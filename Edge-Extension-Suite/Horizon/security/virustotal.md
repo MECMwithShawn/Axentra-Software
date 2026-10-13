@@ -6,11 +6,11 @@ file you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report |
 |---|---|---|---|---|
-| 0.3.10 | `AxentraHorizon-0.3.10.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/208a9b868026518fdbf4ea507bd34ae70d3ab7dd298126c5e755018c3f92c555) |
+| 0.3.11 | `AxentraHorizon-0.3.11.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/8b0018b222cbe64b163ef5bcb6c34848787b66a0c94a0bf84cefaf623396ae3a) |
 
 SHA-256 of each file:
 
-- `AxentraHorizon-0.3.10.zip`: `208a9b868026518fdbf4ea507bd34ae70d3ab7dd298126c5e755018c3f92c555`
+- `AxentraHorizon-0.3.11.zip`: `8b0018b222cbe64b163ef5bcb6c34848787b66a0c94a0bf84cefaf623396ae3a`
 
 Record each result as *detections / engines* (for example `0 / 66`) with the scan date. Screenshots of the
 reports go in [`scans/`](scans/), named `<version>-<file>.png`.

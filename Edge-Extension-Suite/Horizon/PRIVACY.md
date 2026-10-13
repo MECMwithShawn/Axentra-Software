@@ -1,6 +1,6 @@
 # Privacy: Axentra Horizon
 
-*Last updated: 13 October 2026 (0.3.10)*
+*Last updated: 13 October 2026 (0.3.11)*
 
 Axentra Horizon is a new tab page extension. It has no servers of its own, no accounts, no analytics, no ads
 and no tracking. Axentra never receives any of your data.

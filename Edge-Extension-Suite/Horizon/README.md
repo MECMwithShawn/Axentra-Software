@@ -9,8 +9,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.10** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.10) ·
-[Release notes](releases/0.3.10.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.11** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.11) ·
+[Release notes](releases/0.3.11.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -53,9 +53,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.10.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.10) and verify it
-against the SHA-256 in the [release notes](releases/0.3.10.md). Then:
+Download `AxentraHorizon-0.3.11.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.11) and verify it
+against the SHA-256 in the [release notes](releases/0.3.11.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
