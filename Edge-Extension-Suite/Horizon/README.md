@@ -3,20 +3,25 @@
 # Axentra Horizon
 
 A calm, beautiful new tab for Microsoft Edge and Google Chrome: Bing and Windows Spotlight backgrounds, your
-day's focus, todos, notes, habits, birthday and date reminders, a tab stash, a focus timer and soundscapes.
+day's focus, a daily quote or Bible verse, todos, notes, habits, birthday and date reminders, a tab stash, floating
+windows and a Board of mini browsers for YouTube, Spotify and more, a focus timer and soundscapes.
 No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.6** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.6) ·
-[Release notes](releases/0.3.6.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.10** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.10) ·
+[Release notes](releases/0.3.10.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
 | Area | What you get |
 |---|---|
-| **Backgrounds** | Bing's daily image (in 4K where your screen supports it), Windows Spotlight, or Unsplash photography; favorite any photo, upload your own, or use a gradient; change once a day or with every tab; location and photographer credited |
+| **Backgrounds** | Bing's daily image (in 4K where your screen supports it), Windows Spotlight, or Unsplash photography; favorite any photo, upload your own, or use a gradient; change once a day or with every tab; location and photographer credited. The photo button gives one-click **New photo**, **Favorite** and **Keep this** (the photo stays until you unpin it) |
 | **Dashboard** | Large clock (12/24 h), greeting or mantra, today's main focus, daily quote, world clocks, search with your default engine, quick links |
+| **Daily Bible verse** | Instead of (or mixed with) quotes: a verse a day in KJV (built in), WEB, ASV or BBE; ESV with your free api.esv.org key; NKJV, NIV, NLT or NASB open on Bible Gateway |
+| **Floating windows** | Open YouTube, Spotify, Outlook or any site in borderless windows that float over the new tab, several at once, picture-in-picture style: drag, resize, maximize, or pop one out on top of every app (`Shift+W`) |
+| **Board** | A pinned tab of “mini browsers” in a grid (one to six tiles, several saved boards): music and video keep playing while you browse. Embed-friendly sites only, or *Load almost any site* |
+| **Axentra Spaces** | Optional: send windows to [Axentra Spaces](../../Spaces/), the Axentra desktop app for real borderless, always-on-top browser windows anywhere on your desktop |
 | **Weather** | Current conditions and a 6-day forecast; your chosen city, your device location, or an approximate location when Windows Location services are off |
 | **Reminders** | Birthdays (“Mom turns 60”), anniversaries (“10th anniversary”), bills and renewals, events and reminders; repeat yearly, monthly or weekly; desktop notifications on the day and/or up to a month before; countdowns on the dashboard; import and export `.ics` calendars (e.g. Google Calendar's Birthdays) |
 | **Habits** | Daily habits or chosen weekdays, one-click check-ins, streaks, best streak, 30-day completion, a heatmap you can fill in, and an optional daily reminder |
@@ -37,7 +42,9 @@ No account, no subscription, no ads and no tracking.
 | ![Habit detail](screenshots/habit-detail.jpg) Habit streaks and heatmap | ![Tab stash](screenshots/tab-stash.jpg) Tab stash |
 | ![Todo](screenshots/todo.jpg) Todo lists | ![Focus timer](screenshots/focus-timer.jpg) Focus timer |
 | ![Breathe](screenshots/breathe.jpg) Breathing exercise | ![Settings](screenshots/settings.jpg) Photo settings and favorites |
-| ![Favorites bar on a website](screenshots/favorites-bar-website.jpg) Favorites bar on any website (optional) | |
+| ![Favorites bar on a website](screenshots/favorites-bar-website.jpg) Favorites bar on any website | ![Floating windows](screenshots/floating-windows.jpg) Floating windows over the new tab |
+| ![Board](screenshots/board.jpg) The Board: mini browsers in a pinned tab | ![Bible verse](screenshots/bible-verse.jpg) Daily Bible verse |
+| ![Photo panel](screenshots/photo-panel.jpg) New photo, favorite or keep it | |
 
 ## System requirements
 
@@ -46,9 +53,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.6.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.6) and verify it
-against the SHA-256 in the [release notes](releases/0.3.6.md). Then:
+Download `AxentraHorizon-0.3.10.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.10) and verify it
+against the SHA-256 in the [release notes](releases/0.3.10.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -86,8 +93,22 @@ The permanent fix is the Microsoft Edge Add-ons store version (planned; see [sto
 | Favicons | Site icons next to links |
 | Site access: bing.com, Microsoft's Spotlight service, picsum.photos, open-meteo.com, get.geojs.io, bigdatacloud.net | Backgrounds, weather and place names |
 | Site access: localhost, 127.0.0.1, local files | Opening and checking your own locally hosted pages |
-| Read and change data on all websites | Drawing your favorites bar at the top of websites (on by default; turn it off in *Settings → Bookmarks & links* or per site from the bar's ⋯ menu). Horizon draws the bar and never reads page content |
-| Optional site access to other hosts | Only for network servers you allow in *Settings → Local files & servers* |
+| Read and change data on all websites | Drawing your favorites bar at the top of websites (on by default; turn it off in *Settings → Bookmarks & links* or per site from the bar's ⋯ menu), checking your network servers, and loading the sites you put in floating windows or on the Board. Horizon never reads page content |
+| Block or modify network requests (declarativeNetRequest) | Only for frames inside Horizon's own pages (the Board tab and floating windows): with *Load almost any site* on, it removes the headers that stop a site from being shown in a frame, and gives YouTube players a referrer so videos play. Your normal browsing is never changed |
+
+## Floating windows, the Board and Axentra Spaces
+
+- **Window** (top left, or `Shift+W`) opens a site in a borderless window on the new tab. Hover the top edge for its
+  controls; ⧉ pops it out above every app (Edge's picture-in-picture for pages). The windows live in the new tab,
+  so they close with it.
+- **Board** (`G`) opens a pinned tab with a grid of sites that keeps playing while you use other tabs.
+- **[Axentra Spaces](../../Spaces/)** (Windows desktop app) gives you real, borderless, always-on-top browser windows
+  anywhere on the desktop, independent of the browser. Turn on *Settings → Board → Open new windows in Axentra
+  Spaces* and the Window button sends sites there. The first time, Edge asks to open Axentra Spaces: tick
+  *Always allow*.
+
+Some sites (banks, some sign-in pages) refuse to load inside frames even with *Load almost any site*; open those
+in a tab or in Axentra Spaces.
 
 ## Roadmap
 

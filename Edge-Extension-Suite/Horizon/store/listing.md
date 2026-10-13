@@ -6,8 +6,8 @@ Axentra Horizon
 
 ## Short description (max 250 characters)
 
-A calm new tab: Bing and Windows Spotlight backgrounds, your favorites bar on every site, todos, notes, habits,
-birthday reminders, a tab stash, focus timer and soundscapes. No account, no ads, no tracking.
+A calm new tab: Bing and Spotlight backgrounds, your favorites bar on every site, todos, habits, birthday
+reminders, a daily verse, floating windows for YouTube and Spotify, a tab stash and focus timer. No account or ads.
 
 ## Description
 
@@ -17,8 +17,12 @@ on every website.
 **Beautiful backgrounds.** Bing's daily image in 4K, Windows Spotlight, or Unsplash photography. Favorite the ones
 you love, upload your own, or use a gradient. Location and photographer are credited on screen.
 
-**Your day at a glance.** A large clock, a greeting, today's main focus, a daily quote, world clocks and a 6-day
-weather forecast.
+**Your day at a glance.** A large clock, a greeting, today's main focus, a daily quote or Bible verse (KJV, WEB,
+ESV and more), world clocks and a 6-day weather forecast.
+
+**Watch and listen while you work.** Open YouTube, Spotify or any site in borderless windows that float over the
+new tab, several at once, or pop them out above every app. Or open the Board: a pinned tab of mini browsers in a
+grid that keeps playing in the background.
 
 **Never miss a date.** Birthdays (“Mom turns 60”), anniversaries, bills and events, repeating yearly, monthly or
 weekly, with desktop notifications on the day or up to a month ahead. Import your calendar from an .ics file.
@@ -54,9 +58,14 @@ tracker, birthday reminder, tab manager, pomodoro
 
 Paste into the certification notes.
 
-- **Read and change all your data on all websites (`http://*/*`, `https://*/*`):** used only to draw the user's
-  favorites bar at the top of web pages (favbar.js, a closed shadow root). The script does not read page content,
+- **Read and change all your data on all websites (`http://*/*`, `https://*/*`):** used to draw the user's
+  favorites bar at the top of web pages (favbar.js, a closed shadow root), to check the user's own network servers,
+  and to load the sites the user chooses in floating windows and Board tiles. The script does not read page content,
   collect data or make network requests. Users can turn it off globally or per site.
+- **declarativeNetRequestWithHostAccess:** session rules that apply only to sub-frames inside the extension's own
+  pages (Board tabs by tab ID, and frames initiated by the extension's origin): they remove X-Frame-Options and CSP
+  frame-ancestors so the sites the user picked can be shown, and set a Referer for YouTube players (required by
+  YouTube's embed player). Off with the *Load almost any site* setting; top-level browsing is never modified.
 - **Bookmarks:** to display the favorites bar, and to edit, delete or add a favorite only when the user chooses
   that from the bar's right-click or ⋯ menu.
 - **Tabs:** to save (stash) and reopen the user's tabs on request.
@@ -67,6 +76,7 @@ Paste into the certification notes.
 - **Search:** to search with the browser's default search engine.
 - **Context menus:** the “Stash this tab” item.
 - **Favicon:** site icons beside favorites and links.
+- **Host access to bible-api.com and api.esv.org (via the all-sites access):** the daily Bible verse.
 - **Host access to bing.com, fd.api.iris.microsoft.com, res.public.onecdn.static.microsoft, picsum.photos,
   open-meteo.com, get.geojs.io, bigdatacloud.net:** backgrounds, weather and place names.
 - **localhost, 127.0.0.1, file:///:** opening and checking the user's own locally hosted pages.
