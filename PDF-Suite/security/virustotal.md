@@ -6,13 +6,13 @@ check the file you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report |
 |---|---|---|---|---|
-| 0.3.0 | `AxentraPDF-0.3.0-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/2e818495d443281cce02960dc3586bfe06ceb09d11cc1d7df140f167fe91548d) |
-| 0.3.0 | `AxentraPDF-0.3.0.msi` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/a2ae25cad6f398de7eb3afc5fff96c77abc53f2386b73562f4b958d5b2e64852) |
+| 0.3.0 | `AxentraPDF-0.3.0-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/b3b0e29c08e7a71d5b4e8ea8446ae4590e988f0f1f693a25c6618e358c6fe739) |
+| 0.3.0 | `AxentraPDF-0.3.0.msi` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/704ace20e151879e581875a34c3b619d33ab089b069c8c705b51c97133b9cf6a) |
 
 SHA-256 of each file:
 
-- `AxentraPDF-0.3.0-Setup.exe`: `2e818495d443281cce02960dc3586bfe06ceb09d11cc1d7df140f167fe91548d`
-- `AxentraPDF-0.3.0.msi`: `a2ae25cad6f398de7eb3afc5fff96c77abc53f2386b73562f4b958d5b2e64852`
+- `AxentraPDF-0.3.0-Setup.exe`: `b3b0e29c08e7a71d5b4e8ea8446ae4590e988f0f1f693a25c6618e358c6fe739`
+- `AxentraPDF-0.3.0.msi`: `704ace20e151879e581875a34c3b619d33ab089b069c8c705b51c97133b9cf6a`
 
 Record each result as *detections / engines* (for example `0 / 72`) with the scan date. Screenshots of the
 reports go in [`scans/`](scans/), named `<version>-<file>.png`.
