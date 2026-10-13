@@ -8,8 +8,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.5** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.5) ·
-[Release notes](releases/0.3.5.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.6** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.6) ·
+[Release notes](releases/0.3.6.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -23,7 +23,7 @@ No account, no subscription, no ads and no tracking.
 | **Tab stash** | Park all of a window's tabs (or the ones you pick) and restore them later; from the new tab, the toolbar button, `Alt+Shift+S` on any page, or right-click → Stash this tab |
 | **Productivity** | Todo lists (Today, Inbox, your own) with drag-to-reorder; notes with autosave; focus timer (pomodoro) with notifications; breathing exercises; zen mode |
 | **Soundscapes** | Rain, ocean, wind, stream, fireplace, café and white/pink/brown noise, generated live (no audio files) |
-| **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, solid or see-through glass, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it |
+| **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, solid or see-through glass, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it. Right-click a favorite to open, edit or delete it (with undo); add the current page from the bar's ⋯ menu |
 | **Local pages** | Links to local HTML files (`C:\sites\index.html`) and servers on your network (`nas.local`, `192.168.1.20:8080`), with a live up/down indicator |
 | **Backup & restore** | Automatic daily backups to your OneDrive or Google Drive folder (keeps 30, includes your uploaded photos); restore any of them from a dated list, on this PC or a new one |
 | **Everything else** | Show or hide every widget, fonts and clock sizes, background dimming, keyboard shortcuts (`?`), settings that sync between your devices |
@@ -46,9 +46,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.5.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.5) and verify it
-against the SHA-256 in the [release notes](releases/0.3.5.md). Then:
+Download `AxentraHorizon-0.3.6.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.6) and verify it
+against the SHA-256 in the [release notes](releases/0.3.6.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -76,7 +76,7 @@ The permanent fix is the Microsoft Edge Add-ons store version (planned; see [sto
 |---|---|
 | Replace the new tab page | This is the extension |
 | Storage, unlimited storage | Your settings, todos, notes, habits, reminders and the cached background |
-| Read and change favorites (bookmarks) | Showing your favorites bar. Horizon only reads them |
+| Read and change favorites (bookmarks) | Showing your favorites bar, and editing, deleting or adding favorites when you choose to from the bar |
 | Tabs | Tab stash (reading the titles and addresses of the tabs you stash) |
 | Alarms, notifications | Reminders, habit reminders and the focus timer, even with no new tab open |
 | Location | Local weather. Optional: you can pick a city instead |

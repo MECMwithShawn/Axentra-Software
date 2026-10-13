@@ -26,7 +26,8 @@ weekly, with desktop notifications on the day or up to a month ahead. Import you
 **Build habits.** Daily or chosen weekdays, streaks, completion rates, a heatmap and a gentle daily reminder.
 
 **Favorites everywhere.** Your Edge favorites bar on the new tab and on every website, with folders, in a
-see-through glass or solid style. Choose per site, or press Alt+Shift+F to show or hide it.
+see-through glass or solid style. Right-click to edit or delete a favorite, add the page you're on in one click,
+choose per site, or press Alt+Shift+F to show or hide it.
 
 **Tame your tabs.** Stash a window's tabs to clear your tab bar and restore them later, from the new tab, the
 toolbar button, Alt+Shift+S or a right-click.
@@ -56,7 +57,8 @@ Paste into the certification notes.
 - **Read and change all your data on all websites (`http://*/*`, `https://*/*`):** used only to draw the user's
   favorites bar at the top of web pages (favbar.js, a closed shadow root). The script does not read page content,
   collect data or make network requests. Users can turn it off globally or per site.
-- **Bookmarks:** read-only, to display the favorites bar. Horizon never modifies bookmarks.
+- **Bookmarks:** to display the favorites bar, and to edit, delete or add a favorite only when the user chooses
+  that from the bar's right-click or ⋯ menu.
 - **Tabs:** to save (stash) and reopen the user's tabs on request.
 - **Scripting:** to register the favorites bar script on websites, and to remove it when the user turns it off.
 - **Alarms, notifications:** reminders, habit reminders and the focus timer.

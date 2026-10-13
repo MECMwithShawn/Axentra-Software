@@ -1,6 +1,6 @@
 # Privacy: Axentra Horizon
 
-*Last updated: 13 October 2026 (0.3.5)*
+*Last updated: 13 October 2026 (0.3.6)*
 
 Axentra Horizon is a new tab page extension. It has no servers of its own, no accounts, no analytics, no ads
 and no tracking. Axentra never receives any of your data.
@@ -37,8 +37,8 @@ privacy policy applies to the request. Choosing a city in the weather panel mean
 
 ## Permissions
 
-Horizon reads your tabs only when you stash them, and reads your favorites/bookmarks only to show your
-favorites bar; it never changes them. The favorites bar for websites is on by default: Horizon adds the bar to the
+Horizon reads your tabs only when you stash them. It reads your favorites/bookmarks to show your favorites bar,
+and changes them only when you edit, delete or add a favorite from the bar. The favorites bar for websites is on by default: Horizon adds the bar to the
 pages you open (it moves the page down or slides over it) and does not read, collect or send anything from those
 pages. Turn it off in *Settings → Bookmarks & links*, or for one site from the bar's ⋯ menu. It uses your location only for weather, and only if you haven't chosen a
 city. See the [permissions table](README.md#permissions).

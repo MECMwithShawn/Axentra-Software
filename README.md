@@ -7,7 +7,7 @@ screenshots, release notes and security scan results. Installers and extension p
 | Product | What it is | Latest | Platforms |
 |---|---|---|---|
 | [Axentra PDF Suite](PDF-Suite/) | View, edit, convert, compress, sign and protect PDFs, with no accounts or subscriptions | 0.3.3 | Windows 10/11 (64-bit) |
-| [Axentra Edge Extension Suite](Edge-Extension-Suite/) | Browser extensions for Microsoft Edge. First: [Axentra Horizon](Edge-Extension-Suite/Horizon/), a calm new tab with Bing and Spotlight backgrounds, your favorites bar on every site, todos, habits, birthday reminders, a tab stash and OneDrive/Google Drive backups | Horizon 0.3.5 | Microsoft Edge, Google Chrome |
+| [Axentra Edge Extension Suite](Edge-Extension-Suite/) | Browser extensions for Microsoft Edge. First: [Axentra Horizon](Edge-Extension-Suite/Horizon/), a calm new tab with Bing and Spotlight backgrounds, your favorites bar on every site, todos, habits, birthday reminders, a tab stash and OneDrive/Google Drive backups | Horizon 0.3.6 | Microsoft Edge, Google Chrome |
 
 ## Downloading safely
 
