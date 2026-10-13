@@ -29,7 +29,7 @@ of unsaved work, light and dark themes, and a ribbon laid out like the major com
 
 | | |
 |---|---|
-| ![Home](screenshots/home.png) Home | ![Dark mode](screenshots/dark.png) Dark mode |
+| ![Home](screenshots/home.png) Home | ![Start page](screenshots/start.png) Start page |
 | ![Review](screenshots/tab_review.png) Review | ![Page Layout](screenshots/tab_page_layout.png) Page Layout |
 | ![Forms](screenshots/tab_forms.png) Forms | ![Erase](screenshots/tab_erase.png) Erase (redaction) |
 | ![Protect](screenshots/tab_protect.png) Protect | ![Share](screenshots/tab_share.png) Share and Compress |
