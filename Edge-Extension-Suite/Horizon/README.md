@@ -1,3 +1,5 @@
+<img src="logo.png" alt="Axentra Horizon logo" width="96" align="right">
+
 # Axentra Horizon
 
 A calm, beautiful new tab for Microsoft Edge and Google Chrome: Bing and Windows Spotlight backgrounds, your
@@ -6,8 +8,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.1** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.1) ·
-[Release notes](releases/0.3.1.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.2** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.2) ·
+[Release notes](releases/0.3.2.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -21,7 +23,7 @@ No account, no subscription, no ads and no tracking.
 | **Tab stash** | Park all of a window's tabs (or the ones you pick) and restore them later; from the new tab, the toolbar button, `Alt+Shift+S` on any page, or right-click → Stash this tab |
 | **Productivity** | Todo lists (Today, Inbox, your own) with drag-to-reorder; notes with autosave; focus timer (pomodoro) with notifications; breathing exercises; zen mode |
 | **Soundscapes** | Rain, ocean, wind, stream, fireplace, café and white/pink/brown noise, generated live (no audio files) |
-| **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it |
+| **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, solid or see-through glass, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it |
 | **Local pages** | Links to local HTML files (`C:\sites\index.html`) and servers on your network (`nas.local`, `192.168.1.20:8080`), with a live up/down indicator |
 | **Everything else** | Show or hide every widget, fonts and clock sizes, background dimming, keyboard shortcuts (`?`), backup and restore, settings that sync between your devices |
 
@@ -43,9 +45,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.1.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.1) and verify it
-against the SHA-256 in the [release notes](releases/0.3.1.md). Then:
+Download `AxentraHorizon-0.3.2.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.2) and verify it
+against the SHA-256 in the [release notes](releases/0.3.2.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
