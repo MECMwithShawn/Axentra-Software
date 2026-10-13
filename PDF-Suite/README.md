@@ -6,7 +6,7 @@ No account, activation, trial or subscription, and nothing is sent online.
 ![Axentra PDF](screenshots/home.png)
 
 **Latest version: 0.3.0** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.0) ·
-[Release notes](releases/0.3.0.md) · [Security scans](security/virustotal.md)
+[Release notes](releases/0.3.0.md) · [Security scans](security/virustotal.md): 0 detections on VirusTotal
 
 ## Features
 

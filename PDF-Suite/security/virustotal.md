@@ -4,18 +4,22 @@ Every release installer is scanned on [VirusTotal](https://www.virustotal.com) (
 before it is published. Each link opens the report for that exact file (matched by its SHA-256), so you can
 check the file you downloaded is the one that was scanned.
 
-| Version | File | Result | Scanned | Report |
-|---|---|---|---|---|
-| 0.3.0 | `AxentraPDF-0.3.0-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/b3b0e29c08e7a71d5b4e8ea8446ae4590e988f0f1f693a25c6618e358c6fe739) |
-| 0.3.0 | `AxentraPDF-0.3.0.msi` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/704ace20e151879e581875a34c3b619d33ab089b069c8c705b51c97133b9cf6a) |
+| Version | File | Result | Scanned | Report | Screenshot |
+|---|---|---|---|---|---|
+| 0.3.0 | `AxentraPDF-0.3.0-Setup.exe` | **0 / 68** detections | 2026-10-13 | [VirusTotal](https://www.virustotal.com/gui/file/b3b0e29c08e7a71d5b4e8ea8446ae4590e988f0f1f693a25c6618e358c6fe739/detection) | [view](scans/0.3.0-Setup.exe.jpg) |
+| 0.3.0 | `AxentraPDF-0.3.0.msi` | **0 / 60** detections | 2026-10-13 | [VirusTotal](https://www.virustotal.com/gui/file/704ace20e151879e581875a34c3b619d33ab089b069c8c705b51c97133b9cf6a/detection) | [view](scans/0.3.0-msi.jpg) |
+| 0.3.0 | `AxentraPDF-0.3.0-source.zip` | **0 / 66** detections | 2026-10-13 | [VirusTotal](https://www.virustotal.com/gui/file/ffe620c591d30c8f7960152a99238a1d4419854eddcd54a04d30cb3e961610a6/detection) | [view](scans/0.3.0-source.zip.jpg) |
+
+The download links on the release page were also checked as URLs: 0 / 93 vendors flag them.
 
 SHA-256 of each file:
 
 - `AxentraPDF-0.3.0-Setup.exe`: `b3b0e29c08e7a71d5b4e8ea8446ae4590e988f0f1f693a25c6618e358c6fe739`
 - `AxentraPDF-0.3.0.msi`: `704ace20e151879e581875a34c3b619d33ab089b069c8c705b51c97133b9cf6a`
+- `AxentraPDF-0.3.0-source.zip`: `ffe620c591d30c8f7960152a99238a1d4419854eddcd54a04d30cb3e961610a6`
 
 Record each result as *detections / engines* (for example `0 / 72`) with the scan date. Screenshots of the
-reports go in [`scans/`](scans/), named `<version>-<file>.png`.
+reports go in [`scans/`](scans/), named `<version>-<file>.jpg`.
 
 ## About false positives
 
