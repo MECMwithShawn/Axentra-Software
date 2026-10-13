@@ -34,6 +34,9 @@ toolbar button, Alt+Shift+S or a right-click.
 **Get things done.** Todo lists, notes, a focus timer with notifications, breathing exercises, zen mode and
 soundscapes (rain, ocean, fireplace and more), all built in.
 
+**Never lose a thing.** Automatic daily backups to your OneDrive or Google Drive folder, with one-click restore on
+any computer.
+
 **Private by design.** No account and no sign-in. No servers, analytics or ads. Your settings sync through the
 Microsoft account you're signed into Edge with; everything else stays on your computer.
 

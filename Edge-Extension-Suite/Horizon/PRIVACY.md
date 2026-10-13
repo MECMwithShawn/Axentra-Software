@@ -1,6 +1,6 @@
 # Privacy: Axentra Horizon
 
-*Last updated: 13 October 2026 (0.3.4)*
+*Last updated: 13 October 2026 (0.3.5)*
 
 Axentra Horizon is a new tab page extension. It has no servers of its own, no accounts, no analytics, no ads
 and no tracking. Axentra never receives any of your data.
@@ -13,8 +13,11 @@ and no tracking. Axentra never receives any of your data.
 | Todos, notes, tab stashes, photo favorites and history, quotes you add, the cached background image, weather cache | Your browser's local storage on this computer |
 | Photos you upload | Your browser's IndexedDB on this computer |
 
-You can export all of it (*Settings → Backup → Export*), and *Erase all data* deletes it. Removing the
-extension deletes its local data.
+If you turn on automatic backups, Horizon writes a daily backup file of all of the above (including your uploaded
+photos) to the folder you choose, such as your OneDrive or Google Drive folder; that drive's own app uploads it under
+its own privacy terms. Horizon never uploads anything itself. You can also export a file manually (*Settings → Backup &
+restore*), and *Erase all data* deletes everything Horizon stores in the browser (backup files you saved stay where
+they are). Removing the extension deletes its local data.
 
 ## What Horizon sends, and to whom
 

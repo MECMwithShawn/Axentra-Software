@@ -8,8 +8,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.4** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.4) ·
-[Release notes](releases/0.3.4.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.5** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.5) ·
+[Release notes](releases/0.3.5.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -25,7 +25,8 @@ No account, no subscription, no ads and no tracking.
 | **Soundscapes** | Rain, ocean, wind, stream, fireplace, café and white/pink/brown noise, generated live (no audio files) |
 | **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, solid or see-through glass, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it |
 | **Local pages** | Links to local HTML files (`C:\sites\index.html`) and servers on your network (`nas.local`, `192.168.1.20:8080`), with a live up/down indicator |
-| **Everything else** | Show or hide every widget, fonts and clock sizes, background dimming, keyboard shortcuts (`?`), backup and restore, settings that sync between your devices |
+| **Backup & restore** | Automatic daily backups to your OneDrive or Google Drive folder (keeps 30, includes your uploaded photos); restore any of them from a dated list, on this PC or a new one |
+| **Everything else** | Show or hide every widget, fonts and clock sizes, background dimming, keyboard shortcuts (`?`), settings that sync between your devices |
 
 ## Screenshots
 
@@ -45,9 +46,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.4.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.4) and verify it
-against the SHA-256 in the [release notes](releases/0.3.4.md). Then:
+Download `AxentraHorizon-0.3.5.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.5) and verify it
+against the SHA-256 in the [release notes](releases/0.3.5.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -92,6 +93,20 @@ The permanent fix is the Microsoft Edge Add-ons store version (planned; see [sto
 
 - **Microsoft Edge Add-ons store release.** The listing, logo, screenshots and permission justifications are ready in
   [store/](store/). Once published, install from the store for automatic updates and no developer-mode warnings.
+
+## Backups
+
+Settings, links, reminders and habits sync through your browser account. Todos, notes, tab stashes, photo favorites
+and uploaded photos live only on the computer, so turn on automatic backups:
+
+1. **Settings → Backup & restore → Choose backup folder.**
+2. Pick your **OneDrive** folder (“OneDrive - Personal” in the picker) or Google Drive's **My Drive**. Horizon recognises
+   it and creates an *Axentra Horizon Backups* folder inside.
+3. Every day the first new tab saves `horizon-backup-YYYY-MM-DD.json` there (the last 30 are kept) and the drive's app
+   uploads it. To restore, on this or another computer, choose the same folder and pick a backup from the list.
+
+Browsers don't let extensions search your disk, so Horizon recognises the cloud drive from the folder you pick. After
+a browser restart Edge may ask once to allow folder access again; Horizon shows an *Allow backups* button.
 
 ## Do I need an account?
 
