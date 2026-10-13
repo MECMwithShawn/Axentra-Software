@@ -3,7 +3,7 @@
 A complete desktop PDF editor for Windows: view, edit, convert, compress, fill, sign and protect PDFs.
 No account, activation, trial or subscription, and nothing is sent online.
 
-![Axentra PDF](screenshots/home.jpg)
+![Axentra PDF](screenshots/home.png)
 
 **Latest version: 0.3.3** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.3) ·
 [Release notes](releases/0.3.3.md) · [Security scans](security/virustotal.md): 0 detections on VirusTotal
@@ -29,20 +29,10 @@ of unsaved work, light and dark themes, and a ribbon laid out like the major com
 
 | | |
 |---|---|
-| ![Home](screenshots/home.jpg) Home | ![Start page](screenshots/start.jpg) Start page |
-| ![Review](screenshots/tab_review.jpg) Review | ![Page Layout](screenshots/tab_page_layout.jpg) Page Layout |
-| ![Forms](screenshots/tab_forms.jpg) Forms | ![Erase](screenshots/tab_erase.jpg) Erase (redaction) |
-| ![Protect](screenshots/tab_protect.jpg) Protect | ![Share](screenshots/tab_share.jpg) Share and Compress |
-
-Background photos are Bing daily images, shown for illustration; all rights remain with their owners:
-
-- Danxia landform, Zhangye National Geopark, Gansu, China (Â© Weiquan Lin/Getty Images)
-- Double-crested cormorants over Monterey Bay, California (Â© Hiroya Minakuchi/Minden Pictures)
-- Moss-covered rocks in Puzzlewood, Forest of Dean, Gloucestershire, England (Â© Fulcanelli_AOS/Getty Images)
-- Octopus in defensive posture, Mayotte, Indian Ocean (Â© Gabriel Barathieu/Minden Pictures)
-- Plitvice Lakes National Park, Croatia (Â© Jan Wlodarczyk/Alamy)
-- View of the Sanguinaires Islands from Corsica, France (Â© Francesco Riccardo Iacomino/Getty Images)
-- White House Ruin at Canyon de Chelly National Monument in Arizona (Â© Ingo Arndt/Minden Pictures)
+| ![Home](screenshots/home.png) Home | ![Start page](screenshots/start.png) Start page |
+| ![Review](screenshots/tab_review.png) Review | ![Page Layout](screenshots/tab_page_layout.png) Page Layout |
+| ![Forms](screenshots/tab_forms.png) Forms | ![Erase](screenshots/tab_erase.png) Erase (redaction) |
+| ![Protect](screenshots/tab_protect.png) Protect | ![Share](screenshots/tab_share.png) Share and Compress |
 
 ## System requirements
 
