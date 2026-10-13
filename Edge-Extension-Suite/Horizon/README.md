@@ -8,8 +8,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.2** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.2) ·
-[Release notes](releases/0.3.2.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.4** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.4) ·
+[Release notes](releases/0.3.4.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -45,9 +45,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.2.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.2) and verify it
-against the SHA-256 in the [release notes](releases/0.3.2.md). Then:
+Download `AxentraHorizon-0.3.4.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.4) and verify it
+against the SHA-256 in the [release notes](releases/0.3.4.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -58,6 +58,16 @@ against the SHA-256 in the [release notes](releases/0.3.2.md). Then:
 
 To update, replace the folder's contents with the new version; the next new tab reloads the extension by
 itself so new permissions take effect.
+
+### If Edge turns Horizon off
+
+Edge distrusts extensions installed outside its store:
+
+- At startup it may show **“Turn off extensions in developer mode”**. Close it with **×**; don't choose *Turn off*.
+- It may ask **“Change back to Microsoft's new tab page?”**. Choose **Keep changes**.
+- Don't move or rename the folder Horizon was loaded from; Edge would treat it as a new extension with empty storage.
+
+The permanent fix is the Microsoft Edge Add-ons store version (planned; see [store/](store/)), which Edge never flags.
 
 ## Permissions
 
@@ -71,12 +81,17 @@ itself so new permissions take effect.
 | Location | Local weather. Optional: you can pick a city instead |
 | Search | Searching with your browser's default search engine |
 | Context menus | The “Stash this tab” right-click item |
-| Scripting | Adding the favorites bar to websites, only after you turn that on |
+| Scripting | Adding the favorites bar to websites, and removing it when you turn it off |
 | Favicons | Site icons next to links |
 | Site access: bing.com, Microsoft's Spotlight service, picsum.photos, open-meteo.com, get.geojs.io, bigdatacloud.net | Backgrounds, weather and place names |
 | Site access: localhost, 127.0.0.1, local files | Opening and checking your own locally hosted pages |
-| Optional: read and change data on all websites | Only if you turn on *Show my favorites bar on every website*; Edge asks you first. Horizon draws the bar and never reads page content |
+| Read and change data on all websites | Drawing your favorites bar at the top of websites (on by default; turn it off in *Settings → Bookmarks & links* or per site from the bar's ⋯ menu). Horizon draws the bar and never reads page content |
 | Optional site access to other hosts | Only for network servers you allow in *Settings → Local files & servers* |
+
+## Roadmap
+
+- **Microsoft Edge Add-ons store release.** The listing, logo, screenshots and permission justifications are ready in
+  [store/](store/). Once published, install from the store for automatic updates and no developer-mode warnings.
 
 ## Do I need an account?
 
