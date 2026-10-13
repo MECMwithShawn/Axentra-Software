@@ -6,8 +6,8 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/dashboard.jpg)
 
-**Latest version: 0.3.0** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.0) ·
-[Release notes](releases/0.3.0.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Latest version: 0.3.1** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.1) ·
+[Release notes](releases/0.3.1.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
 
 ## Features
 
@@ -21,7 +21,7 @@ No account, no subscription, no ads and no tracking.
 | **Tab stash** | Park all of a window's tabs (or the ones you pick) and restore them later; from the new tab, the toolbar button, `Alt+Shift+S` on any page, or right-click → Stash this tab |
 | **Productivity** | Todo lists (Today, Inbox, your own) with drag-to-reorder; notes with autosave; focus timer (pomodoro) with notifications; breathing exercises; zen mode |
 | **Soundscapes** | Rain, ocean, wind, stream, fireplace, café and white/pink/brown noise, generated live (no audio files) |
-| **Favorites bar** | Your Edge favorites bar (or Chrome bookmarks bar) at the top of the page, with folders, Other and Mobile favorites |
+| **Favorites bar** | Your Edge favorites (or Chrome bookmarks) at the top of the new tab, with folders, Other and Mobile favorites; optionally on **every website** too, always visible or sliding down from the top edge, with per-site choices and `Alt+Shift+F` to show or hide it |
 | **Local pages** | Links to local HTML files (`C:\sites\index.html`) and servers on your network (`nas.local`, `192.168.1.20:8080`), with a live up/down indicator |
 | **Everything else** | Show or hide every widget, fonts and clock sizes, background dimming, keyboard shortcuts (`?`), backup and restore, settings that sync between your devices |
 
@@ -34,6 +34,7 @@ No account, no subscription, no ads and no tracking.
 | ![Habit detail](screenshots/habit-detail.jpg) Habit streaks and heatmap | ![Tab stash](screenshots/tab-stash.jpg) Tab stash |
 | ![Todo](screenshots/todo.jpg) Todo lists | ![Focus timer](screenshots/focus-timer.jpg) Focus timer |
 | ![Breathe](screenshots/breathe.jpg) Breathing exercise | ![Settings](screenshots/settings.jpg) Photo settings and favorites |
+| ![Favorites bar on a website](screenshots/favorites-bar-website.jpg) Favorites bar on any website (optional) | |
 
 ## System requirements
 
@@ -42,9 +43,9 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.3.0.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.0) and verify it
-against the SHA-256 in the [release notes](releases/0.3.0.md). Then:
+Download `AxentraHorizon-0.3.1.zip` from the
+[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.3.1) and verify it
+against the SHA-256 in the [release notes](releases/0.3.1.md). Then:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -68,10 +69,17 @@ itself so new permissions take effect.
 | Location | Local weather. Optional: you can pick a city instead |
 | Search | Searching with your browser's default search engine |
 | Context menus | The “Stash this tab” right-click item |
+| Scripting | Adding the favorites bar to websites, only after you turn that on |
 | Favicons | Site icons next to links |
 | Site access: bing.com, Microsoft's Spotlight service, picsum.photos, open-meteo.com, get.geojs.io, bigdatacloud.net | Backgrounds, weather and place names |
 | Site access: localhost, 127.0.0.1, local files | Opening and checking your own locally hosted pages |
+| Optional: read and change data on all websites | Only if you turn on *Show my favorites bar on every website*; Edge asks you first. Horizon draws the bar and never reads page content |
 | Optional site access to other hosts | Only for network servers you allow in *Settings → Local files & servers* |
+
+## Do I need an account?
+
+No. There's no sign-up or sign-in. Settings, links, reminders and habits sync between your computers through the
+Microsoft (or Google) account you're already signed into the browser with.
 
 ## Privacy
 

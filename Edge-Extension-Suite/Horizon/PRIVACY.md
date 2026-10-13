@@ -35,7 +35,9 @@ privacy policy applies to the request. Choosing a city in the weather panel mean
 ## Permissions
 
 Horizon reads your tabs only when you stash them, and reads your favorites/bookmarks only to show your
-favorites bar; it never changes them. It uses your location only for weather, and only if you haven't chosen a
+favorites bar; it never changes them. If you turn on the favorites bar for websites, Horizon adds the bar to the
+pages you open (it moves the page down or slides over it); it does not read, collect or send anything from those
+pages. It uses your location only for weather, and only if you haven't chosen a
 city. See the [permissions table](README.md#permissions).
 
 ## Contact
