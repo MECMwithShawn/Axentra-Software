@@ -6,18 +6,19 @@ file you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report |
 |---|---|---|---|---|
-| 0.3.11 | `AxentraHorizon-0.3.11.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/8b0018b222cbe64b163ef5bcb6c34848787b66a0c94a0bf84cefaf623396ae3a) |
+| 0.4.2 | `AxentraHorizon-0.4.2.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/2300f331094aa56d1f814fd7aab609e501458047cd2d5a48073ca4dc04f6951b) |
 
 SHA-256 of each file:
 
-- `AxentraHorizon-0.3.11.zip`: `8b0018b222cbe64b163ef5bcb6c34848787b66a0c94a0bf84cefaf623396ae3a`
+- `AxentraHorizon-0.4.2.zip`: `2300f331094aa56d1f814fd7aab609e501458047cd2d5a48073ca4dc04f6951b`
 
 Record each result as *detections / engines* (for example `0 / 66`) with the scan date. Screenshots of the
 reports go in [`scans/`](scans/), named `<version>-<file>.png`.
 
 ## What's in the package
 
-The zip contains only plain, unminified JavaScript, HTML, CSS, three PNG icons and a README. There is no
+The zip contains only plain, unminified JavaScript, HTML and CSS, the JSON manifest, four PNG and two SVG icons
+(static images, no scripts) and a README. There is no
 native code, no bundled third-party library, no remote code and no `eval`; the extension's content security
 policy is the Manifest V3 default, which blocks remote scripts. You can read every file before loading it.
 
