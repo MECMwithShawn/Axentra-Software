@@ -9,6 +9,8 @@ screenshots, release notes and security scan results. Installers and extension p
 | [Axentra PDF Suite](PDF-Suite/) | View, edit, convert, compress, sign and protect PDFs, with no accounts or subscriptions | 0.3.4 | Windows 10/11 (64-bit) |
 | [Axentra Edge Extension Suite](Edge-Extension-Suite/) | Browser extensions for Microsoft Edge. First: [Axentra Horizon](Edge-Extension-Suite/Horizon/), a calm new tab with Bing and Spotlight backgrounds, your favorites bar on every site, todos, habits, birthday reminders, a daily Bible verse, floating windows, a tab stash and OneDrive/Google Drive backups | Horizon 0.3.11 | Microsoft Edge, Google Chrome |
 | [Axentra Spaces](Spaces/) | Borderless, always-on-top browser windows anywhere on your desktop (YouTube, Spotify, Outlook…) with saved layouts; pairs with Horizon | 0.1.0 | Windows 10/11 (64-bit) |
+| [Axentra Vault](Vault/) | A password manager for your own KeePass file, unlocked with your master password plus an iPhone/Android passkey or a YubiKey. No account or cloud | Not released yet (in security review) | Windows 10/11 (64-bit) |
+| [Axentra CrystalWire](CrystalWire/) | See what every app sends and receives, with per-app firewall rules and Pi-hole-aware ad blocking planned. No accounts or telemetry | In development | Windows 10/11 (64-bit) |
 
 ## Downloading safely
 
