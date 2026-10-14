@@ -1,0 +1,4 @@
+# Only for sync_assets.py --apply --apps pdf and verify_binary.py.
+# App icon generation and verify.py require neither package.
+Pillow==12.3.0
+pefile==2024.8.26

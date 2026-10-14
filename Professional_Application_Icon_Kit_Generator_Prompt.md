@@ -1,5 +1,10 @@
 # Reusable Prompt: Professional Application Icon Kit Generator
 
+> **Historical generic prompt.** For current Axentra apps, use the
+> [Glass + Precision icon kit](Icon-Kit/) and its [new-app handoff brief](Icon-Kit/HANDOFF.md).
+> That kit contains the actual production renderer and exact assets. The two-style SVG
+> requirements below describe an earlier general workflow, not the current Axentra family.
+
 Create **two complete, production-ready icon kits** for **[APPLICATION NAME]**, using the application's existing branding, color palette and any supplied reference images.
 
 ## 1. Icon Design Variants

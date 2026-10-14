@@ -12,6 +12,15 @@ screenshots, release notes and security scan results. Installers and extension p
 | [Axentra Vault](Vault/) | A password manager for your own KeePass file, unlocked with your master password plus an iPhone/Android passkey or a YubiKey. No account or cloud | Not released yet (in security review) | Windows 10/11 (64-bit) |
 | [Axentra CrystalWire](CrystalWire/) | See what every app sends and receives, with per-app firewall rules and Pi-hole-aware ad blocking planned. No accounts or telemetry | 0.2.2 (in development) | Windows 10/11 (64-bit) |
 
+## Icon source and design kit
+
+The [Axentra Glass + Precision icon kit](Icon-Kit/) contains the current seven app icons,
+their complete Rust renderer, ready-to-use PNG/ICO assets, checksum verification,
+integration instructions and a guide for creating matching icons for new apps.
+The glass PDF **document** icon is preserved separately from the PDF application icon.
+
+![Axentra app icon family](Icon-Kit/references/production-preview.png)
+
 ## Downloading safely
 
 - Download only from this repository's [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases) page.

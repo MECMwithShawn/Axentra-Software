@@ -1,0 +1,5 @@
+/out/
+/renderer/target/
+__pycache__/
+*.pyc
+.venv/

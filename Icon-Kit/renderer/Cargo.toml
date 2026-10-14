@@ -1,0 +1,11 @@
+[package]
+name = "suite-icons"
+description = "Renders the Axentra suite icon set (Glass + Precision) as PNG + ICO, std only"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[profile.release]
+opt-level = 3
