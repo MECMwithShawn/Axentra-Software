@@ -1,5 +1,13 @@
 # Icon kit revisions
 
+## Motion 1 — 2026-10-14
+
+- Add an eight-app orbital preview and reusable WebGL component.
+- Use spring hover bounce, pointer tilt, true curved-mesh spins and mirrored backs.
+- Include accessible buttons, reduced motion, narrow-screen layout and static fallback.
+- Add a portable HTML builder and optional isolated-browser interaction checks.
+- Preserve all current app and PDF document artwork byte for byte.
+
 ## Glass + Precision 1.2 — 2026-10-14
 
 - Add Axentra Mail with a rose-pink envelope and the existing suite tile and finish.

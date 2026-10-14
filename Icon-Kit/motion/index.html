@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Axentra — Motion study</title>
+<link rel="stylesheet" href="motion.css">
+<style>
+:root{color-scheme:dark;--axm-foreground:#eaf0ff;--axm-label-bg:#111827;background:#090d17;color:var(--axm-foreground);font-family:Inter,Segoe UI,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 40%,#15203955,transparent 63%),#090d17}
+header{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1440px;margin:auto;padding:20px 42px;border-bottom:1px solid #8292b51a}
+.brand{letter-spacing:.22em;font-weight:650;font-size:15px}.edition{color:#9ba9bf;font-size:12px;letter-spacing:.08em}.tools{display:flex;align-items:center;gap:18px}
+button.pause{color:#dbe7fa;background:#172033;border:1px solid #7d98c340;padding:10px 17px;border-radius:24px;font:inherit;font-size:12px;font-weight:500;line-height:1.1;cursor:pointer;min-width:114px}
+button:focus-visible{outline:2px solid #86bbff;outline-offset:4px}
+main{max-width:1440px;margin:auto;min-height:min(78vw,820px);height:calc(100svh - 160px);max-height:900px}
+.hero-copy{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;pointer-events:none;z-index:4;text-align:center}
+.eyebrow{font-size:10px;letter-spacing:.28em;color:#8e9db5;margin:0 0 18px}
+h1{font-size:clamp(38px,5.8vw,84px);line-height:1;margin:0;letter-spacing:.12em;font-weight:570;padding-left:.12em;text-shadow:0 3px 40px #090d17}
+.tagline{margin:23px 0 0;font-size:14px;letter-spacing:.035em;color:#b5c1d5}.hint{margin:15px 0 0;font-size:11px;color:#7f91ac}
+.orbits{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.56}
+.soft-glow{position:absolute;inset:22% 20%;border-radius:50%;background:radial-gradient(ellipse,#15274650,transparent 67%);pointer-events:none}
+footer{max-width:1440px;margin:auto;padding:14px 42px 24px;display:flex;gap:20px;justify-content:space-between;color:#9aabc2;font-size:11px;letter-spacing:.045em;border-top:1px solid #8292b51a}
+.status{margin:0;min-height:16px}.signature{color:#7385a2} .error{color:#f3c69a}
+@media(max-width:900px){header{padding:18px 24px}.edition{display:none}footer{padding:18px 24px}.tagline{font-size:12px}}
+@media(max-width:659px){header{min-height:66px;padding:14px 20px}main{height:860px;min-height:860px}.hero-copy{inset:24px 0 auto;height:90px;justify-content:flex-start}.eyebrow{margin:0 0 12px;font-size:8px}h1{font-size:34px}.tagline{margin:12px 0 0;font-size:10px}.hint,.orbits{display:none}footer{align-items:flex-start;flex-direction:column;gap:8px}.signature{display:none}.brand{font-size:12px}.tools{gap:0}}
+</style>
+</head>
+<body>
+<header><div class="brand">AXENTRA</div><div class="tools"><span class="edition">GLASS + PRECISION / MOTION 01</span><button class="pause" id="pause" type="button" aria-pressed="false">Pause motion</button></div></header>
+<main class="axm-host" id="scene" aria-label="Interactive Axentra icon family">
+<div class="soft-glow"></div>
+<svg class="orbits" viewBox="0 0 1440 820" preserveAspectRatio="none" aria-hidden="true">
+<defs><linearGradient id="orbit-color"><stop stop-color="#62b4ff" stop-opacity=".34"/><stop offset=".4" stop-color="#aa7eff" stop-opacity=".15"/><stop offset=".7" stop-color="#1ad3c0" stop-opacity=".22"/><stop offset="1" stop-color="#ef88c7" stop-opacity=".3"/></linearGradient></defs>
+<g fill="none" stroke="url(#orbit-color)" stroke-width=".7"><ellipse cx="720" cy="410" rx="528" ry="300"/><ellipse cx="720" cy="410" rx="600" ry="345" transform="rotate(-13 720 410)"/><ellipse cx="720" cy="410" rx="450" ry="259" transform="rotate(19 720 410)" stroke-dasharray="2 13"/></g>
+</svg>
+<div class="hero-copy"><p class="eyebrow">EIGHT APPS. ONE FAMILY.</p><h1>AXENTRA</h1><p class="tagline">Software that moves with you.</p><p class="hint">Hover to lift. Click to spin.</p></div>
+</main>
+<footer><p class="status" id="status" aria-live="polite">Explore the icon family</p><span class="signature">Orbit · spring · curve · reflection</span></footer>
+<script src="axentra-motion.js"></script>
+<script>
+(async()=>{
+  const status=document.getElementById('status'), button=document.getElementById('pause');
+  const scene=await AxentraMotion.mount(document.getElementById('scene'),{
+    images:window.AXENTRA_EMBEDDED_ICONS, assetBase:'../assets',
+    onSelect:({name})=>{status.textContent=`Axentra ${name}`;},
+    onError:()=>{status.textContent='Static preview — 3D rendering is unavailable in this browser.';status.classList.add('error');}
+  });
+  window.axentraDemo=scene;
+  button.addEventListener('click',()=>{
+    const paused=!scene.getState().paused;scene.setPaused(paused);
+    button.setAttribute('aria-pressed',String(paused));button.textContent=paused?'Resume motion':'Pause motion';
+  });
+  if(scene.getState().reduced){status.textContent='Reduced motion is on. All eight icons remain available.';button.hidden=true;}
+})();
+</script>
+</body></html>

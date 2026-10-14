@@ -54,5 +54,6 @@
   "concept_reference": "references/approved-concept.png records the initial family direction, not a production master",
   "vault_revision": "Reference-aligned circuit halo in the existing suite tile; exact geometry in VAULT.md",
   "vault_reference": "references/vault-circuit-reference.png; used for visual direction only, not embedded by the renderer",
-  "mail_revision": "Rose-pink envelope, shared glass tile and finish, simplified micro glyph; exact geometry and build handoff in MAIL.md"
+  "mail_revision": "Rose-pink envelope, shared glass tile and finish, simplified micro glyph; exact geometry and build handoff in MAIL.md",
+  "motion_revision": "orbital-1: original WebGL motion, canonical PNG textures; source and build instructions in motion/README.md"
 }

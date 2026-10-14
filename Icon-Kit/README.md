@@ -53,6 +53,15 @@ Rust floating-point transcendental functions can differ across targets/toolchain
 always run the checksum comparison before calling another environment byte-identical.
 Use the checked-in assets when exact bytes are needed without regenerating them.
 
+## Animate the icon family
+
+The [motion component](motion/README.md) adds orbital movement, spring hover bounce,
+curved 3D spins and mirrored reverse faces using the existing eight icons. It is an
+original, dependency-free WebGL implementation. See `motion/index.html` for the demo
+or build a portable preview with `python motion/build_preview.py`. Keyboard, reduced
+motion, narrow screens and static fallback are covered. Source artwork and Windows
+ICOs remain unchanged.
+
 ## Create a matching icon for another app
 
 1. Read the [design specification](DESIGN.md).
@@ -72,6 +81,7 @@ repository root is historical and does not describe the current production rende
 | `renderer/src/main.rs` | Deterministic PNG/ICO encoder and contact-sheet exporter |
 | `renderer/Cargo.toml`, `Cargo.lock` | Standalone Rust crate, no dependencies |
 | `assets/` | Approved production PNG/ICO exports and contact sheet |
+| `motion/` | Orbital animation component, demo, portable-preview builder and browser checks |
 | `MAIL.md` | Mail symbol specification and build handoff |
 | `manifest.json`, `build-info.json` | SHA-256 baseline and build provenance |
 | `document-icons/` | Preserved PDF document ICOs and their legacy SVG design sources |

@@ -18,7 +18,7 @@ def digest(path):
 
 def tracked_files():
     files = []
-    for folder in ("assets", "document-icons", "renderer/src", "references"):
+    for folder in ("assets", "document-icons", "renderer/src", "references", "motion"):
         files.extend(path for path in (ROOT / folder).rglob("*") if path.is_file())
     files.extend(ROOT / name for name in (
         "renderer/Cargo.toml", "renderer/Cargo.lock", "build-info.json"

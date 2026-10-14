@@ -132,6 +132,15 @@ directory and hotkey when changing only `IconLocation`. Point at the new install
 then notify the Windows shell or refresh its icons with `ie4uinit.exe -show`. Icon-cache
 refresh alone cannot fix an old executable resource or incorrect shortcut reference.
 
+## Animated web presentation
+
+See [the motion component](motion/README.md) for the optional eight-app orbital scene.
+It bends the canonical textures on double-sided 3D meshes, with spring hover response
+and mirrored reverse faces. Copy its two runtime files and PNGs into a site's static
+assets, then mount it in a sized host. It does not alter desktop ICOs or automatically
+replace a site's existing hero. The demo and portable preview are separate from live
+website deployment; site integration must wire its theme and product destinations.
+
 ## Keeping the kit current
 
 After an approved change, commit the renderer, outputs, palette/design notes, compiler
