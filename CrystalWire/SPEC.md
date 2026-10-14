@@ -10,6 +10,21 @@ anything learned from inspecting GlassWire's code.
 Legend: **M1** = monitor milestone (no blocking), **M2** = firewall,
 **M3** = security alerts, **M4** = extras. ⭐ = goes beyond the reference product.
 
+## Build status — 0.2.0 (2026-10-13)
+
+| Piece | State |
+|---|---|
+| `cw-svc` service (LocalSystem): ETW net + DNS + process capture → SQLite (schema v3) | Done. Idempotent `install`, `update`, `uninstall`; migrates the old "Axentra Firewall" install |
+| Per-app traffic 1 s / 1 min / 1 h, hosts with forward-DNS, DNS-cache seeding and reverse-DNS names | Done (1.1, 1.2, 1.3, 1.5, 1.8, 1.16) |
+| Owner + country for every internet host (1.6) | Done, using iptoasn.com `ip2asn-combined.tsv.gz` (public domain, PDDL) instead of DB-IP: one file gives ASN, owner and country. Refreshed every 30 days by the service with Windows' curl.exe |
+| DNS lookups by app with outcome (ok / blocked 0.0.0.0 / NXDOMAIN / failed), 1 min (7 d) + 1 h (forever) | Done (feeds 5b.3) |
+| Pi-hole link (5b.3): app password in the user's Credential Manager, v6 API query log for this PC joined to our per-app DNS records; "never reached Pi-hole" list | Done (CLI `cw pihole`, window Pi-hole tab) |
+| First-network-activity alerts (3.1) with a 10-minute baseline | Done (recorded; shown in the window, no toast yet) |
+| `CrystalWire.exe` window: live graph with 5 min–month ranges and click-to-drill, usage by app/server/country/owner, DNS, Pi-hole, alerts | Done |
+| `cw.exe` CLI: status, top, app, dns, alerts, live, geo, pihole | Done |
+| Inno Setup installer (per-machine, stops/reconfigures the service on upgrade, optional history removal on uninstall) | Done |
+| Not yet: tray icon + toasts, CSV export, idle shading, incognito, per-connection ports, publisher/signer grouping, and everything in M2 (firewall) and most of M3 | Open |
+
 ---
 
 ## 1. Traffic monitoring
