@@ -6,15 +6,15 @@ check the file you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report | Screenshot |
 |---|---|---|---|---|---|
-| 0.3.3 | `AxentraPDF-0.3.3-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/f0f8e18a19f721a5b613a8b424f09fa0e1cbceec63933a899ecd443a8897a6f3/detection) | |
-| 0.3.3 | `AxentraPDF-0.3.3.msi` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/8c84611a568213d691a7ac1b5c5f2f303a7ca296c8bf685854628ea03fe5deba/detection) | |
-| 0.3.3 | `AxentraPDF-0.3.3-source.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/2ad8b3734360017b22a7dba237e7574cb15c0f92a0d70ebfd897859a28a96389/detection) | |
+| 0.3.4 | `AxentraPDF-0.3.4-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/afab0bccadf6df95df770976f7225da7f95f5c43ccdbb9f648b6d8a15f11c413/detection) | |
+| 0.3.4 | `AxentraPDF-0.3.4.msi` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/fdd13b18dd224c029ec19597402a19a69cea855e87399dd816a90731c2130e2d/detection) | |
+| 0.3.4 | `AxentraPDF-0.3.4-source.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/e60049b9331e1eb3c6f5850804f21abe12b196b16f9068fc0cee8ff6b200938b/detection) | |
 
 SHA-256 of each file:
 
-- `AxentraPDF-0.3.3-Setup.exe`: `f0f8e18a19f721a5b613a8b424f09fa0e1cbceec63933a899ecd443a8897a6f3`
-- `AxentraPDF-0.3.3.msi`: `8c84611a568213d691a7ac1b5c5f2f303a7ca296c8bf685854628ea03fe5deba`
-- `AxentraPDF-0.3.3-source.zip`: `2ad8b3734360017b22a7dba237e7574cb15c0f92a0d70ebfd897859a28a96389`
+- `AxentraPDF-0.3.4-Setup.exe`: `afab0bccadf6df95df770976f7225da7f95f5c43ccdbb9f648b6d8a15f11c413`
+- `AxentraPDF-0.3.4.msi`: `fdd13b18dd224c029ec19597402a19a69cea855e87399dd816a90731c2130e2d`
+- `AxentraPDF-0.3.4-source.zip`: `e60049b9331e1eb3c6f5850804f21abe12b196b16f9068fc0cee8ff6b200938b`
 
 Only the current release is listed; older versions have been withdrawn.
 

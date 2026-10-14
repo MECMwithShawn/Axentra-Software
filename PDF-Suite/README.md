@@ -5,8 +5,8 @@ No account, activation, trial or subscription, and nothing is sent online.
 
 ![Axentra PDF](screenshots/home.png)
 
-**Latest version: 0.3.3** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.3) ·
-[Release notes](releases/0.3.3.md) · [Security scans](security/virustotal.md): 0 detections on VirusTotal
+**Latest version: 0.3.4** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.4) ·
+[Release notes](releases/0.3.4.md) · [Security scans](security/virustotal.md): 0 detections on VirusTotal
 
 ## Features
 
@@ -43,12 +43,12 @@ of unsaved work, light and dark themes, and a ribbon laid out like the major com
 
 ## Installation
 
-Download from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.3):
+Download from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.4):
 
 | File | Use it for |
 |---|---|
-| `AxentraPDF-0.3.3-Setup.exe` | Installing on your own PC (choose the folder, desktop icon, PDF association) |
-| `AxentraPDF-0.3.3.msi` | Silent or managed installs, e.g. `msiexec /i AxentraPDF-0.3.3.msi /qn` (Intune, Group Policy) |
+| `AxentraPDF-0.3.4-Setup.exe` | Installing on your own PC (choose the folder, desktop icon, PDF association) |
+| `AxentraPDF-0.3.4.msi` | Silent or managed installs, e.g. `msiexec /i AxentraPDF-0.3.4.msi /qn` (Intune, Group Policy) |
 
 Axentra installs for all users and, by default, makes itself the default PDF app with Windows'
 default-associations policy: **sign out and back in once** after installing. Untick *Force Axentra PDF as the
@@ -56,10 +56,13 @@ default PDF app* to be asked instead (Windows' Default apps page opens: click th
 PDF). MSI: `FORCEDEFAULTPDF=0` turns the policy off. Microsoft documents the policy for Windows Pro, Enterprise
 and Education.
 
+**PDF file icon:** PDF files get their own icon, separate from the app's: Flat, Glossy, or the app icon. The
+installer shows a preview of each; change it later in *File → Preferences → Windows*.
+
 **Updating:** run the newer installer. It closes Axentra if it's open (unsaved work is kept for recovery),
 upgrades in place and reopens it.
 
-Verify the download against the SHA-256 in the [release notes](releases/0.3.3.md) before running it.
+Verify the download against the SHA-256 in the [release notes](releases/0.3.4.md) before running it.
 
 > **Windows SmartScreen:** the installers are not code-signed yet, so Windows shows "Windows protected your
 > PC" the first time. Choose **More info → Run anyway** after checking the checksum. On PCs with Smart App
