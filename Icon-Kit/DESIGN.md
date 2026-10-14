@@ -36,7 +36,7 @@ Preserve negative-space details: Ghost's eyes, Vault's keyhole and CrystalWire's
 |---|---|---|
 | `command` | `98,180,255` / `#62B4FF` | Hexagonal hub, six colored tiles linked by spokes |
 | `ghost` | `170,126,255` / `#AA7EFF` | Familiar rounded head, two eyes, three scalloped lobes |
-| `vault` | `64,139,255` / `#408BFF` | Solid blue padlock, arched shackle, keyhole |
+| `vault` | `64,139,255` / `#408BFF` | Icy-blue padlock, round keyhole, thin broken cyan circuit halo |
 | `crystalwire` | `31,208,234` / `#1FD0EA` | Cyan diamond with geometric facet cuts |
 | `horizon` | `255,180,70` / `#FFB446` | Amber sunrise, five rays, two horizon bars |
 | `pdf` | `255,105,119` / `#FF6977` | Coral folded document and dark angular Axentra mark |
@@ -50,6 +50,12 @@ automatically change its six-node logo or the existing icons.
 
 Horizon uses a warmer top-edge blend. CrystalWire adds light on the left facets.
 These exceptions are implemented in `sample()` and are part of the approved baseline.
+
+Vault revision 1.1 adds `vault_lock()`, `vault_arc()` and `vault_finish()`. The common
+tile and accent remain unchanged; the product-specific finish adds rings, dots, nodes
+and an icy lock. Micro icons enlarge the lock and omit the inner/dotted rings. Exact
+geometry and color values are documented in [VAULT.md](VAULT.md). This finish is specific
+to Vault and must not be applied to the other app icons.
 
 ## New symbols
 

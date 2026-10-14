@@ -1,5 +1,5 @@
 {
-  "kit_revision": "glass-precision-1",
+  "kit_revision": "glass-precision-1.1",
   "adopted_date": "2026-10-14",
   "renderer": "Rust standard library only; procedural geometry, custom PNG/ICO encoders",
   "source_origin": "axentra-command/tools/suite-icons",
@@ -24,5 +24,7 @@
     "Pillow": "12.3.0, PDF installer preview and executable icon comparison only",
     "pefile": "2024.8.26, executable icon comparison only"
   },
-  "concept_reference": "references/approved-concept.png is AI-generated visual direction, not a production master"
+  "concept_reference": "references/approved-concept.png records the initial family direction, not a production master",
+  "vault_revision": "Reference-aligned circuit halo in the existing suite tile; exact geometry in VAULT.md",
+  "vault_reference": "references/vault-circuit-reference.png; used for visual direction only, not embedded by the renderer"
 }

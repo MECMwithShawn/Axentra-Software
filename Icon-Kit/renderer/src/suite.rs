@@ -85,6 +85,86 @@ fn window(x: f32, y: f32, cx: f32, cy: f32, micro: bool) -> bool {
             .any(|dx| len(x - cx - dx, y - cy + 0.112) < 0.016);
     outer && !inner && !dots
 }
+// Vault's circuit halo is a product-specific symbol inside the unchanged suite tile.
+// Distances keep the luminous strokes narrow; micro icons lose the inner ring/dots.
+fn vault_lock(x: f32, y: f32, micro: bool) -> (f32, bool) {
+    let scale = if micro { 1.16 } else { 1.0 };
+    let (x, y) = (x / scale, y / scale);
+    let shackle = if y <= -0.075 {
+        (len(x, y + 0.075) - 0.083).abs() - 0.020
+    } else {
+        seg(x.abs(), y, 0.083, -0.075, 0.083, -0.020) - 0.020
+    };
+    let body = rbox(x, y, 0.0, 0.069, 0.145, 0.108, 0.032);
+    let eye = if micro { 0.032 } else { 0.027 };
+    let hole = len(x, y - 0.034) <= eye
+        || rbox(x, y, 0.0, 0.073, 0.013, 0.033, 0.012) <= 0.0;
+    (shackle.min(body) * scale, hole)
+}
+fn vault_arc(x: f32, y: f32, angle: f32, radius: f32, start: f32, end: f32) -> f32 {
+    if angle >= start && angle <= end {
+        (len(x, y) - radius).abs()
+    } else {
+        [start, end].iter().map(|degrees| {
+            let a = degrees * PI / 180.0;
+            len(x - radius * a.cos(), y - radius * a.sin())
+        }).fold(f32::INFINITY, f32::min)
+    }
+}
+fn vault_finish(mut c: C3, micro: bool, x: f32, y: f32) -> C3 {
+    let angle = y.atan2(x) * 180.0 / PI;
+    let mut track = f32::INFINITY;
+    // Reference-like broken outer halo, with open gaps at upper-left and bottom.
+    for (start, end) in [(-110.0, 86.0), (104.0, 137.0), (151.0, 223.0)] {
+        let a = if angle < -110.0 { angle + 360.0 } else { angle };
+        track = track.min(vault_arc(x, y, a, 0.355, start, end));
+    }
+    if !micro {
+        for (start, end) in [(-133.0, -27.0), (-10.0, 138.0), (160.0, 206.0)] {
+            let a = if angle < -133.0 { angle + 360.0 } else { angle };
+            track = track.min(vault_arc(x, y, a, 0.273, start, end) + 0.0015);
+        }
+    }
+    let stroke = if micro { 0.009 } else { 0.0055 };
+    let cyan = [0.24, 0.79, 1.0];
+    let edge = (track - stroke).max(0.0);
+    c = mix(c, cyan, (-(edge / 0.018).powi(2)).exp() * if micro { 0.08 } else { 0.23 });
+    if track <= stroke {
+        c = mix(cyan, [0.60, 0.94, 1.0], 0.30 + (-y).max(0.0) * 0.65);
+    }
+    if !micro {
+        // A fine dotted middle ring; subordinate to both the lock and solid arcs.
+        let step = 2.0 * PI / 48.0;
+        let a = (y.atan2(x) / step).round() * step;
+        let dot = len(x - 0.315 * a.cos(), y - 0.315 * a.sin());
+        if dot < 0.0028 {
+            c = mix(c, [0.43, 0.84, 1.0], 0.60);
+        }
+    }
+    let mut node_distance = f32::INFINITY;
+    for (radius, degrees) in [(0.355, 86.0), (0.355, 137.0), (0.355, 223.0), (0.273, 138.0)] {
+        let a = degrees * PI / 180.0;
+        node_distance = node_distance.min(len(x - radius * a.cos(), y - radius * a.sin()));
+    }
+    let node_radius = if micro { 0.012 } else { 0.013 };
+    let node_edge = (node_distance - node_radius).max(0.0);
+    c = mix(c, [0.59, 0.90, 1.0], (-(node_edge / 0.018).powi(2)).exp() * 0.30);
+    if node_distance <= node_radius {
+        c = [0.83, 0.97, 1.0];
+    }
+    let (lock, hole) = vault_lock(x, y, micro);
+    let glow = (-(lock.max(0.0) / 0.021).powi(2)).exp();
+    c = mix(c, [0.22, 0.72, 1.0], glow * 0.22);
+    if lock <= 0.0 {
+        c = if hole {
+            [0.035, 0.16, 0.29]
+        } else {
+            let glass = mix([0.73, 0.96, 1.0], [0.32, 0.68, 0.98], (y + 0.17) / 0.36);
+            mix(glass, [0.80, 0.98, 1.0], (-(lock / 0.004).powi(2)).exp() * 0.48)
+        };
+    }
+    c
+}
 fn glyph(app: &str, micro: bool, x: f32, y: f32) -> bool {
     match app {
         "command" => {
@@ -108,24 +188,8 @@ fn glyph(app: &str, micro: bool, x: f32, y: f32) -> bool {
             body && !eyes
         }
         "vault" => {
-            let shackle = if y <= -0.14 {
-                (len(x, y + 0.14) - 0.145).abs() <= 0.034
-            } else {
-                y <= -0.075 && (x.abs() - 0.145).abs() <= 0.034
-            };
-            let body = rbox(x, y, 0.0, 0.105, 0.245, 0.19, 0.045) <= 0.0;
-            let hole = len(x, y - 0.055) <= 0.049
-                || poly(
-                    x,
-                    y,
-                    &[
-                        (-0.018, 0.072),
-                        (0.018, 0.072),
-                        (0.048, 0.205),
-                        (-0.048, 0.205),
-                    ],
-                );
-            shackle || (body && !hole)
+            let (lock, hole) = vault_lock(x, y, micro);
+            lock <= 0.0 && !hole
         }
         "crystalwire" => {
             let body = poly(
@@ -217,6 +281,10 @@ fn sample(app: &str, micro: bool, u: f32, v: f32) -> [f32; 4] {
         }
     } else if (-0.040..=-0.035).contains(&tile) && !micro {
         c = mix(c, top, 0.22);
+    }
+    if app == "vault" {
+        let c = vault_finish(c, micro, x, y);
+        return [c[0], c[1], c[2], 1.0];
     }
     let body = glyph(app, micro, x, y);
     if !body && !micro && len(x, y) > 0.12 {

@@ -1,9 +1,14 @@
-# Axentra icon kit — Glass + Precision, v1
+# Axentra icon kit — Glass + Precision, v1.1
 
 This is the canonical, self-contained source kit for the Axentra app icons adopted on
 October 14, 2026. It includes all seven production icons: Command, Ghost, Vault,
 CrystalWire, Horizon, PDF and Spaces. Use this kit to reproduce the existing icons or
 give a new app the same glass tile, geometry, lighting and optical-size treatment.
+
+Revision 1.1 brings Vault closer to its original circuit-halo identity: a smaller icy-blue
+lock, thin cyan rings and restrained glow inside the existing suite tile. See the
+[Vault design notes](VAULT.md) and [revision history](CHANGELOG.md). The other six app
+icons retain their original bytes.
 
 ![Production icons, including small-size samples](references/production-preview.png)
 
@@ -64,7 +69,7 @@ repository root is historical and does not describe the current production rende
 | `assets/` | Approved production PNG/ICO exports and contact sheet |
 | `manifest.json`, `build-info.json` | SHA-256 baseline and build provenance |
 | `document-icons/` | Preserved PDF document ICOs and their legacy SVG design sources |
-| `references/` | Approved concept, labelled production preview, PDF installer preview |
+| `references/` | Original concept, current production preview, Vault reference, PDF installer preview |
 | `scripts/verify.py` | Standard-library integrity and regeneration checks |
 | `scripts/sync_assets.py` | Portable, dry-run-by-default copier for the current app projects |
 | `scripts/verify_binary.py` | Compare a Windows executable's embedded icon against an ICO |
@@ -78,5 +83,6 @@ copy plan and coordinate rebuilds before installing. The public kit contains no 
 machine paths, installers, application data or development logs.
 
 AI-generated concept artwork in `references/approved-concept.png` informed the design.
-It is a visual reference only. The actual shipping designs are defined by the renderer
+It records the initial family direction, before Vault's circuit-halo revision; it is a
+visual reference only. The actual shipping designs are defined by the renderer
 and `assets/`, so exact reproduction never depends on regenerating that concept.
