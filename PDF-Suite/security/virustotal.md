@@ -22,9 +22,9 @@ Record each result as *detections / engines* (for example `0 / 72`) with the sca
 reports go in [`scans/`](scans/), named `<version>-<file>.jpg`.
 
 **0.3.4 installer (.exe):** one engine, Deep Instinct (a machine-learning scanner), flags it; the other 67
-are clean. The same installer code scanned 0 / 68 in earlier builds. Machine-learning engines often flag new,
-unsigned installers, and this is being reported to Deep Instinct as a false positive. The MSI and the source
-are clean.
+are clean. The 0.3.1 installer scanned 0 / 68. Machine-learning engines often flag new, unsigned installers,
+and this one will be submitted to Deep Instinct for review as a likely false positive. The source scanned
+0 / 66.
 
 ## About false positives
 
