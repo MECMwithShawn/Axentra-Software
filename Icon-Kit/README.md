@@ -1,14 +1,19 @@
-# Axentra icon kit — Glass + Precision, v1.1
+# Axentra icon kit — Glass + Precision, v1.2
 
 This is the canonical, self-contained source kit for the Axentra app icons adopted on
-October 14, 2026. It includes all seven production icons: Command, Ghost, Vault,
-CrystalWire, Horizon, PDF and Spaces. Use this kit to reproduce the existing icons or
+October 14, 2026. It includes all eight production icons: Command, Ghost, Vault,
+CrystalWire, Horizon, PDF, Spaces and Mail. Use this kit to reproduce the existing icons or
 give a new app the same glass tile, geometry, lighting and optical-size treatment.
 
-Revision 1.1 brings Vault closer to its original circuit-halo identity: a smaller icy-blue
+Revision 1.2 adds [Axentra Mail](MAIL.md): a rose-pink envelope with a recessed flap,
+using the existing glass tile and optical-size treatment. All seven earlier app icons
+remain byte-identical. Ready-to-use files: [Windows ICO](assets/mail.ico) and
+[512 px PNG](assets/mail-512.png).
+
+Revision 1.1 brought Vault closer to its original circuit-halo identity: a smaller icy-blue
 lock, thin cyan rings and restrained glow inside the existing suite tile. See the
-[Vault design notes](VAULT.md) and [revision history](CHANGELOG.md). The other six app
-icons retain their original bytes.
+[Vault design notes](VAULT.md) and [revision history](CHANGELOG.md). That revision preserved the other six app
+icons byte for byte.
 
 ![Production icons, including small-size samples](references/production-preview.png)
 
@@ -22,7 +27,7 @@ Ready-to-use files are in [`assets/`](assets/):
 
 - PNGs: 16, 24, 32, 48, 64, 128, 256 and 512 px per app.
 - Windows ICOs: eight independently rendered frames at 16, 20, 24, 32, 40, 48, 64 and 256 px.
-- `preview.png`: all seven apps in renderer order, at 160 px and magnified 32/16 px.
+- `preview.png`: all eight apps in renderer order, at 160 px and magnified 32/16 px.
 
 **PDF documents keep the separate [glass PDF file icon](document-icons/README.md).**
 `assets/pdf.ico` identifies the application; it must not replace the document icon.
@@ -67,6 +72,7 @@ repository root is historical and does not describe the current production rende
 | `renderer/src/main.rs` | Deterministic PNG/ICO encoder and contact-sheet exporter |
 | `renderer/Cargo.toml`, `Cargo.lock` | Standalone Rust crate, no dependencies |
 | `assets/` | Approved production PNG/ICO exports and contact sheet |
+| `MAIL.md` | Mail symbol specification and build handoff |
 | `manifest.json`, `build-info.json` | SHA-256 baseline and build provenance |
 | `document-icons/` | Preserved PDF document ICOs and their legacy SVG design sources |
 | `references/` | Original concept, current production preview, Vault reference, PDF installer preview |

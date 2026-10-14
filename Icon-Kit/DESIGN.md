@@ -41,12 +41,14 @@ Preserve negative-space details: Ghost's eyes, Vault's keyhole and CrystalWire's
 | `horizon` | `255,180,70` / `#FFB446` | Amber sunrise, five rays, two horizon bars |
 | `pdf` | `255,105,119` / `#FF6977` | Coral folded document and dark angular Axentra mark |
 | `spaces` | `26,211,192` / `#1AD3C0` | Two overlapping teal browser windows |
+| `mail` | `239,136,199` / `#EF88C7` | Rose-pink closed envelope, recessed V-shaped flap and lower fold seams |
 
 Ghost's body has its own violet-to-cyan gradient, float RGB `[0.68,0.45,1.0]` to
 `[0.08,0.87,0.95]`; this is intentional. Command's core has an icy cyan-to-blue gradient;
 its node order clockwise from the top is Vault, CrystalWire, Horizon, Spaces, PDF, Ghost.
-Command currently represents six apps. Adding an eighth suite product does not
-automatically change its six-node logo or the existing icons.
+Command retains its original six-node logo. Adding Mail as the eighth suite product
+does not alter that logo or any existing icon. Mail uses the shared finish without
+product-specific shader changes; exact geometry and integration notes are in [MAIL.md](MAIL.md).
 
 Horizon uses a warmer top-edge blend. CrystalWire adds light on the left facets.
 These exceptions are implemented in `sample()` and are part of the approved baseline.

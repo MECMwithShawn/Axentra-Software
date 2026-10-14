@@ -1,7 +1,7 @@
 # Adding an app without changing the existing icons
 
 Work in `renderer/src/suite.rs`. The following example adds a sample app named `signal`.
-It is a recipe, not an eighth production icon. Use your real app ID and symbol instead.
+It is a recipe, not a production icon. Use your real app ID and symbol instead.
 
 ## 1. Register the app
 
@@ -12,7 +12,7 @@ Append `"signal"` to `APPS`. App IDs become output filenames. Keep existing IDs 
 Before the fallback arm in `accent()`:
 
 ```rust
-"signal" => [239, 136, 199], // #EF88C7
+"signal" => [168, 219, 100], // #A8DB64; example only, distinct from the current palette
 ```
 
 ## 3. Add the silhouette

@@ -39,6 +39,14 @@ It also does not modify project metadata, manifests or source references automat
 | PDF / `REA/axentra-pdf` | `packaging/icons/axentra-<size>.png`, `axentra.ico`; `axentra/ui/brand/` through 256 px; 96 px `packaging/windows/preview-app.bmp` |
 | Spaces / `axentra-spaces` | `src/AxentraSpaces/Assets/spaces.ico`, root `spaces-512.png` |
 
+## Axentra Mail
+
+Mail is included in the kit as `assets/mail.ico` and `assets/mail-<size>.png`. Its
+application repository and framework were not available when the icon was added, so
+no automatic destination is assumed in `sync_assets.py`. Follow [MAIL.md](MAIL.md) to
+wire the assets into the active Mail build. Add a sync mapping once its actual project
+layout is known. Generating the icon alone does not register Mail in Command.
+
 ## Framework and installer wiring
 
 **Rust applications:** either embed exported PNGs or include the shared `suite.rs` and

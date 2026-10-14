@@ -1,5 +1,14 @@
 # Icon kit revisions
 
+## Glass + Precision 1.2 — 2026-10-14
+
+- Add Axentra Mail with a rose-pink envelope and the existing suite tile and finish.
+- Render a stronger flap seam and omit lower fold seams below 32 px.
+- Supply eight PNG sizes, an eight-frame Windows ICO, and Mail build handoff notes.
+- Verify all 63 existing app exports remain byte-identical.
+- Preserve both PDF document ICOs and the shared renderer finish unchanged.
+- Expand the production contact sheet and include a light/dark optical-size proof.
+
 ## Glass + Precision 1.1 — 2026-10-14
 
 - Restore Vault's circuit-halo identity within the suite's existing blue glass tile.

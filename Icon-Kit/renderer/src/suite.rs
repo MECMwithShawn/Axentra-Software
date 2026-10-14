@@ -12,6 +12,7 @@ pub const APPS: &[&str] = &[
     "horizon",
     "pdf",
     "spaces",
+    "mail",
 ];
 fn mix(a: C3, b: C3, t: f32) -> C3 {
     let t = t.clamp(0.0, 1.0);
@@ -53,6 +54,7 @@ fn accent(app: &str) -> C3 {
         "ghost" => [170, 126, 255],
         "pdf" => [255, 105, 119],
         "spaces" => [26, 211, 192],
+        "mail" => [239, 136, 199],
         _ => [98, 180, 255],
     };
     [
@@ -250,6 +252,16 @@ fn glyph(app: &str, micro: bool, x: f32, y: f32) -> bool {
         "spaces" => {
             let mask = rbox(x, y, -0.085, 0.10, 0.22, 0.175, 0.04) <= 0.0;
             window(x, y, -0.085, 0.10, micro) || (!mask && window(x, y, 0.085, -0.10, micro))
+        }
+        "mail" => {
+            // A solid, optically centered envelope with a crisp recessed flap.
+            // The micro tier widens the flap and omits the lower fold seams.
+            let body = rbox(x, y, 0.0, 0.0, 0.315, 0.215, 0.045) <= 0.0;
+            let cut = if micro { 0.024 } else { 0.014 };
+            let flap = seg(x.abs(), y, 0.300, -0.178, 0.0, 0.040) <= cut;
+            let fold = !micro
+                && seg(x.abs(), y, 0.306, 0.193, 0.125, -0.012) <= 0.009;
+            body && !flap && !fold
         }
         _ => false,
     }
