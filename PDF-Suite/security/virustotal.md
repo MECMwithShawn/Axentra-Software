@@ -1,8 +1,8 @@
 # Security scans: Axentra PDF Suite
 
-Every release installer is scanned on [VirusTotal](https://www.virustotal.com) (70+ antivirus engines)
-before it is published. Each link opens the report for that exact file (matched by its SHA-256), so you can
-check the file you downloaded is the one that was scanned.
+Scan results and pending checks for the current release are recorded below. Each
+[VirusTotal](https://www.virustotal.com) link identifies the exact file by its SHA-256.
+The engine count varies by report; a pending entry has no recorded scan result yet.
 
 | Version | File | Result | Scanned | Report | Screenshot |
 |---|---|---|---|---|---|
