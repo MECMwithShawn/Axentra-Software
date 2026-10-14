@@ -12,6 +12,7 @@ screenshots, release notes and security scan results. Installers and extension p
 | [Axentra Vault](Vault/) | A password manager for your own KeePass file, unlocked with your master password plus an iPhone/Android passkey or a YubiKey. No account or cloud | Not released yet (in security review) | Windows 10/11 (64-bit) |
 | [Axentra CrystalWire](CrystalWire/) | See what every app sends and receives, with per-app firewall rules and Pi-hole-aware ad blocking planned. No accounts or telemetry | 0.2.2 (in development) | Windows 10/11 (64-bit) |
 | [Axentra Ghost](Ghost/) | Stop Windows telemetry, ads and tracking and remove preinstalled apps, with exact undo, drift watch that re-applies what updates turn back on, and a live telemetry monitor | 0.1.4 | Windows 10/11 (64-bit) |
+| [Axentra Mail](Mail/) | An Outlook.com mail client that filters spam and phishing and files promotions with AI that runs on your own PC. Your mail is never sent to an AI company | Not released yet (in testing) | Windows 10/11 (64-bit) |
 
 ## Icon source and design kit
 
