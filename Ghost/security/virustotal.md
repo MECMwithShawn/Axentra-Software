@@ -6,7 +6,7 @@ you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report | Screenshot |
 |---|---|---|---|---|---|
-| 0.1.4 | `AxentraGhost-0.1.4-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/6060095b76d6541af214750672c35e8345bc23dd89a7d20fcdc80b451260a01f/detection) | |
+| 0.1.4 | `AxentraGhost-0.1.4-Setup.exe` | 0 flagged (no vendor flagged it as malicious) | 2026-10-14 | [VirusTotal](https://www.virustotal.com/gui/file/6060095b76d6541af214750672c35e8345bc23dd89a7d20fcdc80b451260a01f/detection) | |
 
 SHA-256: `6060095b76d6541af214750672c35e8345bc23dd89a7d20fcdc80b451260a01f`
 
