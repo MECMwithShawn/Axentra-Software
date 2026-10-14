@@ -6,11 +6,11 @@ you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report | Screenshot |
 |---|---|---|---|---|---|
-| 0.1.8 | `AxentraCommand-0.1.8-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/48f757fb61f97912adb5d6f07047c7850ae309b9c661575dfdbcd5461a58baed/detection) | |
+| 0.1.9 | `AxentraCommand-0.1.9-Setup.exe` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/09fe65292f9acf11fc2a38500c30ee55934e04caab86bcd7c378fb7c83d21a82/detection) | |
 
 SHA-256 of each file:
 
-- `AxentraCommand-0.1.8-Setup.exe`: `48f757fb61f97912adb5d6f07047c7850ae309b9c661575dfdbcd5461a58baed`
+- `AxentraCommand-0.1.9-Setup.exe`: `09fe65292f9acf11fc2a38500c30ee55934e04caab86bcd7c378fb7c83d21a82`
 
 Record each result as *detections / engines* (for example `0 / 72`) along with the scan date. Screenshots of the
 reports go in [`scans/`](scans/), named `<version>-<file>.jpg`.

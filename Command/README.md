@@ -9,7 +9,7 @@ then pick the apps you want. There's no account, subscription, ads or tracking.
 
 ![Axentra Command showing installed apps and one more to get](screenshots/board.jpg)
 
-**Latest version: 0.1.8** · Download: release coming soon · [Release notes](releases/0.1.8.md) ·
+**Latest version: 0.1.9** · Download: release coming soon · [Release notes](releases/0.1.9.md) ·
 [Security scans](security/virustotal.md)
 
 ## Features
@@ -38,8 +38,8 @@ Command automatically, without a Command update.
 
 ## Installation
 
-Download `AxentraCommand-0.1.8-Setup.exe` from the release page and check its SHA-256 against the
-[release notes](releases/0.1.8.md). Setup installs for your user only, so no administrator rights are needed. It
+Download `AxentraCommand-0.1.9-Setup.exe` from the release page and check its SHA-256 against the
+[release notes](releases/0.1.9.md). Setup installs for your user only, so no administrator rights are needed. It
 adds a Start menu shortcut, an optional desktop shortcut and an option to start in the tray when you sign in.
 Apps you install from Command use their own Setup, and some of those (for example CrystalWire and Ghost) ask for
 administrator rights because they install for all users.

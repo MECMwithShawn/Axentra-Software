@@ -6,7 +6,7 @@ screenshots, release notes and security scan results. Installers and extension p
 
 | Product | What it is | Latest | Platforms |
 |---|---|---|---|
-| [Axentra Command](Command/) | One place for every Axentra app: see what's installed and running, keep the suite in one tray icon, choose what starts at sign-in, and install the other apps from these releases with SHA-256 checks. Start here | 0.1.8 | Windows 10/11 (64-bit) |
+| [Axentra Command](Command/) | One place for every Axentra app: see what's installed and running, keep the suite in one tray icon, choose what starts at sign-in, and install the other apps from these releases with SHA-256 checks. Start here | 0.1.9 | Windows 10/11 (64-bit) |
 | [Axentra PDF Suite](PDF-Suite/) | View, edit, convert, compress, sign and protect PDFs, with no accounts or subscriptions | 0.3.4 | Windows 10/11 (64-bit) |
 | [Axentra Edge Extension Suite](Edge-Extension-Suite/) | Browser extensions for Microsoft Edge. First: [Axentra Horizon](Edge-Extension-Suite/Horizon/), a calm new tab with Bing and Spotlight backgrounds, your favorites bar on every site, todos, habits, birthday reminders, a daily Bible verse, floating windows, seven page layouts, a tab stash and OneDrive/Google Drive backups | Horizon 0.4.2 | Microsoft Edge, Google Chrome |
 | [Axentra Spaces](Spaces/) | Borderless, always-on-top browser windows anywhere on your desktop (YouTube, Spotify, Outlook…) with saved layouts; pairs with Horizon | 0.1.0 | Windows 10/11 (64-bit) |
