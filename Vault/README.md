@@ -25,7 +25,8 @@ here, once that review is complete.
 | **Smart categories** | Entries are sorted into categories automatically: Banking, Credit cards, Investing, Bills, Shopping, Travel, Health, Email, Developer and more. You can override the category for any entry |
 | **Archive** | Retire old accounts without deleting them. Archived entries keep their full history and stay out of everyday views and search |
 | **Previous passwords** | See every earlier password for an entry and when it changed |
-| **Watchtower** | Flags reused, weak and old passwords. It works entirely offline |
+| **Watchtower** | Flags reused, weak and old passwords, entirely offline. You can also check your passwords against known data breaches (see *Privacy* below) |
+| **Malware hardening** | Other programs running on your PC can't read the vault's memory or inject code into it. Its windows are hidden from screenshots, screen recording and screen sharing (you can turn this off). Settings shows whether Windows antivirus and Smart App Control are on, and you're warned if antivirus needs attention |
 | **Protected fields** | Mark notes or custom fields as protected, so they stay hidden until you click Show |
 | **Site icons** | Optional. Downloads each website's own logo straight from that site, with no third-party icon service, and stores it in the vault |
 | **Safe clipboard** | Copied passwords are kept out of Windows clipboard history and cloud clipboard, and cleared after 12 seconds |
@@ -66,9 +67,20 @@ Screenshots use made-up demo data.
 | Your vault | Wherever you keep your `.kdbx` file. The app never uploads it |
 | Wrapped passkey key | `<vault>.kdbx.axvault`, next to the vault |
 | Previous version of the vault | `<vault>.kdbx.bak`, encrypted with the same key as the vault |
-| Preferences | `%APPDATA%\Axentra Vault`: last-opened file path, layout, column choices and sort. Never passwords or entry data |
+| Preferences | `%APPDATA%\Axentra Vault`: last-opened file path, layout, column choices and sort, and the screen-capture setting. Never passwords or entry data |
 
-The app only goes online when you click **Download site icons**.
+## Privacy
+
+The app only goes online when you ask it to:
+
+- **Download site icons:** each website is asked for its own logo, over HTTPS only.
+- **Check for breached passwords:** this uses Have I Been Pwned's free *Pwned Passwords* service, the same method
+  KeePassXC and 1Password use.
+  - Each password is turned into a SHA-1 hash on your PC, and only the first 5 characters of that hash are sent.
+  - The service returns hundreds of possible matches, and the comparison happens on your PC.
+  - Your passwords, and even their full hashes, never leave your PC. Results are kept only until you close the app.
+
+There's no telemetry, account or cloud sync.
 
 ## License
 
