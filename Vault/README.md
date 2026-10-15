@@ -2,6 +2,24 @@
 
 # Axentra Vault
 
+<!-- local-release-preparation -->
+## Prepared version: 0.1.0
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **unreleased (security review)**.
+See [release notes, build status and SHA-256 hashes](releases/0.1.0.md) and [changelog](CHANGELOG.md).
+
+- Prepared first-release packaging from audit/fixes; the manifests still identify the app as 0.1.0. No version was invented or bumped.
+- Versioned backup store with retention, manual backup, restore, legacy-backup migration, configurable roots and read-only backup sessions; uninstall preserves backups.
+- Credential changes re-encrypt reachable backups and adjacent old-key copies; cancelled changes remove the new key file and recovery handles locked originals.
+- Bounded database/key/passkey reads and KDF work, compatible effective key-file handling, same-site icon fetching and reported background-job failures.
+- Tray menu and single-instance commands integrate with Axentra Command; new suite app icon.
+
+Prepared per-user installers: `AxentraVault-0.1.0-Setup.exe` and `AxentraVault-0.1.0.msi`. **Windows Smart App Control blocks these unsigned release builds until they are code-signed.** Do not treat packaging as security sign-off. The source archive is included under GPL-3.0-or-later (Vault is GPL, not AGPL).
+
+Pending: Security review of the current audit/fixes HEAD is not recorded as complete; first-public-release sign-off remains pending.; Code signing is required for Smart App Control; fresh VirusTotal scans remain pending.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
+
 A password manager for Windows that keeps your passwords in a standard KeePass (`.kdbx`) file on your own PC.
 It can be unlocked with your master password plus your **iPhone or Android passkey**, or a **YubiKey or other FIDO2
 security key**. There's no account, cloud service, subscription or tracking. Your vault stays a normal KeePass
@@ -26,7 +44,7 @@ here, once that review is complete.
 | **Archive** | Retire old accounts without deleting them. Archived entries keep their full history and stay out of everyday views and search |
 | **Previous passwords** | See every earlier password for an entry and when it changed |
 | **Watchtower** | Flags reused, weak and old passwords, entirely offline. You can also check your passwords against known data breaches (see *Privacy* below) |
-| **Malware hardening** | Other programs running on your PC can't read the vault's memory or inject code into it. Its windows are hidden from screenshots, screen recording and screen sharing (you can turn this off). Settings shows whether Windows antivirus and Smart App Control are on, and you're warned if antivirus needs attention |
+| **Malware hardening** | A restrictive process access list and Windows mitigations protect against same-user, non-admin programs; administrator/SYSTEM malware is outside this protection. Its windows are hidden from screenshots, screen recording and screen sharing (you can turn this off). Settings shows whether Windows antivirus and Smart App Control are on, and you're warned if antivirus needs attention |
 | **Protected fields** | Mark notes or custom fields as protected, so they stay hidden until you click Show |
 | **Site icons** | Optional. Downloads each website's own logo straight from that site, with no third-party icon service, and stores it in the vault |
 | **Safe clipboard** | Copied passwords are kept out of Windows clipboard history and cloud clipboard, and cleared after 12 seconds |
@@ -65,8 +83,9 @@ Screenshots use made-up demo data.
 | What | Where |
 |---|---|
 | Your vault | Wherever you keep your `.kdbx` file. The app never uploads it |
+| Versioned backup store | `%LOCALAPPDATA%\Axentra Vault\Backups` by default; configurable in Settings > Backups. Retention, manual backups, restore and legacy-backup migration are available. Uninstall preserves backups |
 | Wrapped passkey key | `<vault>.kdbx.axvault`, next to the vault |
-| Previous version of the vault | `<vault>.kdbx.bak`, encrypted with the same key as the vault |
+| Previous versions | Saves keep previous encrypted revisions in the backup store. An ordinary save can temporarily fall back to an adjacent `.bak` if the store is unavailable; credential changes do not use that fallback |
 | Preferences | `%APPDATA%\Axentra Vault`: last-opened file path, layout, column choices and sort, and the screen-capture setting. Never passwords or entry data |
 
 ## Privacy
