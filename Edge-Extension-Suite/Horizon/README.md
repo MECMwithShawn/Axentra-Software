@@ -2,6 +2,24 @@
 
 # Axentra Horizon
 
+<!-- local-release-preparation -->
+## Prepared version: 0.6.0
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **0.4.2**.
+See [release notes, build status and SHA-256 hashes](releases/0.6.0.md) and [changelog](CHANGELOG.md).
+
+- Background music player for YouTube/YouTube Music, Spotify, audio URLs and imported local files, with saved stations and an offscreen player that continues after the new tab closes.
+- Favorites organizer proposes destinations with reasons and confidence; bookmarks move only after approval, with undo. Backup import does not reuse another PC's organizer undo state.
+- Common-site shortcuts combine pinned links with the browser's local most-visited list; shortcuts can be hidden or pinned.
+- Time-of-day Bing background collections and a Ring-layout music visualization; updated suite icon assets.
+- Added offscreen and topSites permissions. Privacy documentation now discloses music providers, artwork/audio requests and the built-in owner-server fallback.
+
+The prepared `AxentraHorizon-0.6.0.zip` is the complete unminified extension package. Extract it to a permanent folder and use Developer mode > Load unpacked in Edge or Chrome; retain the same folder on updates. There is no Windows installer or build.ps1 for this static extension. Use the 0.6.0 package and checksum in the new release notes.
+
+Pending: No source Git history is available; a source commit cannot be reported.; Review the owner-specific music fallback endpoint and missing source license declaration before public distribution.; VirusTotal scan and Edge/Chrome store submission remain pending.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
+
 A calm, beautiful new tab for Microsoft Edge and Google Chrome: Bing and Windows Spotlight backgrounds, your
 day's focus, a daily quote or Bible verse, todos, notes, habits, birthday and date reminders, a tab stash, floating
 windows and a Board of mini browsers for YouTube, Spotify and more, a focus timer and soundscapes.
@@ -9,8 +27,7 @@ No account, no subscription, no ads and no tracking.
 
 ![Axentra Horizon](screenshots/layout-classic.jpg)
 
-**Latest version: 0.4.2** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.4.2) ·
-[Release notes](releases/0.4.2.md) · [Privacy](PRIVACY.md) · [Security scans](security/virustotal.md)
+**Current source version: 0.6.0 (prepared; unpublished)** · [Prepared release notes](releases/0.6.0.md) · [Security status](security/virustotal.md)
 
 ## Features
 
@@ -23,6 +40,9 @@ No account, no subscription, no ads and no tracking.
 | **Floating windows** | Open YouTube, Spotify or almost any site in borderless windows that float over the new tab, several at once, picture-in-picture style: drag, resize, maximize, or pop one out on top of every app (`Shift+W`). Outlook, Gmail, Google Calendar and Teams open in Axentra Spaces instead (see below) |
 | **Board** | A pinned tab of “mini browsers” in a grid (one to six tiles, several saved boards): music and video keep playing while you browse. Embed-friendly sites only, or *Load almost any site* |
 | **Axentra Spaces** | Optional: send windows to [Axentra Spaces](../../Spaces/), the Axentra desktop app for real borderless, always-on-top browser windows anywhere on your desktop |
+| **Music** | Saved YouTube/YouTube Music and Spotify links, audio URLs and imported local audio files; background playback continues through an offscreen player. The built-in pinned-song fallback contacts an owner-specific server and remains a release-review item |
+| **Favorites organizer** | Review proposed bookmark folders and reasons before applying; undo can move changes back |
+| **Common sites** | Pinned links and local browser most-visited sites, with hide/pin controls |
 | **Weather** | Current conditions and a 6-day forecast; your chosen city, your device location, or an approximate location when Windows Location services are off |
 | **Reminders** | Birthdays (“Mom turns 60”), anniversaries (“10th anniversary”), bills and renewals, events and reminders; repeat yearly, monthly or weekly; desktop notifications on the day and/or up to a month before; countdowns on the dashboard; import and export `.ics` calendars (e.g. Google Calendar's Birthdays) |
 | **Habits** | Daily habits or chosen weekdays, one-click check-ins, streaks, best streak, 30-day completion, a heatmap you can fill in, and an optional daily reminder |
@@ -63,9 +83,7 @@ No account, no subscription, no ads and no tracking.
 
 ## Installation
 
-Download `AxentraHorizon-0.4.2.zip` from the
-[release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.4.2) and verify it
-against the SHA-256 in the [release notes](releases/0.4.2.md). Then:
+The prepared file is `AxentraHorizon-0.6.0.zip`; it has not been uploaded. Check the SHA-256 in the [0.6.0 notes](releases/0.6.0.md). Once a release is published, obtain it only from the official [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases) page. To install the verified package:
 
 1. Extract the zip to a folder you'll keep.
 2. Open `edge://extensions` (or `chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and
@@ -97,6 +115,8 @@ The permanent fix is the Microsoft Edge Add-ons store version (planned; see [sto
 | Tabs | Tab stash (saving the titles and addresses of the tabs you stash); finding Horizon's own Board tab so the Board's frame rules apply only to that tab; adding the favorites bar to tabs that are already open |
 | Alarms, notifications | Reminders, habit reminders and the focus timer, even with no new tab open |
 | Location | Local weather. Optional: you can pick a city instead |
+| Offscreen | Keeps the music player running after the new-tab page closes |
+| Top sites | Reads the browser's most-visited list locally for common-site shortcuts |
 | Search | Searching with your browser's default search engine |
 | Context menus | The “Stash this tab” right-click item |
 | Scripting | Adding the favorites bar to websites, and removing it when you turn it off |
@@ -149,8 +169,7 @@ Microsoft (or Google) account you're already signed into the browser with.
 
 ## Privacy
 
-Horizon has no servers and no analytics. Settings, links, reminders and habits sync through your browser
-account; everything else stays on your computer. See [PRIVACY.md](PRIVACY.md) for the details.
+Horizon has no analytics. Music playback contacts the selected media providers and can download a built-in pinned-song fallback from an owner-specific server. Settings, links, reminders and habits sync through your browser account; local files stay on this computer. See [PRIVACY.md](PRIVACY.md) for the details.
 
 ## Credits
 

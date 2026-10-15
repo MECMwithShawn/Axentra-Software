@@ -1,9 +1,8 @@
 # Privacy: Axentra Horizon
 
-*Last updated: 14 October 2026 (0.4.2)*
+*Prepared update: 14 October 2026 (0.6.0; unpublished)*
 
-Axentra Horizon is a new tab page extension. It has no servers of its own, no accounts, no analytics, no ads
-and no tracking. Axentra never receives any of your data.
+Axentra Horizon is a new tab extension with no Axentra account or analytics. Optional music playback contacts media providers, artwork hosts and audio sources; the built-in pinned-song fallback can contact an owner-specific server. These requests expose the normal network information any request sends to its destination.
 
 ## What Horizon stores, and where
 
@@ -44,7 +43,7 @@ Horizon checks the addresses of your open tabs to find its own Board tab (so sit
 Horizon's pages) and to add the favorites bar to websites that are already open. It saves tab titles and addresses
 only when you stash them; tab information is never stored otherwise, and Horizon never sends it anywhere (stashes
 are included in backup files if you turn on backups, see above). It reads your favorites/bookmarks to show your favorites bar,
-and changes them only when you edit, delete or add a favorite from the bar. The favorites bar for websites is on by default: Horizon adds the bar to the
+and changes them when you edit, delete or add a favorite, or approve a favorites-organizer plan. Organizer changes support undo. The favorites bar for websites is on by default: Horizon adds the bar to the
 pages you open (it moves the page down or slides over it) and does not read, collect or send anything from those
 pages. Turn it off in *Settings → Bookmarks & links*, or for one site from the bar's ⋯ menu. It uses your location only for weather, and only if you haven't chosen a
 city.
@@ -62,6 +61,13 @@ Horizon hands a site's address to the Axentra Spaces app on your PC (through an 
 you to allow the first time) when *Open new windows in Axentra Spaces* is on, when you use the Window panel's *Open in
 Axentra Spaces* link, when you open Outlook, Gmail, Google Calendar or Teams from the Window panel (these always go to Spaces there,
 because they can't run inside a page), and when you click an *Open in Axentra Spaces* button. Nothing leaves your computer. See the [permissions table](README.md#permissions).
+
+## Prepared 0.6.0 additions
+
+- **Most-visited sites:** the `topSites` permission reads the browser's list locally for common-site shortcuts. The list is not uploaded by Horizon.
+- **Music:** YouTube/YouTube Music, Spotify, artwork hosts (including YouTube thumbnails), user-supplied audio URLs and the built-in owner-server audio fallback receive normal media/page requests when used. The source currently identifies that fallback host as `18.216.130.112`; its suitability for a public release is pending review.
+- **Local audio:** imported music files and downloaded copies are held in IndexedDB on this computer. The offscreen document keeps playback running after a new tab closes; media-provider terms and browser playback restrictions still apply.
+- **Favorites organizer:** proposals use bookmark titles, URLs and folders locally; applying a plan requires approval. Organizer undo data is not reused when importing a backup from another computer.
 
 ## Contact
 

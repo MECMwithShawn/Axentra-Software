@@ -7,7 +7,7 @@ not stored in the folders.
 
 | Extension | What it is | Latest | Browsers |
 |---|---|---|---|
-| [Axentra Horizon](Horizon/) | A calm new tab: Bing and Windows Spotlight backgrounds, focus, a daily quote or Bible verse, todos, notes, habits, birthday and date reminders, tab stash, a favorites bar for every website, floating windows and a Board of mini browsers, seven page layouts, focus timer and soundscapes | 0.4.2 | Edge, Chrome (120+) |
+| [Axentra Horizon](Horizon/) | New tab with music playback, favorites organizer, local most-visited shortcuts, backgrounds, reminders, habits and floating windows | 0.6.0 (prepared; unpublished) | Edge, Chrome (120+) |
 
 ## Installing an extension from a release
 

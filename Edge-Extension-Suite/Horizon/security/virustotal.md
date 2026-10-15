@@ -26,3 +26,11 @@ policy is the Manifest V3 default, which blocks remote scripts. You can read eve
 
 Browser extensions aren't Authenticode-signed. When Horizon is published on the Microsoft Edge Add-ons store,
 the store signs the package and this section will link to the listing.
+
+## Prepared 0.6.0 (unpublished)
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+
+- [AxentraHorizon-0.6.0.zip](https://www.virustotal.com/gui/file/be38852e41fd68489c6fd62970db5d259d83b8142757e8d0880120d93a5b023d/detection): scan pending; this is a hash lookup, not a recorded result.
+
+See [release preparation](../releases/0.6.0.md) for build validation and pending signing/review work.
