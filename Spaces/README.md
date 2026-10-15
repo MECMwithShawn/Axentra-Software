@@ -2,6 +2,24 @@
 
 # Axentra Spaces
 
+<!-- local-release-preparation -->
+## Prepared version: 0.1.2
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **0.1.0**.
+See [release notes, build status and SHA-256 hashes](releases/0.1.2.md) and [changelog](CHANGELOG.md).
+
+- Verified 0.1.2 in both the .NET project and Inno installer; documentation was still at 0.1.0.
+- Tray icon hides while Axentra Command hosts the suite tray and returns when hosting stops; checks the tray-host mutex every two seconds.
+- Added --toggle, --show and --exit for Command's grouped tray menu.
+- Suite app icon and small tray-icon frame selection from 0.1.1; single-file compression keeps the self-contained portable build compact.
+- Built a fresh per-user installer and versioned portable executable, retaining the current working-tree icon assets.
+
+Prepared files are `AxentraSpaces-0.1.2-Setup.exe` (per-user installation, no administrator rights) and `AxentraSpaces-0.1.2-portable.exe` (self-contained). Both need the Edge WebView2 Runtime. Use the 0.1.2 SHA-256 records in the new release notes. Installing registers the axentra-spaces:// link; layouts and browser data are preserved on normal upgrades/uninstall.
+
+Pending: Source has two pre-existing uncommitted icon edits; their hashes are preserved. Confirm the missing source license declaration before public distribution.; Code signing and fresh VirusTotal scans pending.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
+
 Real, borderless browser windows that float anywhere on your Windows desktop. Put a YouTube video in one corner,
 Spotify in another and Outlook down the side. Pin any of them above everything else, and save the arrangement as a
 layout you can switch back to. Every site works, because each window is a full Microsoft Edge (WebView2) browser,
@@ -10,8 +28,7 @@ extension. There's no account, subscription, ads or tracking.
 
 ![A borderless Axentra Spaces window](screenshots/window.jpg)
 
-**Latest version: 0.1.0** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/spaces-v0.1.0) ·
-[Release notes](releases/0.1.0.md) · [Security scans](security/virustotal.md)
+**Current source version: 0.1.2 (prepared; unpublished)** · [Prepared release notes](releases/0.1.2.md) · [Security status](security/virustotal.md)
 
 ## Features
 
@@ -25,6 +42,7 @@ extension. There's no account, subscription, ads or tracking.
 | **Pop-ups** | Sign-in and other pop-up windows open as Spaces windows too, and full-screen video works |
 | **Works with Horizon** | In Horizon, turn on *Settings → Board → Open new windows in Axentra Spaces* and its **Window** button sends sites here |
 | **Starts with Windows** | Optional: waits in the tray, ready for `Ctrl+Alt+N` |
+| **Axentra Command** | Command can host the tray icon and send Show, Hide/Show and Exit actions; Spaces shows its own icon again when hosting stops |
 
 ## Screenshots
 
@@ -50,13 +68,12 @@ Exit.
 
 ## Installation
 
-Download from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/spaces-v0.1.0) and
-check the SHA-256 against the [release notes](releases/0.1.0.md):
+The following 0.1.2 files are prepared locally and have not been uploaded. Check the SHA-256 against the [release notes](releases/0.1.2.md). Once published, obtain them only from the official [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases) page:
 
 | File | Use it for |
 |---|---|
-| `AxentraSpaces-0.1.0-Setup.exe` | Installing on your PC. It installs for your user only, so no administrator rights are needed. It adds a Start menu shortcut, plus an optional desktop shortcut and an option to start when you sign in |
-| `AxentraSpaces-0.1.0-portable.exe` | Running without installing. Horizon's *Open in Axentra Spaces* needs the installed version, or one run of the portable exe, so Windows knows the `axentra-spaces://` link |
+| `AxentraSpaces-0.1.2-Setup.exe` | Installing on your PC. It installs for your user only, so no administrator rights are needed. It adds a Start menu shortcut, plus an optional desktop shortcut and an option to start when you sign in |
+| `AxentraSpaces-0.1.2-portable.exe` | Running without installing. Horizon's *Open in Axentra Spaces* needs the installed version, or one run of the portable exe, so Windows knows the `axentra-spaces://` link |
 
 Spaces isn't code-signed yet, so Windows SmartScreen may say *Windows protected your PC*. Click **More info → Run
 anyway**, after checking the checksum.

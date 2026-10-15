@@ -28,3 +28,12 @@ positive and noted here.
 ## Code signing
 
 Not signed yet. Code signing is planned; this section will show the publisher name once releases are signed.
+
+## Prepared 0.1.2 (unpublished)
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+
+- [AxentraSpaces-0.1.2-Setup.exe](https://www.virustotal.com/gui/file/9293f0f4fb6abd5ad69fe870b0c918da9e2e3f9ab8f062be00e719183475b0f9/detection): scan pending; this is a hash lookup, not a recorded result.
+- [AxentraSpaces-0.1.2-portable.exe](https://www.virustotal.com/gui/file/a6a0a3e1892ae4d7cf824e8ff793757424f4c8fb1a57d5d4511f345aaa89a217/detection): scan pending; this is a hash lookup, not a recorded result.
+
+See [release preparation](../releases/0.1.2.md) for build validation and pending signing/review work.
