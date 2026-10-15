@@ -24,3 +24,11 @@ shows generic detections, they are reported to the vendor as false positives and
 ## Code signing
 
 Not signed yet. Code signing is planned; this section will show the publisher name once releases are signed.
+
+## Prepared 0.1.4 (unpublished)
+
+This is a local rebuild of an already published version; the published assets and checksums remain unchanged.
+
+- [AxentraGhost-0.1.4-Setup.exe](https://www.virustotal.com/gui/file/6060095b76d6541af214750672c35e8345bc23dd89a7d20fcdc80b451260a01f/detection): the repository records 0 vendors flagged on 2026-10-14 for this exact SHA-256. The rebuilt file matches it; no fresh scan was submitted or independently verified during this task.
+
+See [release preparation](../releases/0.1.4-rebuild.md) for build validation and pending signing/review work.
