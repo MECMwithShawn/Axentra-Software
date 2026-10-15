@@ -2,51 +2,73 @@
 
 # Axentra CrystalWire
 
-See what every app on your Windows PC is doing on the network, and later decide which apps get to connect at all.
-CrystalWire records how much each app sends and receives, which servers it talks to, and the first time each app
-ever goes online. Everything stays on your PC. There's no account, subscription, cloud console, ads or telemetry.
+<!-- local-release-preparation -->
+## Prepared version: 0.8.2
 
-**Status: 0.2.2, in development, installed on the developer PC only (no public download).** Full functional spec and test results: [SPEC.md](SPEC.md). It is a monitor only: it records traffic and doesn't block
-anything or change any firewall rules.
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **0.2.2**.
+See [release notes, build status and SHA-256 hashes](releases/0.8.2.md) and [changelog](CHANGELOG.md).
 
-## What's planned
+- Advanced the distribution documentation from 0.2.2 to the real 0.8.2 workspace version, with the current Rust/WebView2 architecture and refreshed functional spec.
+- Security Center with reputation checks and review queue; live traffic graph, app identity and connection-owner attribution; Home/Work/Public profiles and consent-gated discovery/network map.
+- Read-only ASUS router access and network/DNS configuration-health evidence, with CLI/MCP tools and AI-agent task handoff.
+- Opt-in Ghost/Pi-hole domain synchronization with home-network validation, bounded authenticated command-pipe handling and queued removal from earlier Pi-holes.
+- Upgrade/Fresh installation modes, service-start recovery and Setup console fixes; shared Command tray and background launch.
+- Per-app WFP firewall rules and a local DNS blocking engine remain planned, rather than being advertised as implemented.
 
-| Area | What you get | Status |
-|---|---|---|
-| **Per-app traffic** | Bytes sent and received by each app, every second, with per-minute and per-hour history by server | Working (0.2) |
-| **Server names** | Remote addresses shown as names from the PC's own DNS lookups, with a reverse-DNS fallback | Working (0.2) |
-| **New-app alerts** | A record of the first time each app reaches the network | Working (0.2) |
-| **Graphs and app list** | A live traffic graph you can click to see which apps and servers caused a spike, with a timeline | Working (0.2): the CrystalWire window, 5 minutes to a month |
-| **Country and owner** | The country and network owner of every server, from an offline database (no lookups sent anywhere) | Working (0.2): iptoasn.com database, refreshed monthly |
-| **Per-app firewall** | Allow or block each app separately for incoming and outgoing traffic, using the Windows Filtering Platform. It doesn't change your Windows Firewall rules | Planned |
-| **Ask to connect** | New apps are held back until you allow them; temporary rules (*allow for 1 hour*) | Planned |
-| **Domain blocking** | Block ad, tracker and malware domains for every app, using the same blocklists as Pi-hole, with no HTTPS interception and no root certificate | Planned |
-| **Pi-hole integration** | Hands blocking to your Pi-hole at home and does it locally elsewhere, and shows *which app* made each blocked lookup | Partly working (0.2): per-app attribution of Pi-hole blocks; local blocking planned |
-| **Security alerts** | Changes to DNS servers, proxy settings or the hosts file, ARP spoofing, new devices on your network, a changed program that keeps its old permissions | Planned |
+Prepared `AxentraCrystalWire-0.8.2-Setup.exe` is a per-machine installer and requires administrator rights for the recording service. Upgrade preserves history/settings; Fresh install is an explicit destructive choice, with removing saved logins separate. This task did not install, stop or reconfigure the running service.
 
-## How it works
+Pending: The build includes existing uncommitted source icon assets; their hashes are preserved, but a source commit alone does not reproduce this working tree.; Code signing and fresh VirusTotal scan pending; installer not installed during this task.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
 
-- A background Windows service (`Axentra CrystalWire`) reads the network, DNS and process events that Windows
-  already produces (Event Tracing for Windows). It doesn't use a packet-capture driver and doesn't read packet contents.
-- History goes to a local SQLite database: per-second totals for 24 hours, per-minute by server for 30 days, and
-  per-hour by server indefinitely.
-- In tests, its byte counts matched curl's own count within 0.2% on a 100 MB download, and came within 1% of the
-  network adapter's counters once packet headers were included.
+A Windows network monitor with per-app traffic history, a live graph, DNS and Pi-hole attribution,
+a Security Center, network maps and configuration-health checks. It records Windows network events
+without reading packet contents. There is no Axentra account, subscription or telemetry.
 
-## Privacy
+## Current features
 
-CrystalWire has no servers, accounts or analytics, and Axentra never receives any data from it. The only network
-requests it makes itself are reverse-DNS lookups for unnamed servers (through your normal DNS resolver), a monthly
-download of the public iptoasn.com owner database, and, if you connect it, reads of your own Pi-hole's query log. The
-Pi-hole app password stays in your Windows Credential Manager. The history
-database stays on your PC.
+| Area | Available in 0.8.2 |
+|---|---|
+| Traffic and attribution | Live stacked traffic graph, per-app and per-server history, country/network-owner database, service-aware app names and icons; connection-owner attribution fixes prevent busy unrelated processes being credited with traffic |
+| DNS and Pi-hole | Per-app DNS history, which DNS server answered, Pi-hole block attribution and warnings when DNS bypasses Pi-hole |
+| Security Center | File signature and Defender checks, review queue, changed-file alerts, optional online hash reputation checks, tray review/threat badge |
+| Home, Work and Public | Home device discovery requires consent. Work/Public views avoid discovery and can report LAN contacts; unknown networks default to Public |
+| Network map | Device links, details, labels and SVG export; optional ASUS router connection adds wired/Wi-Fi and guest-network information |
+| Configuration health | Read-only checks of this PC, connected router and Pi-hole; evidence explains what was reported and where a setting can be fixed |
+| AI-agent handoff | A finding can be handed to an agent with evidence and ground rules; `cw mcp` exposes read-only findings and recheck tools |
+| Ghost integration | With explicit setup, the service synchronizes Ghost's selected domains to the configured home Pi-hole and removes only Ghost-tagged entries; home-network checks and queued removals protect switching networks |
+| Command integration | Shared suite tray, review counts and actions, background startup; its own tray returns when Command stops hosting |
+| Upgrade handling | Upgrade preserves history/settings; Fresh install is an explicit choice. Setup shows intervening changes and verifies that the recording service starts |
 
-## System requirements (planned)
+Per-app allow/block firewall rules, ask-to-connect and a local DNS blocking engine are future milestones.
+The current app does not install those WFP firewall rules. Ghost's opt-in Pi-hole synchronization can
+change Ghost-tagged deny-list entries on your Pi-hole.
 
-- Windows 10 or 11, 64-bit
-- Administrator rights to install, because the service runs as SYSTEM to read network events
+## Installation and requirements
 
-## Built with
+- Windows 10 (1809 or later) or Windows 11, 64-bit; Microsoft Edge WebView2 Runtime.
+- Administrator rights for Setup, because the recording service runs as SYSTEM.
+- Prepared installer: `AxentraCrystalWire-0.8.2-Setup.exe`. Check its SHA-256 in the release notes before running it.
+- Setup installs the window, recording service and `cw` command-line tool. Choose Upgrade to retain data;
+  Fresh install clears history/settings, and removing saved logins is a separate choice.
+- This preparation task builds the installer only; it does not install or upgrade the running service.
 
-Rust (service, capture and command-line tool), SQLite, and the Windows ETW and WFP APIs. The planned interface uses
-.NET 8 with Microsoft Edge WebView2, like [Axentra Spaces](../Spaces/).
+The installer is unsigned. SmartScreen may warn and Smart App Control can block it. Signing and a
+VirusTotal scan of this exact build are pending.
+
+## Privacy and optional connections
+
+Traffic history is stored locally in SQLite. Network capture uses Windows ETW events, without a
+packet-capture driver, HTTPS interception or a root certificate. Optional network features include
+reverse DNS, the public owner database, connections to your Pi-hole/router, and opt-in file-hash
+reputation checks. Online reputation requests send hashes rather than uploading files.
+
+Router access is read-only, restricted to the trusted Home setup, with its certificate pinned.
+Configuration-health checks report findings; they do not automatically change router/DNS settings.
+Ghost synchronization writes only the opted-in Ghost-tagged Pi-hole entries.
+
+## Technical reference
+
+See [SPEC.md](SPEC.md) for the implemented monitor milestone and the remaining firewall/blocking plans.
+The service, command-line tools and window are written in Rust; the window uses Microsoft Edge WebView2.
+The source workspace declares the MIT license.
