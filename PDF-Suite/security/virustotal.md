@@ -38,3 +38,11 @@ noted here.
 The installers are **not code-signed**. Windows SmartScreen therefore warns on first run, and PCs with
 Smart App Control turned on block them. Code signing (an OV/EV certificate or Microsoft Trusted Signing) is
 planned; this section will name the signer once releases are signed.
+
+## Prepared 0.3.8 (unpublished)
+
+- [AxentraPDF-0.3.8-Setup.exe](https://www.virustotal.com/gui/file/4b82c0d4441d9a928c4f623a7f5201ee1995db4a63bdc9724e53dc5c78f94a88/detection): scan pending; this is a hash lookup, not a recorded result.
+- [AxentraPDF-0.3.8.msi](https://www.virustotal.com/gui/file/4488763acf92d1262a1cb3fd080f2f48e0b503e666737371f494437428a20a63/detection): scan pending; this is a hash lookup, not a recorded result.
+- [AxentraPDF-0.3.8-source.zip](https://www.virustotal.com/gui/file/9b5ca8704ea1ed55781c629296501d27209588242c78caf74587b2f4c9e38646/detection): scan pending; this is a hash lookup, not a recorded result.
+
+See [release preparation](../releases/0.3.8.md) for build validation and pending signing/review work.

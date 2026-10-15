@@ -1,11 +1,27 @@
 # Axentra PDF Suite
 
+<!-- local-release-preparation -->
+## Prepared version: 0.3.8
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **0.3.4**.
+See [release notes, build status and SHA-256 hashes](releases/0.3.8.md) and [changelog](CHANGELOG.md).
+
+- Glass + Precision coral document app icon across the app, taskbar and installers; Glossy is now the default PDF file icon.
+- System tray menu and single-instance behavior: opening another PDF adds a tab in the running window; Command can host the tray entry.
+- Blue suite accent across the ribbon, thumbnails, form editor and reports.
+- Installer asks before removing a different installed Axentra copy and shows removal progress; unattended installs do not remove other software.
+
+Prepared installers: `AxentraPDF-0.3.8-Setup.exe` for interactive setup and `AxentraPDF-0.3.8.msi` for managed deployment. Existing installation instructions below describe the previously published 0.3.4 release. Check the new release's SHA-256 before running a prepared installer.
+
+Pending: Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.; Installers are unsigned; Smart App Control can block them. Code signing and fresh VirusTotal scans remain pending.
+<!-- /local-release-preparation -->
 A complete desktop PDF editor for Windows: view, edit, convert, compress, fill, sign and protect PDFs.
 No account, activation, trial or subscription, and nothing is sent online.
 
 ![Axentra PDF](screenshots/home.png)
 
-**Latest version: 0.3.4** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.4) ·
+**Latest published version: 0.3.4** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/pdf-suite-v0.3.4) ·
 [Release notes](releases/0.3.4.md) · [Security scans](security/virustotal.md)
 
 **VirusTotal status for 0.3.4:** installer (.exe) **1 / 68** detections (Deep Instinct only),
