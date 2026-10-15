@@ -2,6 +2,24 @@
 
 # Axentra Mail
 
+<!-- local-release-preparation -->
+## Prepared version: 0.1.2
+
+This version is prepared locally and is awaiting approval to upload a GitHub Release draft.
+The previously documented version was **unreleased (handoff build 0.1.0)**.
+See [release notes, build status and SHA-256 hashes](releases/0.1.2.md) and [changelog](CHANGELOG.md).
+
+- Source is now 0.1.2, ahead of the handoff's 0.1.0 installer. Fixed UTF-8 slicing crashes that could permanently stop sorting; per-message panic handling skips failures and records crashes in crash.log.
+- Sorting status page shows progress, waiting/sorted counts, timing, recent decisions and category totals, with pause and resume.
+- Resizable folder, message and reading panes remember their widths; double-click resets a divider.
+- AI work no longer blocks opening, archiving or moving messages. Fixed native TLS for Microsoft HTTPS calls and made sign-in cancellation release the screen immediately.
+- Per-user Inno installer includes optional desktop/startup entries and preserves the local mail copy on uninstall unless removal is selected.
+
+Prepared `AxentraMail-0.1.2-Setup.exe` installs for the current user to `%LOCALAPPDATA%\Programs\Axentra Mail`, without administrator rights. It adds a Start menu entry plus optional desktop and Start with Windows entries. Uninstall preserves your mail cache unless you explicitly choose to remove it. A Microsoft app registration, mailbox setup and optional local Ollama model are still required; the installer does not configure those accounts.
+
+Pending: Code signing and fresh VirusTotal scan pending.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
+
 An Outlook.com mail client for Windows that cleans up your inbox with AI that runs **on your own PC**. Spam and
 phishing are caught and held for you. Promotions, newsletters and app notifications are filed away automatically
 (always undoable). Your mail is never sent to an AI company. There's no Axentra server, account, subscription or
@@ -21,6 +39,8 @@ here, once it's ready.
 | **Automatic filing, safely** | Low-risk mail moves to *Promotions*, *Newsletters* and *Social & alerts* folders on its own, but only with bulk-mail headers, from senders you never write to, and never anything that looks like a code, receipt, bill or account notice |
 | **Spam and phishing wait for you** | *To review* shows the evidence: links whose text names one site but go to another, failed SPF/DKIM/DMARC, replies redirected to another domain. Nothing suspicious moves without your OK |
 | **Undo everything** | *Activity & undo* lists every move the AI or you made, with one-click undo |
+| **Sorting status** | Live queue progress, timing, recent decisions and category totals, with pause and resume. A failed message is skipped instead of stopping the worker |
+| **Resizable panes** | Drag the folder, message-list and reading-pane dividers; widths are remembered and double-click resets them |
 | **Cleanup** | Mail that was already in your inbox when you connected gets suggestions, grouped so one click files a whole group |
 | **Needs a reply** | Real people waiting for your answer, as the AI reads it |
 | **Senders** | Who fills your mailbox and how much of it you read. Set a rule per sender (always keep, always file, always junk) or unsubscribe with the sender's own link |
