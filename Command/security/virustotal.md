@@ -26,3 +26,11 @@ positive and noted here.
 ## Code signing
 
 Not signed yet. Code signing is planned; this section will show the publisher name once releases are signed.
+
+## Prepared 0.1.9 (unpublished)
+
+This is a local rebuild of an already published version; the published assets and checksums remain unchanged.
+
+- [AxentraCommand-0.1.9-Setup.exe](https://www.virustotal.com/gui/file/09fe65292f9acf11fc2a38500c30ee55934e04caab86bcd7c378fb7c83d21a82/detection): scan pending; this is a hash lookup, not a recorded result.
+
+See [release preparation](../releases/0.1.9-rebuild.md) for build validation and pending signing/review work.

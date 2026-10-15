@@ -2,6 +2,23 @@
 
 # Axentra Command
 
+<!-- local-release-preparation -->
+## Prepared version: 0.1.9
+
+This is a local rebuild of an already published version; the published assets and checksums remain unchanged.
+The previously documented version was **0.1.9**.
+See [release notes, build status and SHA-256 hashes](releases/0.1.9-rebuild.md) and [changelog](CHANGELOG.md).
+
+- Shawn confirmed the final product name is Axentra Command.
+- Source and published documentation both remain at 0.1.9; the only subsequent commit updates TRAY-HOST documentation for AxentraPDF 0.3.8.
+- Current 0.1.9 behavior includes self-update, background update checks, tray update alerts and a testing channel; these are existing features, not a new version bump.
+- Rebuilt locally with the app's build script; the installer SHA-256 exactly matches GitHub's published asset digest. Preserved the published 0.1.9 release notes and original asset checksum.
+
+The existing published installer and installation instructions below remain valid. The rebuilt `AxentraCommand-0.1.9-Setup.exe` is kept locally with its own checksum. A different rebuilt binary must not replace the published file under the same tag without an explicit release/version decision.
+
+Pending: command-v0.1.9 is already published and the rebuilt installer matches it exactly; no duplicate draft is needed or created.; Code signing and VirusTotal scans of the rebuild remain pending.; Draft release assets remain local at Shawn's request. Pushing and publishing still require approval.
+<!-- /local-release-preparation -->
+
 One place for every Axentra app. Command shows what you have installed and what's running, keeps all the suite's
 tray icons in one, starts the apps you choose when you sign in, and installs the ones you don't have yet straight
 from this repository's releases, checked against GitHub's SHA-256 before anything runs. Install Command first,
@@ -9,7 +26,7 @@ then pick the apps you want. There's no account, subscription, ads or tracking.
 
 ![Axentra Command showing installed apps and one more to get](screenshots/board.jpg)
 
-**Latest version: 0.1.9** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/command-v0.1.9) · [Release notes](releases/0.1.9.md) ·
+**Latest published version: 0.1.9** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/command-v0.1.9) · [Release notes](releases/0.1.9.md) ·
 [Security scans](security/virustotal.md)
 
 ## Features
@@ -18,7 +35,7 @@ then pick the apps you want. There's no account, subscription, ads or tracking.
 |---|---|
 | **Your apps** | A card for every installed Axentra app with its version, who it's installed for (just you or all users), whether it's running, and its background service if it has one. Open the app or its folder in one click |
 | **Get more apps** | Apps you don't have yet appear as cards with a **Get** button. Command downloads the installer from this repository's [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases), checks it against the SHA-256 GitHub publishes for that file and only then starts Setup. A file that doesn't match is deleted, and a file without a published checksum is never run |
-| **Updates** | Shows when a newer version of an installed app is out, with an **Update** button that works the same way |
+| **Updates** | Checks in the background from the tray, including updates to Command itself. Tray alerts and Update buttons show newer versions; Settings offers a testing channel for pre-releases |
 | **One tray icon** | Axentra apps hide their own notification-area icons while Command is running, and their menus move into Command's: each app gets a submenu with its own actions (for example *Lock vault*, *Show / hide windows*, *Security Center*). If Command closes, the apps' own icons come back. Can be turned off |
 | **Alerts in one place** | Apps can report items that need you (for example CrystalWire's review queue). They show as a red or amber dot on Command's tray icon and as a note on the board |
 | **Start with Command** | Choose which apps start when you sign in. Command starts them quietly in the tray (or normally, if an app has no tray mode) and skips any that are already running |
