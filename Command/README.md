@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Command logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.1.9 local rebuild. Public release: **0.1.9**. Mail and Archive are built into the nine-app catalog. Archive uses app ID `zip`. The local rebuild differs from published 0.1.9; assign a new version before releasing it.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Command`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Command
 
 <!-- local-release-preparation -->

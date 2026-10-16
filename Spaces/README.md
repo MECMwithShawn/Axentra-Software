@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Spaces logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.1.2. Public release: **None**. Floating WebView2 windows and saved layouts; integrates with Horizon and Command.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Spaces`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Spaces
 
 <!-- local-release-preparation -->

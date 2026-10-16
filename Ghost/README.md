@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Ghost logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.1.4 local rebuild. Public release: **0.1.4**. Windows privacy controls with exact undo and drift monitoring. The local installer uses the shared suite root; published installer hashes still describe the original release.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Ghost`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Ghost
 
 <!-- local-release-preparation -->

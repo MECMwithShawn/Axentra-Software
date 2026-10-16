@@ -1,0 +1,331 @@
+{
+  "apps": [
+    {
+      "id": "command",
+      "name": "Axentra Command",
+      "tagline": "One place for every Axentra app",
+      "kind": "desktop",
+      "order": 0,
+      "accent": "#38bdf8",
+      "install": {
+        "uninstall_key": "{6F3B2C1D-8A4E-4F7B-9C2D-1E5A7B3C9D20}_is1",
+        "exe": "%ProgramFiles%/Axentra/Command/AxentraCommand.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Command/AxentraCommand.exe"
+      },
+      "process": [
+        "AxentraCommand.exe"
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "command-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "crystalwire",
+      "name": "Axentra CrystalWire",
+      "tagline": "Network monitor, DNS blocking and Pi-hole",
+      "kind": "desktop",
+      "order": 20,
+      "accent": "#1fd0ea",
+      "icon": "{source}/assets/crystalwire-512.png",
+      "install": {
+        "uninstall_key": "{9C1E6B0A-3F7D-4D2B-9E5A-6A1C2F8B7D41}_is1",
+        "exe": "%ProgramFiles%/Axentra/CrystalWire/CrystalWire.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/CrystalWire/CrystalWire.exe"
+      },
+      "process": [
+        "CrystalWire.exe"
+      ],
+      "background_args": [
+        "--background"
+      ],
+      "service": "AxentraCrystalWire",
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "crystalwire-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "ghost",
+      "name": "Axentra Ghost",
+      "tagline": "Anti-telemetry, privacy hardening and debloat, with exact undo",
+      "kind": "desktop",
+      "order": 35,
+      "accent": "#aa7eff",
+      "icon": "{source}/assets/ghost.ico",
+      "install": {
+        "uninstall_key": "{1E7F7782-F3DA-45CD-991E-15B7C44CD931}_is1",
+        "exe": "%ProgramFiles%/Axentra/Ghost/AxentraGhost.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Ghost/AxentraGhost.exe"
+      },
+      "process": [
+        "AxentraGhost.exe"
+      ],
+      "background_args": [
+        "--background"
+      ],
+      "tray": [
+        {
+          "label": "Rescan",
+          "args": [
+            "--scan"
+          ]
+        },
+        {
+          "label": "Live monitor",
+          "args": [
+            "--activity"
+          ]
+        },
+        {
+          "label": "Re-apply drifted settings\u2026",
+          "args": [
+            "--reapply"
+          ],
+          "running_only": false
+        },
+        {
+          "label": "Exit Axentra Ghost",
+          "args": [
+            "--exit"
+          ],
+          "running_only": true,
+          "separator": true
+        }
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "ghost-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "horizon",
+      "name": "Axentra Horizon",
+      "tagline": "New-tab page for Edge: clock, focus, board, favorites bar",
+      "kind": "extension",
+      "order": 30,
+      "accent": "#ffb446",
+      "icon": "{source}/icons/512.png",
+      "install": {
+        "extension_path": "~/code/stillpoint"
+      },
+      "launch": {
+        "exe": "msedge.exe",
+        "args": [
+          "--new-window"
+        ]
+      },
+      "links": [
+        {
+          "label": "Edge extensions page",
+          "url": "edge://extensions"
+        }
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "horizon-v",
+        "asset_suffix": ".zip"
+      }
+    },
+    {
+      "id": "mail",
+      "name": "Axentra Mail",
+      "tagline": "Outlook.com with private, on-device AI triage",
+      "kind": "desktop",
+      "order": 70,
+      "accent": "#EF88C7",
+      "icon": "{source}/assets/mail-512.png",
+      "install": {
+        "uninstall_key": "{A41250E3-53B3-4C55-AC97-C4EA060C4CA2}_is1",
+        "exe": "%ProgramFiles%/Axentra/Mail/AxentraMail.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Mail/AxentraMail.exe"
+      },
+      "process": [
+        "AxentraMail.exe"
+      ],
+      "background_args": [
+        "--background"
+      ],
+      "tray": [
+        {
+          "label": "Check mail now",
+          "args": [
+            "--sync"
+          ],
+          "running_only": true
+        },
+        {
+          "label": "Exit Axentra Mail",
+          "args": [
+            "--exit"
+          ],
+          "running_only": true,
+          "separator": true
+        }
+      ]
+    },
+    {
+      "id": "pdf",
+      "name": "AxentraPDF",
+      "tagline": "Edit, sign, convert and compress PDFs",
+      "kind": "desktop",
+      "order": 40,
+      "accent": "#ff6977",
+      "icon": "{source}/packaging/icons/axentra-512.png",
+      "install": {
+        "uninstall_key": "{AA236E81-0A76-49D9-82D7-FAA09CAA0DB1}_is1",
+        "exe": "%ProgramFiles%/Axentra/PDF/axentra.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/PDF/axentra.exe"
+      },
+      "process": [
+        "axentra.exe"
+      ],
+      "tray": [
+        {
+          "label": "Open File\u2026",
+          "args": [
+            "--open"
+          ]
+        },
+        {
+          "label": "Exit AxentraPDF",
+          "args": [
+            "--exit"
+          ],
+          "running_only": true,
+          "separator": true
+        }
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "pdf-suite-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "spaces",
+      "name": "Axentra Spaces",
+      "tagline": "Borderless, always-on-top browser windows",
+      "kind": "desktop",
+      "order": 50,
+      "accent": "#1ad3c0",
+      "icon": "{source}/spaces-512.png",
+      "install": {
+        "uninstall_key": "{45B2F6D4-DCC8-4995-9ED6-5D629073280F}_is1",
+        "exe": "%ProgramFiles%/Axentra/Spaces/AxentraSpaces.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Spaces/AxentraSpaces.exe"
+      },
+      "process": [
+        "AxentraSpaces.exe"
+      ],
+      "background_args": [
+        "--background"
+      ],
+      "tray": [
+        {
+          "label": "New window\u2026",
+          "args": [
+            "--new"
+          ]
+        },
+        {
+          "label": "Show / hide windows",
+          "args": [
+            "--toggle"
+          ],
+          "running_only": true
+        },
+        {
+          "label": "Exit Axentra Spaces",
+          "args": [
+            "--exit"
+          ],
+          "running_only": true,
+          "separator": true
+        }
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "spaces-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "vault",
+      "name": "Axentra Vault",
+      "tagline": "KeePass-compatible password manager with passkey unlock",
+      "kind": "desktop",
+      "order": 10,
+      "accent": "#408bff",
+      "icon": "{source}/app/assets/app/vault-512.png",
+      "install": {
+        "uninstall_key": "{C36D03EC-E3A1-41C6-B147-019EC2B9B245}_is1",
+        "display_name": "Axentra Vault*",
+        "exe": "%ProgramFiles%/Axentra/Vault/axentra-vault.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Vault/axentra-vault.exe"
+      },
+      "process": [
+        "axentra-vault.exe"
+      ],
+      "tray": [
+        {
+          "label": "Lock vault",
+          "args": [
+            "--lock"
+          ],
+          "running_only": true
+        },
+        {
+          "label": "Exit Axentra Vault",
+          "args": [
+            "--exit"
+          ],
+          "running_only": true,
+          "separator": true
+        }
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "vault-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
+      "id": "zip",
+      "name": "Axentra Archive",
+      "tagline": "Your files, neatly packed. Powered by 7-Zip.",
+      "kind": "desktop",
+      "order": 80,
+      "accent": "#B6DE76",
+      "icon": "%ProgramFiles%/Axentra/Archive/icons/zip-glass-v1.ico",
+      "install": {
+        "uninstall_key": "{C6B1A84C-71F7-4E6F-A56B-0B08318FDC25}_is1",
+        "exe": "%ProgramFiles%/Axentra/Archive/AxentraZip.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Archive/AxentraZip.exe"
+      },
+      "process": [
+        "AxentraZip.exe"
+      ],
+      "tray": []
+    }
+  ]
+}

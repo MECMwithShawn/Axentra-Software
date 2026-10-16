@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Vault logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.1.0. Public release: **None**. KeePass password storage with passkey/security-key options, backup retention and restore. Audit fixes and a second-pass checklist remain local; a checklist is not security certification.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Vault`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Vault
 
 <!-- local-release-preparation -->

@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Horizon logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.6.0 manifest; newer local work. Public release: **None**. Browser new-tab extension with a Windows native companion. Mergeable Apps/Resources panels and local music improvements are present. Calendar integration, Common Sites merging and driver-warning handling remain active work. The manifest version has not advanced with all local changes.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Horizon`. The extension itself remains a browser-loaded folder; this path is for its native companion.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Horizon
 
 <!-- local-release-preparation -->
@@ -180,3 +191,9 @@ Weather data by [Open-Meteo](https://open-meteo.com). Horizon displays these ima
 ## Source code
 
 The release zip is the complete, unminified source of the extension.
+
+## Latest documented preview
+
+![Local Horizon panel merging; recorded telemetry preview](screenshots/panels-local-0.6.0.png)
+
+Local Horizon panel merging; recorded telemetry preview.

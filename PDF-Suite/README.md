@@ -1,5 +1,16 @@
 # Axentra PDF Suite
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.3.8. Public release: **0.3.4**. Local PDF development and packaging are ahead of the public release. Windows MSI uses the shared suite directory and removes the older product early during major upgrades.
+
+Updated Windows installation target: `C:\Program Files\Axentra\PDF`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 <!-- local-release-preparation -->
 ## Prepared version: 0.3.8
 

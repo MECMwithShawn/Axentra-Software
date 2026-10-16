@@ -1,5 +1,16 @@
 <img src="logo.png" alt="Axentra Mail logo" width="96" align="right">
 
+<!-- current-suite-state -->
+## Current local status — 2026-10-16
+
+0.1.18 installed; 0.1.19 in progress. Public release: **None**. Hover summaries use cached bodies over 5,000 characters and do not mark messages read. Disregard and Archive preview actions are being added. Local AI uses Ollama; optional reputation and logo services can contact external providers.
+
+Updated Windows installation target: `C:\Program Files\Axentra\Mail`. Installers request administrator rights; existing user data remains in its application data directory.
+
+This status supersedes older installation-path and preparation notes below. Historical release checksums apply only to their original artifacts.
+
+<!-- /current-suite-state -->
+
 # Axentra Mail
 
 <!-- local-release-preparation -->
@@ -90,3 +101,9 @@ you choose to remove it.
 ## License
 
 Axentra Mail is free software under the MIT license.
+
+## Latest documented preview
+
+![Demo mailbox: cached hover preview in 0.1.18](screenshots/preview-0.1.18.png)
+
+Demo mailbox: cached hover preview in 0.1.18.

@@ -4,16 +4,19 @@ Desktop software and browser extensions by Axentra. Each product has its own fol
 screenshots, release notes and security scan results. Installers and extension packages are attached to this repository's
 [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases), not stored in the folders.
 
-| Product | What it is | Latest | Platforms |
+| App | Local build / development state | Public release | Install subfolder |
 |---|---|---|---|
-| [Axentra Command](Command/) | One place for every Axentra app: see what's installed and running, keep the suite in one tray icon, choose what starts at sign-in, and install the other apps from these releases with SHA-256 checks. Start here | 0.1.9 (published; local rebuild prepared) | Windows 10/11 (64-bit) |
-| [Axentra PDF Suite](PDF-Suite/) | View, edit, convert, compress, sign and protect PDFs, with no accounts or subscriptions | 0.3.8 (prepared; unpublished) | Windows 10/11 (64-bit) |
-| [Axentra Edge Extension Suite](Edge-Extension-Suite/) | Browser extensions for Edge and Chrome: Horizon's new tab, music player, favorites organizer, common-site shortcuts, backgrounds, reminders, habits and floating windows | 0.6.0 (prepared; unpublished) | Microsoft Edge, Google Chrome |
-| [Axentra Spaces](Spaces/) | Borderless, always-on-top browser windows anywhere on your desktop (YouTube, Spotify, Outlook…) with saved layouts; pairs with Horizon | 0.1.2 (prepared; unpublished) | Windows 10/11 (64-bit) |
-| [Axentra Vault](Vault/) | A password manager for your own KeePass file, unlocked with your master password plus an iPhone/Android passkey or a YubiKey. No account or cloud | 0.1.0 (prepared; unpublished) | Windows 10/11 (64-bit) |
-| [Axentra CrystalWire](CrystalWire/) | Per-app traffic and DNS history, a Security Center, network maps and config-health checks, plus opt-in Axentra Ghost/Pi-hole sync | 0.8.2 (prepared; unpublished) | Windows 10/11 (64-bit) |
-| [Axentra Ghost](Ghost/) | Stop Windows telemetry, ads and tracking and remove preinstalled apps, with exact undo, drift watch that re-applies what updates turn back on, and a live telemetry monitor | 0.1.4 (published; local rebuild prepared) | Windows 10/11 (64-bit) |
-| [Axentra Mail](Mail/) | An Outlook.com mail client that filters spam and phishing and files promotions with AI that runs on your own PC. Your mail is never sent to an AI company | 0.1.2 (prepared; unpublished) | Windows 10/11 (64-bit) |
+| [Command](Command/) | 0.1.9 local rebuild | 0.1.9 | `Command` |
+| [CrystalWire](CrystalWire/) | 0.8.9 | None | `CrystalWire` |
+| [Ghost](Ghost/) | 0.1.4 local rebuild | 0.1.4 | `Ghost` |
+| [Mail](Mail/) | 0.1.18 installed; 0.1.19 in progress | None | `Mail` |
+| [Spaces](Spaces/) | 0.1.2 | None | `Spaces` |
+| [Vault](Vault/) | 0.1.0 | None | `Vault` |
+| [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 | `PDF` |
+| [Archive](Archive/) | 0.1.4 | None | `Archive` |
+| [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.0 manifest; newer local work | None | `Horizon` |
+
+Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md).
 
 ## Icon source and design kit
 
