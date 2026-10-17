@@ -4,19 +4,19 @@ Desktop software and browser extensions by Axentra. Each product has its own fol
 screenshots, release notes and security scan results. Installers and extension packages are attached to this repository's
 [Releases](https://github.com/MECMwithShawn/Axentra-Software/releases), not stored in the folders.
 
-| App | Local build / development state | Public release | Install subfolder |
+| App | Source snapshot version | Published release | Zorin OS |
 |---|---|---|---|
-| [Command](Command/) | 0.1.9 local rebuild | 0.1.9 | `Command` |
-| [CrystalWire](CrystalWire/) | 0.8.9 | None | `CrystalWire` |
-| [Ghost](Ghost/) | 0.1.4 local rebuild | 0.1.4 | `Ghost` |
-| [Mail](Mail/) | 0.1.18 installed; 0.1.19 in progress | None | `Mail` |
-| [Spaces](Spaces/) | 0.1.2 | None | `Spaces` |
-| [Vault](Vault/) | 0.1.0 | None | `Vault` |
-| [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 | `PDF` |
-| [Archive](Archive/) | 0.1.4 | None | `Archive` |
-| [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.0 manifest; newer local work | None | `Horizon` |
+| [Command](Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](Command/LINUX.md) |
+| [CrystalWire](CrystalWire/) | 0.8.11 | None | [Installed preview](CrystalWire/LINUX.md) |
+| [Ghost](Ghost/) | 0.1.4 | 0.1.4 (Windows) | [Installed preview](Ghost/LINUX.md) |
+| [Mail](Mail/) | 0.1.20 | None | [Installed preview](Mail/LINUX.md) |
+| [Spaces](Spaces/) | 0.1.2 | None | [Installed preview](Spaces/LINUX.md) |
+| [Vault](Vault/) | 0.1.0 | None | [Installed preview](Vault/LINUX.md) |
+| [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](PDF-Suite/LINUX.md) |
+| [Archive](Archive/) | 0.1.4 | None | [Installed preview](Archive/LINUX.md) |
+| [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](Edge-Extension-Suite/Horizon/LINUX.md) |
 
-Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md).
+Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md) and [Linux / Zorin support](docs/LINUX.md).
 
 ## Icon source and design kit
 

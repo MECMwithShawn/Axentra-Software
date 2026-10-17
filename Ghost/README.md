@@ -1,5 +1,7 @@
 <img src="logo.png" alt="Axentra Ghost logo" width="96" align="right">
 
+**Linux preview (0.1.4, verified 2026-10-17):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+
 <!-- current-suite-state -->
 ## Current local status — 2026-10-16
 

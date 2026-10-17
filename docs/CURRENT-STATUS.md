@@ -1,61 +1,39 @@
-# Axentra suite status — 2026-10-16
+# Axentra suite status — 2026-10-17
 
-| App | Local build / development state | Public release | Install subfolder |
+All nine applications have native Linux development previews installed and launch-tested on Zorin OS 18.1 / Ubuntu 24.04 x86_64. The source snapshots and Linux changes are maintained in separate private repositories. These are previews with the limits below, not a new stable binary release.
+
+| App | Source snapshot version | Published release | Zorin OS |
 |---|---|---|---|
-| [Command](../Command/) | 0.1.9 local rebuild | 0.1.9 | `Command` |
-| [CrystalWire](../CrystalWire/) | 0.8.9 | None | `CrystalWire` |
-| [Ghost](../Ghost/) | 0.1.4 local rebuild | 0.1.4 | `Ghost` |
-| [Mail](../Mail/) | 0.1.18 installed; 0.1.19 in progress | None | `Mail` |
-| [Spaces](../Spaces/) | 0.1.2 | None | `Spaces` |
-| [Vault](../Vault/) | 0.1.0 | None | `Vault` |
-| [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 | `PDF` |
-| [Archive](../Archive/) | 0.1.4 | None | `Archive` |
-| [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.0 manifest; newer local work | None | `Horizon` |
+| [Command](../Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](../Command/LINUX.md) |
+| [CrystalWire](../CrystalWire/) | 0.8.11 | None | [Installed preview](../CrystalWire/LINUX.md) |
+| [Ghost](../Ghost/) | 0.1.4 | 0.1.4 (Windows) | [Installed preview](../Ghost/LINUX.md) |
+| [Mail](../Mail/) | 0.1.20 | None | [Installed preview](../Mail/LINUX.md) |
+| [Spaces](../Spaces/) | 0.1.2 | None | [Installed preview](../Spaces/LINUX.md) |
+| [Vault](../Vault/) | 0.1.0 | None | [Installed preview](../Vault/LINUX.md) |
+| [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
+| [Archive](../Archive/) | 0.1.4 | None | [Installed preview](../Archive/LINUX.md) |
+| [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](../Edge-Extension-Suite/Horizon/LINUX.md) |
 
-## Installation layout
+## Installation locations
 
-All updated Windows desktop apps use a separate folder under `C:\Program Files\Axentra`. Horizon uses this root for its Windows native companion. Old app folders may remain for recovery; do not delete user data during migration. Command includes Archive (`zip`) and Mail, and preserves custom app manifests.
+Windows apps use separate folders under `C:\Program Files\Axentra`. Linux previews use separate folders under `~/.local/share/axentra/apps`, with launchers in the application menu. System-wide Linux packaging may use `/opt/axentra/<app>`. User data stays outside the application folders. Command includes Archive (app ID `zip`) and detects all nine installed previews.
 
-## Build and publication status
+## What was verified
 
-Only Command 0.1.9, Ghost 0.1.4 and PDF 0.3.4 were verified as published releases during this refresh. No new binary releases were published. Same-version local rebuilds are not interchangeable with published artifacts or checksums. Mail, CrystalWire and Horizon have ongoing development; the notes below describe completed work separately from pending requests.
+- Archive, Command and Mail: native WebKitGTK windows, custom-protocol API calls and POST handling. The GTK-container embedding fix resolved blank window rendering.
+- Vault: 235 Rust tests passed; native egui startup. Physical USB passkey testing remains outstanding.
+- Mail: 109 ordinary Rust tests and an isolated Secret Service keyring integration test passed. Real account authentication and sending remain untested.
+- PDF: 193 tests passed, packaged self-test passed and native window opened.
+- Spaces: layout tests and native QtWebEngine page/save check passed.
+- Ghost: engine/API tests plus isolated real GNOME apply/undo passed. No real desktop privacy settings were changed.
+- CrystalWire: 6 collector tests, including real loopback TCP accounting, passed. Its Linux capture scope remains sampled TCP.
+- Horizon: loaded in Brave; both native hosts responded; all nine installed apps appeared in the Command bridge.
+- Windows: `cargo check --tests --locked` passed for Archive, Command, Mail and Vault after the portability changes. This is a compilation check, not a new Windows installer release.
 
-### Command
+## Release status
 
-Mail and Archive are built into the nine-app catalog. Archive uses app ID `zip`. The local rebuild differs from published 0.1.9; assign a new version before releasing it.
-
-### CrystalWire
-
-Security Center, Firewall paging and Traffic controls are updated. CrystalWire keeps its own tray icon. Firewall views monitor traffic; Windows Firewall enforces policy. Network map, DNS layout, device identity and Command icon work is still in progress.
-
-### Ghost
-
-Windows privacy controls with exact undo and drift monitoring. The local installer uses the shared suite root; published installer hashes still describe the original release.
-
-### Mail
-
-Hover summaries use cached bodies over 5,000 characters and do not mark messages read. Disregard and Archive preview actions are being added. Local AI uses Ollama; optional reputation and logo services can contact external providers.
-
-### Spaces
-
-Floating WebView2 windows and saved layouts; integrates with Horizon and Command.
-
-### Vault
-
-KeePass password storage with passkey/security-key options, backup retention and restore. Audit fixes and a second-pass checklist remain local; a checklist is not security certification.
-
-### PDF
-
-Local PDF development and packaging are ahead of the public release. Windows MSI uses the shared suite directory and removes the older product early during major upgrades.
-
-### Archive
-
-UI and binary are named Axentra Zip; Command shows Axentra Archive. Create ZIP/7z and extract/test archives. RAR creation requires the user's separately licensed WinRAR; no RAR writer is bundled.
-
-### Horizon
-
-Browser new-tab extension with a Windows native companion. Mergeable Apps/Resources panels and local music improvements are present. Calendar integration, Common Sites merging and driver-warning handling remain active work. The manifest version has not advanced with all local changes.
+The published releases listed above remain unchanged. No new public Linux .deb/AppImage or Windows installer was published by this port. Development version numbers describe source snapshots and local installations; they do not imply a matching public download or full Windows feature parity. Detailed remaining work is in [Linux support](LINUX.md) and each application's Linux page.
 
 ## Screenshots
 
-Mail includes a 0.1.18 demo-mailbox capture; Archive includes its 0.1.4 empty state; Horizon includes a recorded-telemetry panel-merging preview. Existing screenshots for other apps remain historical UI examples, not verification of the latest local build. Current CrystalWire captures include personal network information and were intentionally not published. Retake a sanitized current capture before the next release.
+Each app has a dated Linux screenshot and capture context. Mail uses demo messages, CrystalWire uses synthetic counters, Spaces uses a local fixture, and the other captures use empty or disposable profiles. Older screenshots remain historical Windows examples.

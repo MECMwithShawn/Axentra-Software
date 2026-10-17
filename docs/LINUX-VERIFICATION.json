@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-17",
+  "system": "Zorin OS 18.1 / Ubuntu 24.04 x86_64",
+  "channel": "development preview",
+  "tests": {
+    "Archive-tests": [
+      "test result: ok. 14 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.16s"
+    ],
+    "Command-tests": [
+      "test result: ok. 20 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.03s"
+    ],
+    "Mail-tests": [
+      "test result: ok. 109 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.37s"
+    ],
+    "Mail-keyring-test": [
+      "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 110 filtered out; finished in 0.07s"
+    ],
+    "vault-tests": [
+      "test result: ok. 83 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 8.88s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 150 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.06s",
+      "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+    ],
+    "pdf-tests": [
+      "193 passed, 7 skipped in 243.69s (0:04:03)"
+    ],
+    "Ghost-tests": [
+      "Ran 13 tests in 1.728s",
+      "OK"
+    ],
+    "Ghost-desktop": [
+      "OK"
+    ],
+    "CrystalWire-tests": [
+      "Ran 6 tests in 0.022s",
+      "OK"
+    ],
+    "Spaces-tests": [
+      "Ran 4 tests in 0.009s",
+      "OK"
+    ],
+    "Horizon-tests": [
+      "Ran 6 tests in 0.291s",
+      "OK"
+    ]
+  },
+  "installed_startup": {
+    "Archive": {
+      "exit": 0,
+      "checks": {
+        "status": 200
+      }
+    },
+    "Command": {
+      "exit": 0,
+      "checks": {
+        "status": 200,
+        "post_status": 200,
+        "post_applied": true
+      }
+    },
+    "Mail": {
+      "exit": 0,
+      "checks": {
+        "status": 200,
+        "post_status": 200,
+        "post_applied": true
+      }
+    },
+    "Vault": {
+      "exit": 0,
+      "checks": {
+        "rendered": true
+      }
+    },
+    "Spaces": {
+      "exit": 0,
+      "checks": {
+        "saved": true,
+        "visible": true
+      }
+    },
+    "Ghost": {
+      "exit": 0,
+      "checks": {
+        "loaded": true,
+        "error": ""
+      }
+    },
+    "CrystalWire": {
+      "exit": 0,
+      "checks": {
+        "visible": true
+      }
+    },
+    "PDF": {
+      "exit": 0,
+      "checks": {}
+    }
+  },
+  "horizon": {
+    "title": "New Tab",
+    "resources_platform": "linux",
+    "resources_error": null,
+    "command_error": null,
+    "apps": [
+      {
+        "id": "command",
+        "installed": true
+      },
+      {
+        "id": "vault",
+        "installed": true
+      },
+      {
+        "id": "crystalwire",
+        "installed": true
+      },
+      {
+        "id": "horizon",
+        "installed": true
+      },
+      {
+        "id": "ghost",
+        "installed": true
+      },
+      {
+        "id": "pdf",
+        "installed": true
+      },
+      {
+        "id": "spaces",
+        "installed": true
+      },
+      {
+        "id": "mail",
+        "installed": true
+      },
+      {
+        "id": "zip",
+        "installed": true
+      }
+    ],
+    "page_errors": []
+  },
+  "windows": "cargo check --tests --locked passed: Archive, Command, Mail, Vault",
+  "limitations": [
+    "Real account OAuth/send/sync not tested",
+    "Physical USB PRF not tested",
+    "Wayland not validated",
+    "CrystalWire sampled TCP only",
+    "Ghost GNOME settings catalog only",
+    "Optional OCR/conversion/music helpers not tested",
+    "Preview debug builds; no public binary release"
+  ]
+}
