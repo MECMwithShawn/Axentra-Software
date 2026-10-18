@@ -1,0 +1,208 @@
+{
+  "documentation_updated": "2026-10-18",
+  "tested_on": "2026-10-17",
+  "preview_version": "0.1.5-linux-preview",
+  "system": "Zorin OS 18.1 / Ubuntu 24.04 x86_64",
+  "desktop": "XFCE (zorin-os-lite)",
+  "catalog_entries": 27,
+  "suite_unit_api_tests_passed": 17,
+  "all_originals_restored": true,
+  "session_detection": {
+    "inactive_controls_excluded": 16,
+    "gnome_apply_skipped_on_xfce": true
+  },
+  "gnome_gtk_preference_tests": [
+    {
+      "id": "usage-stats",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "problem-reporting",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "recent-files",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "app-usage",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "lock-identity",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "top-bar-name",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "location",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "lock-notifications",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "screen-lock",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "external-search",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "camera",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "microphone",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "automount-open",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "autorun",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "suspend-lock",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "not applicable: default already meets target",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "automount",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "notification-banners",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "primary-paste",
+      "explicit_apply_undo": "passed",
+      "unset_apply_undo": "passed",
+      "result": "passed",
+      "original_restored": true
+    }
+  ],
+  "xfce_preference_tests": [
+    {
+      "id": "xfce-notification-history",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-suspend-lock",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-autorun",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-autobrowse",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-automount-drives",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-automount-media",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-audio-autoplay",
+      "result": "passed",
+      "original_restored": true
+    },
+    {
+      "id": "xfce-video-autoplay",
+      "result": "passed",
+      "original_restored": true
+    }
+  ],
+  "connectivity": {
+    "available": false,
+    "endpoint_configured": false,
+    "live_mutation_undo_verified": false,
+    "note": "Initial enabling was ignored because no endpoint was configured; availability detection was corrected."
+  },
+  "ui": {
+    "loaded": true,
+    "count": 27,
+    "rows": 24,
+    "overflow": false,
+    "style": true,
+    "narrow": {
+      "expanded": true,
+      "overflow": false
+    },
+    "js_errors": []
+  },
+  "boundaries": [
+    "Preference storage/readback/undo does not establish that XFCE honors GNOME-only settings.",
+    "No physical camera/microphone, suspend/resume, media-insertion or packet-capture test.",
+    "XFCE undo restores the saved effective value; GNOME undo restores the user override or its absence.",
+    "No public Linux binary release."
+  ]
+}

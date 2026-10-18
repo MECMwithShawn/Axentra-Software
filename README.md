@@ -8,7 +8,7 @@ screenshots, release notes and security scan results. Installers and extension p
 |---|---|---|---|
 | [Command](Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](Command/LINUX.md) |
 | [CrystalWire](CrystalWire/) | 0.8.11 | None | [Installed preview](CrystalWire/LINUX.md) |
-| [Ghost](Ghost/) | 0.1.4 | 0.1.4 (Windows) | [Installed preview](Ghost/LINUX.md) |
+| [Ghost](Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](Ghost/LINUX.md) |
 | [Mail](Mail/) | 0.1.20 | None | [Installed preview](Mail/LINUX.md) |
 | [Spaces](Spaces/) | 0.1.2 | None | [Installed preview](Spaces/LINUX.md) |
 | [Vault](Vault/) | 0.1.0 | None | [Installed preview](Vault/LINUX.md) |

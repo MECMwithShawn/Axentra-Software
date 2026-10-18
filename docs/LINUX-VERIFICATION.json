@@ -151,8 +151,19 @@
     "Physical USB PRF not tested",
     "Wayland not validated",
     "CrystalWire sampled TCP only",
-    "Ghost GNOME settings catalog only",
+    "Ghost session-matched GNOME/GTK and XFCE preferences; configured NetworkManager endpoint, physical devices and suspend/resume not verified",
     "Optional OCR/conversion/music helpers not tested",
     "Preview debug builds; no public binary release"
-  ]
+  ],
+  "updates": {
+    "2026-10-18": {
+      "Ghost": {
+        "version": "0.1.5-linux-preview",
+        "verification": "../Ghost/verification/linux-0.1.5.json",
+        "tested_on": "2026-10-17",
+        "desktop": "XFCE (zorin-os-lite)",
+        "all_originals_restored": true
+      }
+    }
+  }
 }

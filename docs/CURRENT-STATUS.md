@@ -1,4 +1,4 @@
-# Axentra suite status — 2026-10-17
+# Axentra suite status — 2026-10-18
 
 All nine applications have native Linux development previews installed and launch-tested on Zorin OS 18.1 / Ubuntu 24.04 x86_64. The source snapshots and Linux changes are maintained in separate private repositories. These are previews with the limits below, not a new stable binary release.
 
@@ -6,7 +6,7 @@ All nine applications have native Linux development previews installed and launc
 |---|---|---|---|
 | [Command](../Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](../Command/LINUX.md) |
 | [CrystalWire](../CrystalWire/) | 0.8.11 | None | [Installed preview](../CrystalWire/LINUX.md) |
-| [Ghost](../Ghost/) | 0.1.4 | 0.1.4 (Windows) | [Installed preview](../Ghost/LINUX.md) |
+| [Ghost](../Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](../Ghost/LINUX.md) |
 | [Mail](../Mail/) | 0.1.20 | None | [Installed preview](../Mail/LINUX.md) |
 | [Spaces](../Spaces/) | 0.1.2 | None | [Installed preview](../Spaces/LINUX.md) |
 | [Vault](../Vault/) | 0.1.0 | None | [Installed preview](../Vault/LINUX.md) |
@@ -25,7 +25,7 @@ Windows apps use separate folders under `C:\Program Files\Axentra`. Linux previe
 - Mail: 109 ordinary Rust tests and an isolated Secret Service keyring integration test passed. Real account authentication and sending remain untested.
 - PDF: 193 tests passed, packaged self-test passed and native window opened.
 - Spaces: layout tests and native QtWebEngine page/save check passed.
-- Ghost: engine/API tests plus isolated real GNOME apply/undo passed. No real desktop privacy settings were changed.
+- Ghost 0.1.5 Linux preview: 17 engine/API tests passed. Live preference round trips passed for 18 GNOME/GTK settings and eight native XFCE settings; every original setting was restored. The active session was XFCE. Other-desktop controls are excluded from active protection counts; configured-endpoint connectivity changes and physical behavior remain unverified.
 - CrystalWire: 6 collector tests, including real loopback TCP accounting, passed. Its Linux capture scope remains sampled TCP.
 - Horizon: loaded in Brave; both native hosts responded; all nine installed apps appeared in the Command bridge.
 - Windows: `cargo check --tests --locked` passed for Archive, Command, Mail and Vault after the portability changes. This is a compilation check, not a new Windows installer release.
