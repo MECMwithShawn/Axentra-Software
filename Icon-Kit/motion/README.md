@@ -1,6 +1,6 @@
 # Axentra orbital icon motion
 
-An original animation of the eight canonical Glass + Precision icons, using
+An original animation of the nine canonical Glass + Precision icons, using
 [ArtCraft's homepage](https://getartcraft.com/) as a visual motion reference.
 Only Axentra's existing PNGs are loaded. This component has no runtime dependencies,
 network services, external models, or Linux/Docker requirement.
@@ -30,7 +30,7 @@ additional image master. The existing PNG and ICO exports remain unchanged.
 
 ## Behavior and geometry
 
-- Eight independently textured, double-sided 32 × 32 quad meshes.
+- Nine independently textured, double-sided 32 × 32 quad meshes.
 - The same image/UVs remain on both faces. When viewed from the reverse side, the
   artwork is mirrored naturally by 3D rotation; it does not disappear or swap designs.
 - A 0.045 radians/second orbital movement with depth, perspective, slight tilt,
@@ -52,9 +52,9 @@ component in `axentra-motion.js` owns only the tiles and their interaction targe
 
 ## Embed in the website or another web surface
 
-Copy `motion.css`, `axentra-motion.js` and the eight `assets/*-256.png` files into the
+Copy `motion.css`, `axentra-motion.js` and the nine `assets/*-256.png` files into the
 target project's static assets. Keep the icons in an app-owned location. Load the CSS
-and script, give the host a defined height, then mount:
+and script, give the host a defined hnine, then mount:
 
 ```html
 <link rel="stylesheet" href="/assets/motion/motion.css">
@@ -75,12 +75,12 @@ AxentraMotion.mount(document.getElementById('family-motion'), {
 
 `assetBase` must contain the exact filenames `command-256.png`, `ghost-256.png`,
 `vault-256.png`, `crystalwire-256.png`, `horizon-256.png`, `pdf-256.png`, `spaces-256.png`,
-and `mail-256.png`. Prefer same-origin assets. Alternatively pass an `images` object
+`mail-256.png` and `archive-256.png`. Prefer same-origin assets. Alternatively pass an `images` object
 mapping the app IDs to embedded data URLs, as the portable preview does.
 
 Use CSS variables `--axm-foreground` and `--axm-label-bg` for label colors in the host
-site's theme. On narrow viewports allow at least 820 px of height for the two-column
-layout, plus any surrounding header/copy. Retain keyboard focus styles and accessible
+site's theme. On narrow viewports allow at least 980 px of hnine for the two-column
+layout with Archive centered on the fifth row, plus any surrounding header/copy. Retain keyboard focus styles and accessible
 button names. The sample page uses no external fonts.
 
 The component supports reduced motion, pauses rendering while hidden/offscreen, and
@@ -94,7 +94,7 @@ can be replaced with this component after wiring the site's theme and product li
 ## Validation
 
 The accompanying `check.cjs` uses Playwright for optional browser checks. It covers
-all eight textures, spring overshoot, deformation during a spin, keyboard activation,
+all nine textures, spring overshoot, deformation during a spin, keyboard activation,
 390 px layout, reduced motion, and WebGL-unavailable fallback. It launches an isolated
 headless browser and writes screenshots/results to `out/`.
 

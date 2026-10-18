@@ -1,5 +1,8 @@
 # Archive
 
+The official [Archive icon kit](../Icon-Kit/ARCHIVE.md) includes its Windows ICO,
+eight PNG sizes, source provenance and the nine-app family preview.
+
 **Linux preview (0.1.4, verified 2026-10-17):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
 <!-- current-suite-state -->

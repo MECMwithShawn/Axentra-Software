@@ -5,6 +5,8 @@
 Revision 1.3 uses [SVG masters](OUTLINE-ICONS.md) for Horizon and CrystalWire. The
 procedural measurements below describe the six Rust icons and the historical filled
 versions of those two apps. Use the SVG specification for their current artwork.
+Archive, added in revision 1.4, uses its preserved installed ICO as a raster master;
+its exact frame provenance and derived sizes are documented in [ARCHIVE.md](ARCHIVE.md).
 
 The family combines a dark glass tile, a precise central symbol and restrained colored
 light. Keep the shared `sample()` and `rgba()` functions unchanged when adding an app.
@@ -46,6 +48,7 @@ Preserve negative-space details: Ghost's eyes, Vault's keyhole and CrystalWire's
 | `pdf` | `255,105,119` / `#FF6977` | Coral folded document and dark angular Axentra mark |
 | `spaces` | `26,211,192` / `#1AD3C0` | Two overlapping teal browser windows |
 | `mail` | `239,136,199` / `#EF88C7` | Rose-pink closed envelope, recessed V-shaped flap and lower fold seams |
+| `archive` | `182,222,118` / `#B6DE76` | Lime archive glyph in a glass tile; preserved installed ICO |
 
 Ghost's body has its own violet-to-cyan gradient, float RGB `[0.68,0.45,1.0]` to
 `[0.08,0.87,0.95]`; this is intentional. Command's core has an icy cyan-to-blue gradient;

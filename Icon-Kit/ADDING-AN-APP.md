@@ -43,7 +43,8 @@ python scripts/export.py out
 
 Expect `signal.ico`, eight `signal-<size>.png` exports and an expanded `out/preview.png`.
 The complete exporter reapplies the current Horizon/CrystalWire SVGs; Cargo alone
-would restore their historical filled icons.
+would restore their historical filled icons and omit Archive. The final extraction
+step appends Archive from its preserved ICO without changing its native pixels.
 Review actual small-size PNGs, each ICO frame, the full contact sheet and light/dark
 backgrounds. Check that unrelated icons are untouched before updating the baseline:
 
@@ -55,7 +56,7 @@ This mode intentionally checks only existing per-app exports. It allows the cont
 sheet to expand, and it does **not** certify the new app or approve source changes.
 After visual approval, copy the new app's files and updated contact sheet to `assets/`.
 Keep the existing files if they already match. Add the app to the table in `DESIGN.md`,
-record the change and compiler in `build-info.json`, and update integration mappings
+record the change, catalog `app_order` and compiler in `build-info.json`, and update integration mappings
 for any new target project.
 
 Then deliberately record the approved source/assets baseline and verify it:

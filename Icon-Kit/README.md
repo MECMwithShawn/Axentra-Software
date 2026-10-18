@@ -1,9 +1,15 @@
-# Axentra icon kit — Glass + Precision, v1.3
+# Axentra icon kit — Glass + Precision, v1.4
 
 This is the canonical, self-contained source kit for the Axentra app icons adopted on
-October 14, 2026. It includes all eight production icons: Command, Ghost, Vault,
-CrystalWire, Horizon, PDF, Spaces and Mail. Use this kit to reproduce the existing icons or
+October 14, 2026, with subsequent additions. It includes all nine production icons:
+Command, Ghost, Vault, CrystalWire, Horizon, PDF, Spaces, Mail and Archive.
+Use this kit to reproduce the existing icons or
 give a new app the same glass tile, geometry, lighting and optical-size treatment.
+
+Revision 1.4 adds [Archive](ARCHIVE.md) using its original installed lime archive icon.
+It includes the preserved Windows ICO, eight PNG sizes, an extraction/export script,
+and Archive in the production contact sheet and orbital preview. All 72 exports for
+the existing eight apps remain byte-identical.
 
 Revision 1.3 updates Horizon to its outlined gold sunrise and CrystalWire to its
 lilac outlined crystal. Their editable [SVG masters and export rules](OUTLINE-ICONS.md)
@@ -24,17 +30,20 @@ icons byte for byte.
 
 Six editable masters use **procedural Rust geometry**. Horizon and CrystalWire use
 the approved **SVG masters** in `svg/`, rendered with pinned Sharp 0.35.5. The complete
-export runs both renderers; running Cargo alone produces the historical filled versions
-of those two icons. No image-generation service or sibling app repository is needed.
+export runs both renderers, then extracts Archive from its preserved ICO. Archive's
+original procedural/vector source was unavailable; the ICO is its raster master.
+Running Cargo alone omits Archive and produces the historical filled versions of the
+two outline icons. No image-generation service or sibling app repository is needed.
 
 ## Use the existing icons
 
 Ready-to-use files are in [`assets/`](assets/):
 
-- PNGs: 16, 24, 32, 48, 64, 128, 256 and 512 px per app.
+- PNGs: 16, 24, 32, 48, 64, 128, 256 and 512 px per app. Archive's 128/512 px
+  exports are resized from its native 256 px frame; see [provenance](ARCHIVE.md).
 - Windows ICOs: Horizon/CrystalWire have seven frames at 16, 24, 32, 48, 64, 128 and
-  256 px; the other six have eight at 16, 20, 24, 32, 40, 48, 64 and 256 px.
-- `preview.png`: all eight apps in renderer order, at 160 px and magnified 32/16 px.
+  256 px; the other seven have eight at 16, 20, 24, 32, 40, 48, 64 and 256 px.
+- `preview.png`: all nine apps in catalog order, at 160 px and magnified 32/16 px.
 
 **PDF documents keep the separate [glass PDF file icon](document-icons/README.md).**
 `assets/pdf.ico` identifies the application; it must not replace the document icon.
@@ -58,7 +67,7 @@ Nothing writes to an application, installer, shortcut or registry during generat
 
 The verified baseline used Rust 1.99.0 and Node.js 24.19.0 on Windows x64; full compiler
 and SVG library details are recorded in [`build-info.json`](build-info.json). The Rust
-crate has no external dependencies; only the SVG pass needs Sharp.
+crate has no external dependencies; the SVG and Archive extraction passes use Sharp.
 Rust floating-point transcendental functions can differ across targets/toolchains:
 always run the checksum comparison before calling another environment byte-identical.
 Use the checked-in assets when exact bytes are needed without regenerating them.
@@ -66,7 +75,7 @@ Use the checked-in assets when exact bytes are needed without regenerating them.
 ## Animate the icon family
 
 The [motion component](motion/README.md) adds orbital movement, spring hover bounce,
-curved 3D spins and mirrored reverse faces using the existing eight icons. It is an
+curved 3D spins and mirrored reverse faces using all nine icons. It is an
 original, dependency-free WebGL implementation. See `motion/index.html` for the demo
 or build a portable preview with `python motion/build_preview.py`. Keyboard, reduced
 motion, narrow screens and static fallback are covered. Source artwork and Windows
@@ -89,6 +98,7 @@ repository root is historical and does not describe the current production rende
 |---|---|
 | `renderer/src/suite.rs` | Six current procedural icons; historical filled Horizon/CrystalWire geometry |
 | `svg/`, `OUTLINE-ICONS.md` | Current Horizon/CrystalWire masters, optical-size rules and SVG exporter |
+| `raster/`, `ARCHIVE.md` | Preserved Archive ICO master, exact frame extraction and derived-size provenance |
 | `renderer/src/main.rs` | Deterministic PNG/ICO encoder and contact-sheet exporter |
 | `renderer/Cargo.toml`, `Cargo.lock` | Standalone Rust crate, no dependencies |
 | `assets/` | Approved production PNG/ICO exports and contact sheet |
@@ -98,7 +108,7 @@ repository root is historical and does not describe the current production rende
 | `document-icons/` | Preserved PDF document ICOs and their legacy SVG design sources |
 | `references/` | Original concept, current production preview, Vault reference, PDF installer preview |
 | `scripts/verify.py` | Standard-library integrity and regeneration checks |
-| `scripts/export.py` | Complete Rust + SVG export, including the current contact sheet |
+| `scripts/export.py` | Complete Rust + SVG + Archive export and nine-app contact sheet |
 | `scripts/sync_assets.py` | Portable, dry-run-by-default copier for the current app projects |
 | `scripts/verify_binary.py` | Compare a Windows executable's embedded icon against an ICO |
 

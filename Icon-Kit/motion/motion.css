@@ -8,5 +8,5 @@
 .axm-ready .axm-fallback{opacity:0}
 .axm-label{position:absolute;top:calc(100% + 14px);left:50%;transform:translate(-50%,3px);font:500 12px/1.4 system-ui,sans-serif;letter-spacing:.025em;white-space:nowrap;padding:5px 10px;border-radius:20px;background:var(--axm-label-bg,#101524);color:var(--axm-foreground,#edf4ff);opacity:0;transition:opacity .18s,transform .18s;pointer-events:none}
 .axm-target:hover .axm-label,.axm-target:focus-visible .axm-label{opacity:1;transform:translate(-50%,0)}
-@media(max-width:659px){.axm-host{min-height:820px}.axm-label{opacity:1;top:calc(100% + 5px);transform:translate(-50%,0)}}
+@media(max-width:659px){.axm-host{min-height:980px}.axm-label{opacity:1;top:calc(100% + 5px);transform:translate(-50%,0)}}
 @media(prefers-reduced-motion:reduce){.axm-label{transition:none}}

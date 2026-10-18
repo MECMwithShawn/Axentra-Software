@@ -6,7 +6,8 @@
     ['command', 'Command', '#62B4FF'], ['ghost', 'Ghost', '#AA7EFF'],
     ['vault', 'Vault', '#408BFF'], ['crystalwire', 'CrystalWire', '#B79AD5'],
     ['horizon', 'Horizon', '#FFB446'], ['pdf', 'PDF', '#FF6977'],
-    ['spaces', 'Spaces', '#1AD3C0'], ['mail', 'Mail', '#EF88C7']
+    ['spaces', 'Spaces', '#1AD3C0'], ['mail', 'Mail', '#EF88C7'],
+    ['archive', 'Archive', '#B6DE76']
   ];
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const smooth = x => { x = clamp(x, 0, 1); return x*x*(3-2*x); };
@@ -171,11 +172,11 @@
       item.tilt.x+=(item.pointer.x-item.tilt.x)*lerp;
       item.tilt.y+=(item.pointer.y-item.tilt.y)*lerp;
       const mobile=width<660, t=still?0:time, i=item.i;
-      const initial=-Math.PI/2+i*TAU/8;
+      const initial=-Math.PI/2+i*TAU/items.length;
       const a=initial+t*.045;
       let x,y,z,size;
       if(mobile){
-        x=(i%2 ? .225 : -.225)*width;
+        x=items.length%2 && i===items.length-1 ? 0 : (i%2 ? .225 : -.225)*width;
         y=height/2-190-Math.floor(i/2)*156;
         z=0;size=Math.min(100,width*.25);
       } else {

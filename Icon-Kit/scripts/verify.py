@@ -19,7 +19,7 @@ def digest(path):
 
 def tracked_files():
     files = []
-    for folder in ("assets", "document-icons", "renderer/src", "references", "motion"):
+    for folder in ("assets", "document-icons", "renderer/src", "references", "motion", "raster"):
         files.extend(path for path in (ROOT / folder).rglob("*") if path.is_file())
     files.extend(ROOT / name for name in (
         "renderer/Cargo.toml", "renderer/Cargo.lock", "build-info.json"
@@ -84,6 +84,8 @@ def check_assets():
     assets = ROOT / "assets"
     apps = sorted(path.stem for path in assets.glob("*.ico"))
     require(bool(apps), "No app ICO files")
+    catalog = json.loads((ROOT / "build-info.json").read_text(encoding="utf-8"))["app_order"]
+    require(len(catalog) == len(set(catalog)) and set(apps) == set(catalog), "App catalog and ICO files differ")
     expected = {"preview.png"}
     for app in apps:
         check_ico(assets / f"{app}.ico", SVG_ICO_SIZES if app in {"horizon", "crystalwire"} else ICO_SIZES)
@@ -94,6 +96,7 @@ def check_assets():
             expected.add(name)
     require({path.name for path in assets.iterdir() if path.is_file()} == expected, "Unexpected or missing asset files")
     check_png((assets / "preview.png").read_bytes(), (len(apps) * 200 + 20, 452))
+    require((assets / "archive.ico").read_bytes() == (ROOT / "raster/archive.ico").read_bytes(), "Archive ICO differs from preserved master")
     return len(apps)
 
 
@@ -116,7 +119,7 @@ def main():
         require(current.keys() == approved.keys(), "Baseline file list changed; review added/removed files")
         for name, value in approved.items():
             require(current[name] == value, f"Approved file changed: {name}")
-        print(f"Approved source/assets verified: {len(approved)} checksums; {count} apps; SVG ICOs have 7 frames, Rust ICOs have 8.")
+        print(f"Approved source/assets verified: {len(approved)} checksums; {count} apps; SVG ICOs have 7 frames, other ICOs have 8.")
     if args.rendered:
         expected = {Path(name).name: value for name, value in approved.items() if name.startswith("assets/")}
         if args.existing_only:

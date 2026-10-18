@@ -1,4 +1,4 @@
-"""Export the full current icon family: Rust baseline followed by approved SVG overrides."""
+"""Export all nine icons: Rust baseline, approved SVG overrides, preserved Archive ICO."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -14,13 +14,14 @@ def main():
     # Generation must never overwrite the approved assets or source tree.
     if output == ROOT or output in ROOT.parents or any(
         output == ROOT / folder or (ROOT / folder) in output.parents
-        for folder in ("assets", "svg", "renderer", "references", "document-icons", "scripts", "motion")
+        for folder in ("assets", "svg", "raster", "renderer", "references", "document-icons", "scripts", "motion")
     ):
         parser.error("Choose a separate output folder, such as Icon-Kit/out")
     subprocess.run(["node", str(ROOT / "svg/render.cjs"), "--versions"], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["cargo", "run", "--manifest-path", str(ROOT / "renderer/Cargo.toml"),
                     "--release", "--locked", "--offline", "--", str(output)], check=True)
     subprocess.run(["node", str(ROOT / "svg/render.cjs"), str(output)], check=True)
+    subprocess.run(["node", str(ROOT / "raster/render.cjs"), str(output)], check=True)
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ def mapping(app):
         pairs.append((ROOT / source, Path(PROJECTS[app]) / target))
     if app == "command":
         add("assets/command.ico", "assets/command.ico")
+        add("assets/archive.ico", "assets/archive.ico")
         for app_id in ("horizon", "crystalwire"):
             add(f"svg/{app_id}.svg", f"assets/{app_id}-outline.svg")
         for name in ("Cargo.toml", "Cargo.lock", "src/main.rs", "src/suite.rs"):

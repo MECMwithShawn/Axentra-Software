@@ -31,7 +31,7 @@ It also does not modify project metadata, manifests or source references automat
 
 | App / project folder | Source consumers |
 |---|---|
-| Command / `axentra-command` | `tools/suite-icons/src/suite.rs` and `src/logo.rs`; `assets/{horizon,crystalwire}-outline.svg` for those two cards; `assets/command.ico` and suite exports |
+| Command / `axentra-command` | `tools/suite-icons/src/suite.rs` and `src/logo.rs`; `assets/{horizon,crystalwire}-outline.svg` for those two cards; `assets/archive.ico` for Archive; `assets/command.ico` and suite exports |
 | Ghost / `axentra-ghost` | `src/suite_icon.rs` included by `src/logo.rs`; `assets/ghost.ico` |
 | Vault / `axentra-vault` | `app/assets/app/vault-<size>.png`, `vault.ico`; runtime in `app/src/icon.rs`, chrome and floating session branding |
 | CrystalWire / `axentra-crystalwire` | `assets/crystalwire-<size>.png`, `crystalwire.ico`, `crystalwire.svg` |
@@ -47,11 +47,20 @@ no automatic destination is assumed in `sync_assets.py`. Follow [MAIL.md](MAIL.m
 wire the assets into the active Mail build. Add a sync mapping once its actual project
 layout is known. Generating the icon alone does not register Mail in Command.
 
+## Axentra Archive
+
+Archive is included as `assets/archive.ico` and eight `assets/archive-<size>.png`
+exports. The ICO matches the installed Archive 0.1.4 icon and Command's embedded copy.
+Its original source checkout was unavailable, so only the verified Command consumer
+is synchronized automatically. See [ARCHIVE.md](ARCHIVE.md) for native/derived sizes,
+the preserved raster master and packaging guidance.
+
 ## Framework and installer wiring
 
 **Rust applications:** either embed exported PNGs or include the shared `suite.rs` and
 call `rgba("app-id", target_size)` for the six procedural icons. Horizon and CrystalWire
 must use the SVG masters or approved PNGs; their procedural branches are historical.
+Archive must use its approved ICO or PNGs; it has no procedural branch in `suite.rs`.
 The Rust renderer has no external dependencies. Runtime and build
 script copies must use the same renderer. Include the source in Cargo's build dependency
 tracking, for example the existing Command `build.rs` line:
@@ -136,7 +145,7 @@ refresh alone cannot fix an old executable resource or incorrect shortcut refere
 
 ## Animated web presentation
 
-See [the motion component](motion/README.md) for the optional eight-app orbital scene.
+See [the motion component](motion/README.md) for the optional nine-app orbital scene.
 It bends the canonical textures on double-sided 3D meshes, with spring hover response
 and mirrored reverse faces. Copy its two runtime files and PNGs into a site's static
 assets, then mount it in a sized host. It does not alter desktop ICOs or automatically

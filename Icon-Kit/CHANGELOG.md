@@ -1,5 +1,14 @@
 # Icon kit revisions
 
+## Glass + Precision 1.4 — 2026-10-18
+
+- Add Archive as the ninth app, preserving its installed eight-frame Windows ICO.
+- Export native-frame PNGs and documented 128/512 px derivatives without redrawing.
+- Expand the production preview and motion component to nine apps, including a
+  centered fifth row on phones, keyboard activation and static fallback.
+- Add the Command Archive ICO mapping, provenance and checksum baseline.
+- Preserve all 72 existing app exports and every PDF document-icon file byte for byte.
+
 ## Glass + Precision 1.3 — 2026-10-18
 
 - Synchronize Horizon's gold outlined sunrise and CrystalWire's lilac outlined crystal.

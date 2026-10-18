@@ -8,6 +8,7 @@ Copy the following request and replace the bracketed fields:
 > ADDING-AN-APP and INTEGRATION guides before editing.
 > Horizon and CrystalWire use the current SVG masters described in OUTLINE-ICONS.md.
 > Run `scripts/export.py` for the complete set; Cargo alone is not the current set.
+> Preserve Archive's raster master and frame pixels as documented in ARCHIVE.md.
 >
 > Add the ID, accent and glyph to `renderer/src/suite.rs`. Reuse the existing tile,
 > lighting, sampling and micro-size behavior. Preserve all existing app icons and
