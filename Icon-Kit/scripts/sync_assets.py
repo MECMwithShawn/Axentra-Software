@@ -18,6 +18,8 @@ def mapping(app):
         pairs.append((ROOT / source, Path(PROJECTS[app]) / target))
     if app == "command":
         add("assets/command.ico", "assets/command.ico")
+        for app_id in ("horizon", "crystalwire"):
+            add(f"svg/{app_id}.svg", f"assets/{app_id}-outline.svg")
         for name in ("Cargo.toml", "Cargo.lock", "src/main.rs", "src/suite.rs"):
             add(f"renderer/{name}", f"tools/suite-icons/{name}")
         for path in sorted((ROOT / "assets").iterdir()):
@@ -30,11 +32,16 @@ def mapping(app):
         for size in SIZES:
             add(f"assets/vault-{size}.png", f"app/assets/app/vault-{size}.png")
     elif app == "crystalwire":
+        add("svg/crystalwire.svg", "assets/crystalwire.svg")
         add("assets/crystalwire.ico", "assets/crystalwire.ico")
         for size in SIZES:
             add(f"assets/crystalwire-{size}.png", f"assets/crystalwire-{size}.png")
     elif app == "horizon":
-        for size in (16, 32, 48, 128, 512):
+        add("svg/horizon.svg", "icons/horizon.svg")
+        add("svg/horizon-16.svg", "icons/horizon-16.svg")
+        add("assets/horizon.ico", "icons/horizon.ico")
+        add("assets/horizon-128.png", "icons/apps/horizon.png")
+        for size in SIZES:
             add(f"assets/horizon-{size}.png", f"icons/{size}.png")
     elif app == "pdf":
         add("assets/pdf.ico", "packaging/icons/axentra.ico")

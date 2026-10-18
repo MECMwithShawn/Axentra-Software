@@ -6,6 +6,8 @@ Copy the following request and replace the bracketed fields:
 > The app does **[one-sentence purpose]**; the proposed symbol is **[symbol idea]**.
 > Use `Axentra-Software/Icon-Kit` as the source of truth. Read its README, DESIGN,
 > ADDING-AN-APP and INTEGRATION guides before editing.
+> Horizon and CrystalWire use the current SVG masters described in OUTLINE-ICONS.md.
+> Run `scripts/export.py` for the complete set; Cargo alone is not the current set.
 >
 > Add the ID, accent and glyph to `renderer/src/suite.rs`. Reuse the existing tile,
 > lighting, sampling and micro-size behavior. Preserve all existing app icons and

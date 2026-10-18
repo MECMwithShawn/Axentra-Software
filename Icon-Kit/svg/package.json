@@ -1,0 +1,7 @@
+{
+  "name": "axentra-outline-icons",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Reproduce the approved Horizon and CrystalWire SVG exports",
+  "devDependencies": { "sharp": "0.35.5" }
+}

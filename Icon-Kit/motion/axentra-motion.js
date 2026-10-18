@@ -4,7 +4,7 @@
   const TAU = Math.PI * 2;
   const APPS = [
     ['command', 'Command', '#62B4FF'], ['ghost', 'Ghost', '#AA7EFF'],
-    ['vault', 'Vault', '#408BFF'], ['crystalwire', 'CrystalWire', '#1FD0EA'],
+    ['vault', 'Vault', '#408BFF'], ['crystalwire', 'CrystalWire', '#B79AD5'],
     ['horizon', 'Horizon', '#FFB446'], ['pdf', 'PDF', '#FF6977'],
     ['spaces', 'Spaces', '#1AD3C0'], ['mail', 'Mail', '#EF88C7']
   ];

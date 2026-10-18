@@ -1,5 +1,13 @@
 # Icon kit revisions
 
+## Glass + Precision 1.3 — 2026-10-18
+
+- Synchronize Horizon's gold outlined sunrise and CrystalWire's lilac outlined crystal.
+- Preserve the exact eight PNG sizes and seven-frame ICO from each application.
+- Add editable SVG masters and a complete Rust + SVG export command.
+- Refresh the production preview, motion accent, integration mappings and checksums.
+- Preserve the other 54 app exports and every PDF document-icon file byte for byte.
+
 ## Motion 1 — 2026-10-14
 
 - Add an eight-app orbital preview and reusable WebGL component.

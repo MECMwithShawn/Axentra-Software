@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "manifest.json"
 PNG_SIZES = {16, 24, 32, 48, 64, 128, 256, 512}
 ICO_SIZES = {16, 20, 24, 32, 40, 48, 64, 256}
+SVG_ICO_SIZES = {16, 24, 32, 48, 64, 128, 256}
 
 
 def digest(path):
@@ -23,6 +24,10 @@ def tracked_files():
     files.extend(ROOT / name for name in (
         "renderer/Cargo.toml", "renderer/Cargo.lock", "build-info.json"
     ))
+    # npm may create a local lockfile; only the committed source inputs form this baseline.
+    files.extend(path for path in (ROOT / "svg").iterdir()
+                 if path.is_file() and (path.suffix in {".svg", ".cjs"} or path.name == "package.json"))
+    files.extend(path for path in (ROOT / "scripts").iterdir() if path.is_file())
     return sorted(files)
 
 
@@ -53,10 +58,10 @@ def check_png(data, size):
     require(len(raw) == size[1] * (size[0] * 4 + 1), "PNG pixel data length")
 
 
-def check_ico(path):
+def check_ico(path, expected_sizes=ICO_SIZES):
     data = path.read_bytes()
     reserved, kind, count = struct.unpack_from("<HHH", data)
-    require((reserved, kind, count) == (0, 1, 8), f"{path.name}: ICO header/frame count")
+    require((reserved, kind, count) == (0, 1, len(expected_sizes)), f"{path.name}: ICO header/frame count")
     sizes = set()
     for index in range(count):
         width, height, colors, reserved, planes, bits, length, offset = struct.unpack_from("<BBBBHHII", data, 6 + index * 16)
@@ -72,7 +77,7 @@ def check_ico(path):
             expected_length = 40 + width * height * 4 + ((width + 31) // 32) * 4 * height
             require(length == expected_length, "ICO DIB byte length")
         sizes.add(width)
-    require(sizes == ICO_SIZES, f"{path.name}: ICO sizes {sizes}")
+    require(sizes == expected_sizes, f"{path.name}: ICO sizes {sizes}")
 
 
 def check_assets():
@@ -81,7 +86,7 @@ def check_assets():
     require(bool(apps), "No app ICO files")
     expected = {"preview.png"}
     for app in apps:
-        check_ico(assets / f"{app}.ico")
+        check_ico(assets / f"{app}.ico", SVG_ICO_SIZES if app in {"horizon", "crystalwire"} else ICO_SIZES)
         expected.add(f"{app}.ico")
         for size in PNG_SIZES:
             name = f"{app}-{size}.png"
@@ -103,7 +108,7 @@ def main():
     count = check_assets()
     current = {path.relative_to(ROOT).as_posix(): digest(path) for path in tracked_files()}
     if args.write_manifest:
-        MANIFEST.write_text(json.dumps({"schema": 1, "algorithm": "sha256", "files": current}, indent=2) + "\n", encoding="utf-8")
+        MANIFEST.write_text(json.dumps({"schema": 1, "algorithm": "sha256", "files": current}, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(f"Recorded approved baseline: {len(current)} files, {count} apps. Review the manifest diff.")
         return
     approved = json.loads(MANIFEST.read_text(encoding="utf-8"))["files"]
@@ -111,7 +116,7 @@ def main():
         require(current.keys() == approved.keys(), "Baseline file list changed; review added/removed files")
         for name, value in approved.items():
             require(current[name] == value, f"Approved file changed: {name}")
-        print(f"Approved source/assets verified: {len(approved)} checksums; {count} apps, 8 ICO frames each.")
+        print(f"Approved source/assets verified: {len(approved)} checksums; {count} apps; SVG ICOs have 7 frames, Rust ICOs have 8.")
     if args.rendered:
         expected = {Path(name).name: value for name, value in approved.items() if name.startswith("assets/")}
         if args.existing_only:

@@ -31,11 +31,11 @@ It also does not modify project metadata, manifests or source references automat
 
 | App / project folder | Source consumers |
 |---|---|
-| Command / `axentra-command` | `tools/suite-icons/src/suite.rs` for runtime cards and `src/logo.rs`; `assets/command.ico` for packaging; local exporter files and exports also synchronized |
+| Command / `axentra-command` | `tools/suite-icons/src/suite.rs` and `src/logo.rs`; `assets/{horizon,crystalwire}-outline.svg` for those two cards; `assets/command.ico` and suite exports |
 | Ghost / `axentra-ghost` | `src/suite_icon.rs` included by `src/logo.rs`; `assets/ghost.ico` |
 | Vault / `axentra-vault` | `app/assets/app/vault-<size>.png`, `vault.ico`; runtime in `app/src/icon.rs`, chrome and floating session branding |
-| CrystalWire / `axentra-crystalwire` | `assets/crystalwire-<size>.png`, `crystalwire.ico` |
-| Horizon / `stillpoint` | `icons/16.png`, `32.png`, `48.png`, `128.png`, `512.png`; browser manifest and page favicons |
+| CrystalWire / `axentra-crystalwire` | `assets/crystalwire-<size>.png`, `crystalwire.ico`, `crystalwire.svg` |
+| Horizon / `stillpoint` | All eight `icons/<size>.png`, `horizon.ico`, `horizon.svg`, `horizon-16.svg`, `apps/horizon.png`; manifest and favicons |
 | PDF / `REA/axentra-pdf` | `packaging/icons/axentra-<size>.png`, `axentra.ico`; `axentra/ui/brand/` through 256 px; 96 px `packaging/windows/preview-app.bmp` |
 | Spaces / `axentra-spaces` | `src/AxentraSpaces/Assets/spaces.ico`, root `spaces-512.png` |
 
@@ -50,7 +50,9 @@ layout is known. Generating the icon alone does not register Mail in Command.
 ## Framework and installer wiring
 
 **Rust applications:** either embed exported PNGs or include the shared `suite.rs` and
-call `rgba("app-id", target_size)`. It has no external dependencies. Runtime and build
+call `rgba("app-id", target_size)` for the six procedural icons. Horizon and CrystalWire
+must use the SVG masters or approved PNGs; their procedural branches are historical.
+The Rust renderer has no external dependencies. Runtime and build
 script copies must use the same renderer. Include the source in Cargo's build dependency
 tracking, for example the existing Command `build.rs` line:
 
@@ -142,6 +144,11 @@ replace a site's existing hero. The demo and portable preview are separate from 
 website deployment; site integration must wire its theme and product destinations.
 
 ## Keeping the kit current
+
+Use `scripts/export.py` for full exports. The copier preserves product-local
+`tools/make-icon.cjs` generators; it does not install the kit's Node dependency into
+app projects. Command's copied legacy Cargo exporter alone does not reproduce the
+current Horizon/CrystalWire artwork. See [OUTLINE-ICONS.md](OUTLINE-ICONS.md).
 
 After an approved change, commit the renderer, outputs, palette/design notes, compiler
 record and checksum manifest together. Include a contact sheet. Prefer a new revision

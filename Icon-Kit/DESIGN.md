@@ -2,6 +2,10 @@
 
 ## Shared structure
 
+Revision 1.3 uses [SVG masters](OUTLINE-ICONS.md) for Horizon and CrystalWire. The
+procedural measurements below describe the six Rust icons and the historical filled
+versions of those two apps. Use the SVG specification for their current artwork.
+
 The family combines a dark glass tile, a precise central symbol and restrained colored
 light. Keep the shared `sample()` and `rgba()` functions unchanged when adding an app.
 New work normally needs only an app ID, an accent and a `glyph()` branch.
@@ -37,8 +41,8 @@ Preserve negative-space details: Ghost's eyes, Vault's keyhole and CrystalWire's
 | `command` | `98,180,255` / `#62B4FF` | Hexagonal hub, six colored tiles linked by spokes |
 | `ghost` | `170,126,255` / `#AA7EFF` | Familiar rounded head, two eyes, three scalloped lobes |
 | `vault` | `64,139,255` / `#408BFF` | Icy-blue padlock, round keyhole, thin broken cyan circuit halo |
-| `crystalwire` | `31,208,234` / `#1FD0EA` | Cyan diamond with geometric facet cuts |
-| `horizon` | `255,180,70` / `#FFB446` | Amber sunrise, five rays, two horizon bars |
+| `crystalwire` | `183,154,213` / `#B79AD5` | Lilac outlined crystal; SVG gradient and open facets |
+| `horizon` | `255,180,70` / `#FFB446` | Gold outlined sunrise, five rays, three lines; SVG gradient |
 | `pdf` | `255,105,119` / `#FF6977` | Coral folded document and dark angular Axentra mark |
 | `spaces` | `26,211,192` / `#1AD3C0` | Two overlapping teal browser windows |
 | `mail` | `239,136,199` / `#EF88C7` | Rose-pink closed envelope, recessed V-shaped flap and lower fold seams |
@@ -50,8 +54,8 @@ Command retains its original six-node logo. Adding Mail as the eighth suite prod
 does not alter that logo or any existing icon. Mail uses the shared finish without
 product-specific shader changes; exact geometry and integration notes are in [MAIL.md](MAIL.md).
 
-Horizon uses a warmer top-edge blend. CrystalWire adds light on the left facets.
-These exceptions are implemented in `sample()` and are part of the approved baseline.
+The historical procedural Horizon uses a warmer top-edge blend and CrystalWire adds
+light on the left facets. Current exports use the SVG finish described above.
 
 Vault revision 1.1 adds `vault_lock()`, `vault_arc()` and `vault_finish()`. The common
 tile and accent remain unchanged; the product-specific finish adds rings, dots, nodes

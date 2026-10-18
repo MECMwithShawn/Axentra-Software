@@ -20,8 +20,9 @@ Local builds are not automatically public releases. See [current suite status](d
 
 ## Icon source and design kit
 
-The [Axentra Glass + Precision icon kit](Icon-Kit/) contains the current seven app icons,
-their complete Rust renderer, ready-to-use PNG/ICO assets, checksum verification,
+The [Axentra Glass + Precision icon kit](Icon-Kit/) contains eight app icons, including
+the current outlined Horizon and CrystalWire artwork, their Rust/SVG sources,
+ready-to-use PNG/ICO assets, checksum verification,
 integration instructions and a guide for creating matching icons for new apps.
 The glass PDF **document** icon is preserved separately from the PDF application icon.
 

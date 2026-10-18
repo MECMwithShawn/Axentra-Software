@@ -37,10 +37,13 @@ revision has been approved. No changes are needed in the encoder or preview loop
 ## 4. Render and review
 
 ```powershell
-cargo run --manifest-path renderer/Cargo.toml --release --locked --offline -- out
+npm install --prefix svg --ignore-scripts
+python scripts/export.py out
 ```
 
 Expect `signal.ico`, eight `signal-<size>.png` exports and an expanded `out/preview.png`.
+The complete exporter reapplies the current Horizon/CrystalWire SVGs; Cargo alone
+would restore their historical filled icons.
 Review actual small-size PNGs, each ICO frame, the full contact sheet and light/dark
 backgrounds. Check that unrelated icons are untouched before updating the baseline:
 

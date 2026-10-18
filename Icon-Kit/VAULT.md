@@ -51,7 +51,8 @@ the outer stroke half-width becomes `0.009`, and inner/dotted rings are omitted.
 glow drops to 8%; nodes use radius `0.012`. Every size is rendered independently.
 
 The canonical outputs remain `assets/vault-<size>.png` and `assets/vault.ico`. The ICO
-contains the same eight frame sizes as the rest of the suite. Run the normal exporter
+contains the original eight Rust frame sizes. Horizon and CrystalWire use seven SVG
+frame sizes as of revision 1.3. Run the complete `scripts/export.py` exporter
 and `scripts/verify.py --rendered out` to reproduce the approved bytes.
 
 ## App and shortcut integration
