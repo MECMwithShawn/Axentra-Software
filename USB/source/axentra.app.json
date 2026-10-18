@@ -1,0 +1,37 @@
+{
+  "id": "usb",
+  "name": "Axentra USB",
+  "tagline": "Create, inspect and verify bootable USB drives.",
+  "kind": "desktop",
+  "order": 90,
+  "accent": "#A3EDB7",
+  "icon": "%ProgramFiles%/Axentra/USB/icons/usb-outline-v1.ico",
+  "install": {
+    "uninstall_key": "{379E227C-1024-4D76-9A85-ED057406DF52}_is1",
+    "exe": "%ProgramFiles%/Axentra/USB/AxentraUSB.exe"
+  },
+  "launch": {
+    "exe": "%ProgramFiles%/Axentra/USB/AxentraUSB.exe"
+  },
+  "process": [
+    "AxentraUSB.exe",
+    "axentra-usb.exe"
+  ],
+  "source": {
+    "path": "~/code/Axentra-Software/USB/source",
+    "version_file": "Cargo.toml"
+  },
+  "dist": {
+    "path": "{source}/dist",
+    "prefix": "AxentraUSB-",
+    "suffix": "-Setup.exe"
+  },
+  "docs": "~/code/Axentra-Software/USB",
+  "links": [
+    {
+      "label": "Source and documentation",
+      "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/USB"
+    }
+  ],
+  "tray": []
+}

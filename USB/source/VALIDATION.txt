@@ -1,0 +1,69 @@
+Axentra USB 0.1.1 preview - branding and Windows packaging
+Date: 2026-10-18
+
+- All 30 Rust core tests passed (temporary files and synthetic devices).
+- Windows x64 release build and Inno Setup installer compiled successfully.
+- All seven PE icon resources match the approved ICO byte for byte.
+- Nine PNG sizes and shared SVG copies validated.
+- Command 0.1.12 built: 20 tests passed; one existing test remains ignored.
+- Windows packages remain unsigned. No USB was formatted or written.
+No new Linux binary or physical USB write/boot validation is claimed.
+
+Historical 0.1.0 validation follows unchanged:
+
+Axentra USB 0.1.0 preview - validation record
+Date: 2026-10-18
+
+Builds
+- Native Rust application and egui/eframe 0.36.2 interface.
+- Rust/Cargo 1.99; dependencies pinned by Cargo.lock.
+- Windows: release x86_64-pc-windows-msvc executable, built successfully.
+- Linux: release x86_64-unknown-linux-gnu executable, cross-linked using
+  Zig 0.15.2 with a glibc 2.35 target, built successfully.
+- Linux ELF checked: 64-bit little-endian x86-64, interpreter
+  /lib64/ld-linux-x86-64.so.2; direct shared dependencies are libc.so.6,
+  libm.so.6 and ld-linux-x86-64.so.2. GUI libraries also load at runtime.
+
+Automated core validation
+- 30 Rust core tests passed.
+- cargo clippy --all-targets --locked -- -D warnings passed before the
+  final cosmetic button-contrast adjustment. Both release builds passed
+  after that adjustment. cargo fmt applied.
+- Tests cover internal/system/read-only/unstable-identity device rejection,
+  device identity changes, capacity checks, Linux system-disk descendants,
+  erase confirmation, typed worker actions, unsafe image paths, multiple
+  ISO extents, malformed/unsupported initramfs input, cancellation,
+  sector padding, short reads and byte-level corruption detection.
+- File-backed compatible-media copying and verification passed, including
+  deliberate post-flush corruption rejection. No test targets a real disk.
+
+Windows release executable validation
+- Inspected the actual Zorin OS 18.1 Pro x64 ISO successfully.
+- Full image size: 8,381,560,832 bytes.
+- Full image SHA-256:
+  3984789a2762d1aa359eda5fe19c757e3e5ea9a1bd5a4acc52099c3979905ded
+- Read the entire 7,458,250,752-byte casper/filesystem.squashfs across
+  both ISO extents. SHA-256 matched a separate reference implementation:
+  21adf64c40ba6964fab6647ac3a546e75fe9f3773246e3c99afd01196a583d44
+- The independent reference also matched the ISO's published internal MD5
+  for that file: e5e156263e6072258159c993083ed59e.
+- Confirmed early CPIO archives followed by gzip despite initrd.zstd name,
+  Casper live-media UUID, NTFS support and the reviewed boot-script hashes.
+- Enumerated actual Windows disks and correctly distinguished the internal
+  system RAID disk from the Kingston USB.
+- A native Windows debug GUI process/window launched successfully.
+  Automated GUI screenshot approval timed out, so no completed visual or
+  interactive end-to-end GUI verification is claimed.
+
+Not yet validated
+- The Linux executable has NOT been installed or executed on Zorin.
+- Privileged workers, partition creation/formatting and actual physical USB
+  writes/read-back have NOT been exercised on either platform.
+- Alienware firmware boot, Secure Boot trust and live-session startup have
+  NOT been tested. Inspecting boot assets cannot prove these outcomes.
+- FAT32 + NTFS compatibility is limited to the reviewed Casper profile and
+  remains experimental pending a real boot test.
+- Windows executable is unsigned; no Windows installer is included.
+
+No USB was erased, formatted or written during this development session.
+Use this as a preview build pending spare-device and real-boot validation.

@@ -1,0 +1,37 @@
+[package]
+name = "axentra-usb"
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.95"
+description = "Bootable USB creation and evidence-based verification for Windows and Linux"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+eframe = { version = "=0.36.2", default-features = false, features = ["glow", "default_fonts", "x11", "wayland", "accesskit"] }
+flate2 = "1"
+hex = "0.4"
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Security", "Win32_System_Registry"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+embed-resource = "=2.5.2"
+
+[profile.release]
+opt-level = 2
+lto = "thin"
+strip = true
+
+[[bin]]
+name = "axentra-usb"
+path = "src/main.rs"

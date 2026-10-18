@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Axentra USB
+Comment=Create and verify bootable USB drives
+Exec=axentra-usb
+Icon=axentra-usb
+Terminal=false
+Categories=System;Utility;
+StartupNotify=true

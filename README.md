@@ -15,6 +15,7 @@ screenshots, release notes and security scan results. Installers and extension p
 | [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](PDF-Suite/LINUX.md) |
 | [Archive](Archive/) | 0.1.4 | None | [Installed preview](Archive/LINUX.md) |
 | [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](Edge-Extension-Suite/Horizon/LINUX.md) |
+| [USB](USB/) | 0.1.1 Windows preview | None | Source / packaging included; hardware validation pending |
 
 Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md) and [Linux / Zorin support](docs/LINUX.md).
 
@@ -26,6 +27,7 @@ and Archive's preserved raster master,
 ready-to-use PNG/ICO assets, checksum verification,
 integration instructions and a guide for creating matching icons for new apps.
 The glass PDF **document** icon is preserved separately from the PDF application icon.
+The new [USB icon and editable source](USB/source/assets/) are included with the USB app.
 
 ![Axentra app icon family](Icon-Kit/references/production-preview.png)
 

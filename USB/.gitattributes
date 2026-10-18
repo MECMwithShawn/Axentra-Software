@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+# Preserve bundled third-party license text verbatim.
+source/THIRD-PARTY-NOTICES.txt -whitespace

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#daf0ff"/><stop offset=".16" stop-color="#aadbc9"/>
+      <stop offset=".42" stop-color="#354e50"/><stop offset=".7" stop-color="#609b85"/>
+      <stop offset="1" stop-color="#c3f0d7"/>
+    </linearGradient>
+    <linearGradient id="tile" x2=".8" y2="1">
+      <stop stop-color="#1b1c30"/><stop offset=".5" stop-color="#10121e"/><stop offset="1" stop-color="#080b12"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#8cdeb2" stop-opacity=".19"/><stop offset="1" stop-color="#8cdeb2" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x2=".4" y2="1">
+      <stop stop-color="#dfffee"/><stop offset=".5" stop-color="#a7e7c4"/><stop offset="1" stop-color="#78b99d"/>
+    </linearGradient>
+    <filter id="halo" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="10" fill="none" stroke="#a1d4c2" stroke-width="1.6" opacity=".4" filter="url(#halo)"/>
+  <rect x="3" y="3" width="58" height="58" rx="10" fill="url(#tile)" stroke="url(#rim)" stroke-width="1.4"/>
+  <rect x="5" y="5" width="54" height="54" rx="8.5" fill="none" stroke="#c4e7da" stroke-opacity=".07"/>
+  <circle cx="31" cy="29" r="27" fill="url(#glow)"/>
+  <g transform="rotate(-32 32 32)" fill="none" stroke="url(#line)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 23v-8.5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1V23"/>
+    <path d="M29 17.5v2.7M35 17.5v2.7"/>
+    <rect x="22" y="23" width="20" height="27" rx="4"/>
+    <path d="M32 29v11m-4-4 4 4 4-4"/>
+    <path d="M29 45h6" opacity=".75"/>
+  </g>
+</svg>
