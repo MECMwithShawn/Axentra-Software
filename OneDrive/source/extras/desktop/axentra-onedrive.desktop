@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Axentra OneDrive
+GenericName=Cloud storage
+Comment=Sync your OneDrive files with Files On-Demand
+Exec=@APP@/AxentraOneDrive --panel
+Icon=axentra-onedrive
+Terminal=false
+Categories=Network;FileTransfer;Utility;
+Keywords=onedrive;cloud;sync;microsoft;files;
+StartupNotify=false
+Actions=Settings;Folder;
+
+[Desktop Action Settings]
+Name=Settings
+Exec=@APP@/AxentraOneDrive --settings
+
+[Desktop Action Folder]
+Name=Open OneDrive folder
+Exec=@APP@/axentra-onedrive folder

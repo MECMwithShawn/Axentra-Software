@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = ["crates/graph", "crates/core", "crates/cli", "crates/ui", "crates/mock"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.80"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "http2"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+sha2 = "0.10"
+url = "2"
+percent-encoding = "2"
+dirs = "6"
+libc = "0.2"
+rusqlite = { version = "0.37", features = ["bundled"] }
+fuser = { version = "0.18", default-features = false }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures-util = "0.3"
+bytes = "1"
+globset = "0.4"
+hostname = "0.4"
+parking_lot = "0.12"
+clap = { version = "4", features = ["derive"] }
+axum = "0.8"
+tempfile = "3"
+
+axentra-onedrive-graph = { path = "crates/graph" }
+axentra-onedrive-core = { path = "crates/core" }
+axentra-onedrive-mock = { path = "crates/mock" }
+
+[profile.release]
+lto = "thin"
+strip = true

@@ -1,0 +1,521 @@
+//! The running tray app: Slint windows on the main thread, a tokio task
+//! talking to the sync service over D-Bus, and the tray icon.
+
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+
+use anyhow::Result;
+use axentra_onedrive_core::config::{Config, Paths};
+use axentra_onedrive_core::db::Activity;
+use axentra_onedrive_core::ipc::{AxentraOneDriveProxy, ChangedStream};
+use axentra_onedrive_core::status::{Account, Status};
+use futures_util::StreamExt;
+use ksni::TrayMethods;
+use slint::{ComponentHandle, Weak};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+
+use crate::tray::AxentraOneDriveTray;
+use crate::{present, Flyout, SettingsWindow};
+
+pub enum Cmd {
+    ToggleFlyout,
+    ShowFlyout,
+    HideFlyout,
+    ShowSettings,
+    OpenFolder,
+    ViewOnline,
+    RecycleBin,
+    ManageStorage,
+    Pause(u32),
+    Resume,
+    TogglePause(bool),
+    SignIn,
+    Quit,
+    OpenItem(String),
+    RevealItem(String),
+    ShareItem(String),
+    ItemOnline(String),
+    SettingsChanged,
+    SetOnDemand(bool),
+    FreeUpSpace,
+    Unlink,
+    Reload,
+}
+
+pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
+    let _guard = rt.enter();
+
+    let flyout = Flyout::new()?;
+    let settings = SettingsWindow::new()?;
+    let (tx, rx) = unbounded_channel();
+
+    macro_rules! wire {
+        ($ui:ident . $on:ident => $cmd:expr) => {{
+            let tx = tx.clone();
+            $ui.$on(move || {
+                let _ = tx.send($cmd);
+            });
+        }};
+        ($ui:ident . $on:ident ($a:ident) => $cmd:expr) => {{
+            let tx = tx.clone();
+            $ui.$on(move |$a| {
+                let _ = tx.send($cmd);
+            });
+        }};
+    }
+    wire!(flyout.on_open_folder => Cmd::OpenFolder);
+    wire!(flyout.on_view_online => Cmd::ViewOnline);
+    wire!(flyout.on_open_settings => Cmd::ShowSettings);
+    wire!(flyout.on_recycle_bin => Cmd::RecycleBin);
+    wire!(flyout.on_pause(h) => Cmd::Pause(h as u32));
+    wire!(flyout.on_resume => Cmd::Resume);
+    wire!(flyout.on_sign_in => Cmd::SignIn);
+    wire!(flyout.on_quit => Cmd::Quit);
+    wire!(flyout.on_dismiss => Cmd::HideFlyout);
+    wire!(flyout.on_open_item(p) => Cmd::OpenItem(p.to_string()));
+    wire!(flyout.on_reveal_item(p) => Cmd::RevealItem(p.to_string()));
+    wire!(flyout.on_share_item(p) => Cmd::ShareItem(p.to_string()));
+    wire!(flyout.on_item_online(p) => Cmd::ItemOnline(p.to_string()));
+    wire!(settings.on_changed => Cmd::SettingsChanged);
+    wire!(settings.on_toggle_pause(b) => Cmd::TogglePause(b));
+    wire!(settings.on_set_on_demand(b) => Cmd::SetOnDemand(b));
+    wire!(settings.on_open_folder => Cmd::OpenFolder);
+    wire!(settings.on_free_up_space => Cmd::FreeUpSpace);
+    wire!(settings.on_sign_in => Cmd::SignIn);
+    wire!(settings.on_unlink => Cmd::Unlink);
+    wire!(settings.on_manage_storage => Cmd::ManageStorage);
+    wire!(settings.on_view_online => Cmd::ViewOnline);
+
+    if show_panel {
+        let _ = tx.send(Cmd::ShowFlyout);
+    }
+    rt.spawn(
+        Backend::new(tx.clone(), flyout.as_weak(), settings.as_weak()).run(rx, start_with_settings),
+    );
+    slint::run_event_loop_until_quit()?;
+    rt.shutdown_timeout(Duration::from_secs(1));
+    Ok(())
+}
+
+struct Backend {
+    paths: Paths,
+    tx: UnboundedSender<Cmd>,
+    flyout: Weak<Flyout>,
+    settings: Weak<SettingsWindow>,
+    proxy: Option<AxentraOneDriveProxy<'static>>,
+    changed: Option<ChangedStream>,
+    tray: Option<ksni::Handle<AxentraOneDriveTray>>,
+    account: Account,
+    started_daemon: bool,
+}
+
+async fn next_change(s: &mut Option<ChangedStream>) -> Option<()> {
+    match s {
+        Some(s) => s.next().await.map(|_| ()),
+        None => std::future::pending().await,
+    }
+}
+
+fn open(target: &str) {
+    let _ = Command::new("xdg-open")
+        .arg(target)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
+fn sibling_binary(name: &str) -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(name)))
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from(name))
+}
+
+fn clipboard() -> &'static Mutex<Option<arboard::Clipboard>> {
+    static CB: OnceLock<Mutex<Option<arboard::Clipboard>>> = OnceLock::new();
+    CB.get_or_init(|| Mutex::new(arboard::Clipboard::new().ok()))
+}
+
+impl Backend {
+    fn new(tx: UnboundedSender<Cmd>, flyout: Weak<Flyout>, settings: Weak<SettingsWindow>) -> Self {
+        Self {
+            paths: Paths::user(),
+            tx,
+            flyout,
+            settings,
+            proxy: None,
+            changed: None,
+            tray: None,
+            account: Account::default(),
+            started_daemon: false,
+        }
+    }
+
+    fn config(&self) -> Config {
+        Config::load(&self.paths.config_file).unwrap_or_default()
+    }
+
+    async fn run(mut self, mut rx: UnboundedReceiver<Cmd>, start_with_settings: bool) {
+        let tray = AxentraOneDriveTray {
+            state: "starting".into(),
+            tooltip: "Axentra OneDrive".into(),
+            tx: self.tx.clone(),
+        };
+        match tray.spawn().await {
+            Ok(h) => self.tray = Some(h),
+            Err(e) => {
+                // No tray host (e.g. GNOME without the AppIndicator extension):
+                // the flyout is the main window then.
+                tracing::warn!("no system tray available ({e}); showing the panel instead");
+                let _ = self.tx.send(Cmd::ShowFlyout);
+            }
+        }
+        if start_with_settings {
+            let _ = self.tx.send(Cmd::ShowSettings);
+        }
+        let mut tick = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            if self.proxy.is_none() {
+                self.connect().await;
+            }
+            tokio::select! {
+                cmd = rx.recv() => match cmd {
+                    Some(cmd) => {
+                        if let Err(e) = self.handle(cmd).await {
+                            tracing::warn!("{e:#}");
+                            self.toast(format!("{e}"));
+                        }
+                    }
+                    None => break,
+                },
+                Some(()) = next_change(&mut self.changed) => self.refresh().await,
+                _ = tick.tick() => self.refresh().await,
+            }
+        }
+    }
+
+    async fn connect(&mut self) {
+        let Ok(conn) = zbus::Connection::session().await else {
+            return;
+        };
+        if let Ok(p) = AxentraOneDriveProxy::new(&conn).await {
+            if p.status().await.is_ok() {
+                self.changed = p.receive_changed().await.ok();
+                self.proxy = Some(p);
+                self.refresh().await;
+                return;
+            }
+        }
+        self.show_disconnected();
+        if !self.started_daemon {
+            self.started_daemon = true;
+            let unit_ok = Command::new("systemctl")
+                .args(["--user", "start", "axentra-onedrive.service"])
+                .stderr(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if !unit_ok {
+                let _ = Command::new(sibling_binary("axentra-onedrive"))
+                    .arg("daemon")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+            }
+        }
+    }
+
+    fn show_disconnected(&self) {
+        let st = Status {
+            state: "starting".into(),
+            message: "Starting Axentra OneDrive".into(),
+            detail: "Waiting for the sync service to start".into(),
+            ..Default::default()
+        };
+        let acct = self.account.clone();
+        let _ = self
+            .flyout
+            .upgrade_in_event_loop(move |ui| present::apply_flyout(&ui, &st, &acct, &[]));
+    }
+
+    fn proxy(&self) -> Result<&AxentraOneDriveProxy<'static>> {
+        self.proxy
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Axentra OneDrive isn't running yet"))
+    }
+
+    async fn refresh(&mut self) {
+        let Some(p) = self.proxy.clone() else { return };
+        let fetched = async {
+            let st: Status = serde_json::from_str(&p.status().await?).unwrap_or_default();
+            let acct: Account = serde_json::from_str(&p.account().await?).unwrap_or_default();
+            let act: Vec<Activity> =
+                serde_json::from_str(&p.activity(40).await?).unwrap_or_default();
+            let usage = p.local_usage().await.unwrap_or(0);
+            Ok::<_, zbus::Error>((st, acct, act, usage))
+        }
+        .await;
+        let Ok((st, acct, act, usage)) = fetched else {
+            // The service went away; reconnect on the next pass.
+            self.proxy = None;
+            self.changed = None;
+            self.started_daemon = false;
+            self.show_disconnected();
+            return;
+        };
+        self.account = acct.clone();
+        if let Some(tray) = &self.tray {
+            let (state, tip) = (
+                st.state.clone(),
+                if st.detail.is_empty() {
+                    st.message.clone()
+                } else {
+                    format!("{}\n{}", st.message, st.detail)
+                },
+            );
+            tray.update(move |t| {
+                t.state = state;
+                t.tooltip = tip;
+            })
+            .await;
+        }
+        let cfg = self.config();
+        let (st2, acct2) = (st.clone(), acct.clone());
+        let _ = self
+            .flyout
+            .upgrade_in_event_loop(move |ui| present::apply_flyout(&ui, &st, &acct, &act));
+        let _ = self.settings.upgrade_in_event_loop(move |ui| {
+            // Live values only; editable fields are loaded when the window opens.
+            let keep = (
+                ui.get_notify_deletes(),
+                ui.get_notify_conflicts(),
+                ui.get_notify_errors(),
+                ui.get_upload_mode(),
+                ui.get_upload_kbps(),
+                ui.get_download_mode(),
+                ui.get_download_kbps(),
+                ui.get_poll_index(),
+                ui.get_files_on_demand(),
+            );
+            present::apply_settings(&ui, &cfg, &st2, &acct2, usage);
+            ui.set_notify_deletes(keep.0);
+            ui.set_notify_conflicts(keep.1);
+            ui.set_notify_errors(keep.2);
+            ui.set_upload_mode(keep.3);
+            ui.set_upload_kbps(keep.4);
+            ui.set_download_mode(keep.5);
+            ui.set_download_kbps(keep.6);
+            ui.set_poll_index(keep.7);
+            ui.set_files_on_demand(keep.8);
+        });
+    }
+
+    fn toast(&self, text: String) {
+        let _ = self.flyout.upgrade_in_event_loop({
+            let text = text.clone();
+            move |ui| ui.set_toast(text.into())
+        });
+        let flyout = self.flyout.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(4)).await;
+            let _ = flyout.upgrade_in_event_loop(move |ui| {
+                if ui.get_toast() == text.as_str() {
+                    ui.set_toast("".into());
+                }
+            });
+        });
+    }
+
+    fn mount(&self) -> String {
+        self.config().mount_path().display().to_string()
+    }
+
+    fn recycle_bin_url(&self) -> String {
+        if self.account.drive_type == "business" && !self.account.web_url.is_empty() {
+            let site = self
+                .account
+                .web_url
+                .trim_end_matches('/')
+                .trim_end_matches("/Documents");
+            format!("{site}/_layouts/15/RecycleBin.aspx")
+        } else {
+            "https://onedrive.live.com/recycle".into()
+        }
+    }
+
+    async fn handle(&mut self, cmd: Cmd) -> Result<()> {
+        match cmd {
+            Cmd::ToggleFlyout | Cmd::ShowFlyout => {
+                let toggle = matches!(cmd, Cmd::ToggleFlyout);
+                let _ = self.flyout.upgrade_in_event_loop(move |ui| {
+                    if toggle && ui.window().is_visible() {
+                        let _ = ui.hide();
+                    } else {
+                        let _ = ui.show();
+                    }
+                });
+                self.refresh().await;
+            }
+            Cmd::HideFlyout => {
+                let _ = self.flyout.upgrade_in_event_loop(|ui| {
+                    let _ = ui.hide();
+                });
+            }
+            Cmd::ShowSettings => {
+                let cfg = self.config();
+                let _ = self.flyout.upgrade_in_event_loop(|ui| {
+                    let _ = ui.hide();
+                });
+                let acct = self.account.clone();
+                let _ = self.settings.upgrade_in_event_loop(move |ui| {
+                    present::apply_settings(&ui, &cfg, &Status::default(), &acct, 0);
+                    let _ = ui.show();
+                });
+                self.refresh().await;
+            }
+            Cmd::OpenFolder => open(&self.mount()),
+            Cmd::ViewOnline => {
+                let url = match self.proxy() {
+                    Ok(p) => p.web_url(self.mount()).await.ok(),
+                    Err(_) => None,
+                };
+                open(&url.unwrap_or_else(|| "https://onedrive.live.com/my".into()));
+            }
+            Cmd::RecycleBin => open(&self.recycle_bin_url()),
+            Cmd::ManageStorage => open(if self.account.drive_type == "business" {
+                "https://www.microsoft365.com/"
+            } else {
+                "https://onedrive.live.com/?v=managestorage"
+            }),
+            Cmd::Pause(h) => {
+                self.proxy()?.pause(h * 3600).await?;
+                self.refresh().await;
+            }
+            Cmd::Resume => {
+                self.proxy()?.resume().await?;
+                self.refresh().await;
+            }
+            Cmd::TogglePause(on) => {
+                if on {
+                    self.proxy()?.pause(2 * 3600).await?;
+                } else {
+                    self.proxy()?.resume().await?;
+                }
+                self.refresh().await;
+            }
+            Cmd::SignIn => {
+                let cli = sibling_binary("axentra-onedrive");
+                if self.config().client_id.is_empty() {
+                    // First run: the app registration has to be entered once.
+                    let script = format!(
+                        "{0} setup && {0} login; echo; read -p 'Press Enter to close' _",
+                        cli.display()
+                    );
+                    let _ = Command::new("gnome-terminal")
+                        .args([
+                            "--title",
+                            "Set up Axentra OneDrive",
+                            "--",
+                            "bash",
+                            "-c",
+                            &script,
+                        ])
+                        .spawn()
+                        .or_else(|_| {
+                            Command::new("x-terminal-emulator")
+                                .args(["-e", "bash", "-c", &script])
+                                .spawn()
+                        });
+                } else {
+                    let _ = Command::new(cli)
+                        .arg("login")
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn();
+                    self.toast("Finish signing in in your browser".into());
+                }
+            }
+            Cmd::Quit => {
+                if let Ok(p) = self.proxy() {
+                    let _ = p.quit().await;
+                }
+                if let Some(t) = &self.tray {
+                    t.shutdown().await;
+                }
+                let _ = slint::invoke_from_event_loop(|| {
+                    let _ = slint::quit_event_loop();
+                });
+            }
+            Cmd::OpenItem(path) => open(&path),
+            Cmd::RevealItem(path) => {
+                let uri = url::Url::from_file_path(&path)
+                    .map(|u| u.to_string())
+                    .unwrap_or(path);
+                let conn = zbus::Connection::session().await?;
+                conn.call_method(
+                    Some("org.freedesktop.FileManager1"),
+                    "/org/freedesktop/FileManager1",
+                    Some("org.freedesktop.FileManager1"),
+                    "ShowItems",
+                    &(vec![uri], ""),
+                )
+                .await?;
+            }
+            Cmd::ShareItem(path) => {
+                let link = self.proxy()?.share_link(path, false).await?;
+                let copied = clipboard()
+                    .lock()
+                    .ok()
+                    .and_then(|mut c| c.as_mut().map(|c| c.set_text(link.clone()).is_ok()))
+                    .unwrap_or(false);
+                self.toast(if copied {
+                    "Link copied. Anyone with the link can view.".into()
+                } else {
+                    link
+                });
+            }
+            Cmd::ItemOnline(path) => {
+                let url = self.proxy()?.web_url(path).await?;
+                open(&url);
+            }
+            Cmd::SettingsChanged | Cmd::SetOnDemand(_) => {
+                let pin_all = matches!(cmd, Cmd::SetOnDemand(false));
+                let path = self.paths.config_file.clone();
+                let tx = self.tx.clone();
+                let _ = self.settings.upgrade_in_event_loop(move |ui| {
+                    let mut cfg = Config::load(&path).unwrap_or_default();
+                    present::read_settings(&ui, &mut cfg);
+                    if let Err(e) = cfg.save(&path) {
+                        tracing::warn!("couldn't save settings: {e:#}");
+                    }
+                    let _ = tx.send(Cmd::Reload);
+                });
+                if pin_all {
+                    self.proxy()?.pin(vec![self.mount()]).await?;
+                }
+            }
+            Cmd::Reload => {
+                self.proxy()?.reload().await?;
+                self.refresh().await;
+            }
+            Cmd::FreeUpSpace => {
+                self.proxy()?.free_up_space(vec![self.mount()]).await?;
+                self.refresh().await;
+            }
+            Cmd::Unlink => {
+                self.proxy()?.sign_out().await?;
+                self.refresh().await;
+            }
+        }
+        Ok(())
+    }
+}

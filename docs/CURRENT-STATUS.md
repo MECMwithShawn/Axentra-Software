@@ -14,6 +14,10 @@ All nine applications have native Linux development previews installed and launc
 | [Archive](../Archive/) | 0.1.4 | None | [Installed preview](../Archive/LINUX.md) |
 | [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](../Edge-Extension-Suite/Horizon/LINUX.md) |
 
+## Axentra OneDrive (added 2026-10-19)
+
+[Axentra OneDrive](../OneDrive/) 0.1.0 is a Linux-only development preview that mirrors the Windows OneDrive client: Files On-Demand, tray and activity panel, file-manager badges and Windows conflict rules. It is installed on Zorin OS 18.1 under `~/.local/share/axentra/apps/onedrive` and syncing a real personal account. Its source is included in this repository under the MIT license. 26 Rust tests passed. No binary release is published, and it is not yet in Command's catalog or the Icon Kit. See its [Linux notes](../OneDrive/LINUX.md).
+
 ## Installation locations
 
 Windows apps use separate folders under `C:\Program Files\Axentra`. Linux previews use separate folders under `~/.local/share/axentra/apps`, with launchers in the application menu. System-wide Linux packaging may use `/opt/axentra/<app>`. User data stays outside the application folders. Command includes Archive (app ID `zip`) and detects all nine installed previews.

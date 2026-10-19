@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Axentra OneDrive
+Comment=OneDrive status in the notification area
+Exec=@APP@/AxentraOneDrive
+Icon=axentra-onedrive
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3

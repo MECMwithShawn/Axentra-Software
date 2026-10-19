@@ -1,0 +1,179 @@
+// Windows 11 (Fluent) design tokens and the small controls the flyout and
+// settings share.
+
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    // Force light or dark, including Slint's own widgets (used for screenshots).
+    public function use-dark(on: bool) {
+        Palette.color-scheme = on ? ColorScheme.dark : ColorScheme.light;
+        dark = on;
+    }
+
+    out property <color> base: dark ? #202020 : #f3f3f3;
+    out property <color> layer: dark ? #2b2b2b : #ffffff;
+    out property <color> layer-alt: dark ? #2d2d2d : #f9f9f9;
+    out property <color> stroke: dark ? #ffffff12 : #0000000f;
+    out property <color> divider: dark ? #ffffff14 : #00000014;
+    out property <color> text: dark ? #ffffff : #1b1b1b;
+    out property <color> text2: dark ? #ffffffc5 : #00000099;
+    out property <color> text3: dark ? #ffffff87 : #00000070;
+    out property <color> accent: dark ? #60cdff : #005fb8;
+    out property <color> on-accent: dark ? #000000 : #ffffff;
+    out property <color> hover: dark ? #ffffff10 : #0000000a;
+    out property <color> pressed: dark ? #ffffff0a : #00000006;
+    out property <color> track: dark ? #ffffff26 : #00000021;
+    out property <color> danger: dark ? #ff99a4 : #c42b1c;
+    out property <color> success: dark ? #6ccb5f : #0f7b0f;
+    out property <string> font: "Inter";
+}
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <length> icon-size: 16px;
+    in property <string> label;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: label;
+
+    Image {
+        source: root.icon;
+        colorize: Theme.text;
+        width: root.icon-size;
+        height: root.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MenuItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <bool> danger: false;
+    callback clicked();
+
+    height: 34px;
+    border-radius: 4px;
+    background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: text;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 10px;
+        if root.has-icon: VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: root.danger ? Theme.danger : Theme.text;
+                width: 16px;
+                height: 16px;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            color: root.danger ? Theme.danger : Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MenuSeparator inherits Rectangle {
+    height: 9px;
+    Rectangle {
+        y: 4px;
+        height: 1px;
+        background: Theme.divider;
+    }
+}
+
+/// Rounded menu surface for popups.
+export component MenuSurface inherits Rectangle {
+    background: Theme.layer;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Theme.stroke;
+    drop-shadow-blur: 18px;
+    drop-shadow-offset-y: 6px;
+    drop-shadow-color: #00000045;
+}
+
+/// Thin progress track like the Windows storage meter.
+export component Meter inherits Rectangle {
+    in property <float> value;
+    in property <color> fill: Theme.accent;
+    height: 4px;
+    border-radius: 2px;
+    background: Theme.track;
+    Rectangle {
+        x: 0;
+        width: parent.width * clamp(root.value, 0, 1);
+        height: parent.height;
+        border-radius: 2px;
+        background: root.fill;
+    }
+}
+
+/// Flat accent-coloured button (primary) or subtle one.
+export component FluentButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    callback clicked();
+
+    height: 32px;
+    min-width: label.preferred-width + 24px;
+    border-radius: 4px;
+    border-width: root.primary ? 0 : 1px;
+    border-color: Theme.stroke;
+    background: root.primary
+        ? (ta.pressed ? Theme.accent.darker(0.15) : ta.has-hover ? Theme.accent.darker(0.07) : Theme.accent)
+        : (ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover.mix(Theme.layer-alt, 0.5) : Theme.layer-alt);
+    accessible-role: button;
+    accessible-label: text;
+
+    label := Text {
+        text: root.text;
+        font-size: 13px;
+        font-weight: root.primary ? 600 : 400;
+        color: root.primary ? Theme.on-accent : root.danger ? Theme.danger : Theme.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component Hyperlink inherits Text {
+    callback clicked();
+    font-size: 12px;
+    color: ta.has-hover ? Theme.accent.brighter(0.15) : Theme.accent;
+    accessible-role: button;
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}

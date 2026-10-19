@@ -1,0 +1,13 @@
+[Unit]
+Description=Axentra OneDrive sync (Files On-Demand)
+
+[Service]
+Type=simple
+ExecStart=@APP@/axentra-onedrive daemon
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=20
+Environment=RUST_LOG=info,fuser=error
+
+[Install]
+WantedBy=default.target

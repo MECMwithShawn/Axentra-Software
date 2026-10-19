@@ -1,0 +1,86 @@
+// "Version history" for one file, opened from the file manager's menu.
+
+import { ListView } from "std-widgets.slint";
+import { Theme, FluentButton } from "theme.slint";
+
+export struct VersionRow {
+    id: string,
+    when: string,
+    who: string,
+    size: string,
+    current: bool,
+}
+
+export component VersionsWindow inherits Window {
+    title: "Version history";
+    icon: @image-url("icons/logo.svg");
+    preferred-width: 540px;
+    preferred-height: 460px;
+    min-width: 420px;
+    min-height: 320px;
+    background: Theme.base;
+    default-font-family: Theme.font;
+
+    in property <string> file-name;
+    in property <[VersionRow]> versions;
+    in property <string> message;
+    in property <bool> busy;
+    callback restore(string);
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 14px;
+        HorizontalLayout {
+            spacing: 14px;
+            VerticalLayout {
+                alignment: center;
+                Image { source: @image-url("icons/history.svg"); colorize: Theme.text; width: 24px; height: 24px; }
+            }
+            VerticalLayout {
+                alignment: center;
+                Text { text: "Version history"; font-size: 20px; font-weight: 600; color: Theme.text; }
+                Text { text: root.file-name; font-size: 13px; color: Theme.text2; overflow: elide; }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.layer;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Theme.stroke;
+            clip: true;
+            ListView {
+                for v[i] in root.versions: Rectangle {
+                    height: 60px;
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        spacing: 12px;
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 1;
+                            spacing: 2px;
+                            Text { text: v.when; font-size: 14px; color: Theme.text; }
+                            Text { text: v.who + " · " + v.size; font-size: 12px; color: Theme.text2; overflow: elide; }
+                        }
+                        if v.current: VerticalLayout {
+                            alignment: center;
+                            Text { text: "Current version"; font-size: 12px; font-weight: 600; color: Theme.accent; }
+                        }
+                        if !v.current: VerticalLayout {
+                            alignment: center;
+                            FluentButton { text: "Restore"; clicked => { root.restore(v.id); } }
+                        }
+                    }
+                    if i > 0: Rectangle { y: 0; height: 1px; background: Theme.divider; }
+                }
+            }
+        }
+        if root.message != "": Text {
+            text: root.message;
+            font-size: 12px;
+            color: Theme.text2;
+            wrap: word-wrap;
+        }
+    }
+}

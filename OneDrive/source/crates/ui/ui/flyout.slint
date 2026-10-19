@@ -1,0 +1,510 @@
+// The panel that opens from the tray icon, laid out like the Windows 11
+// OneDrive flyout: header actions, sync status, recent activity, storage.
+
+import { ListView } from "std-widgets.slint";
+import { Theme, IconButton, MenuItem, MenuSeparator, MenuSurface, Meter, FluentButton, Hyperlink } from "theme.slint";
+
+export struct ActivityRow {
+    name: string,
+    subtitle: string,
+    // Short file-type label shown on the tile ("DOCX"); empty for folders.
+    tile: string,
+    tile-color: color,
+    folder: bool,
+    // Absolute path, for the row's actions.
+    path: string,
+    // Item no longer exists locally (deleted).
+    gone: bool,
+    // Sync problem row.
+    problem: bool,
+}
+
+component FileTile inherits Rectangle {
+    in property <string> label;
+    in property <color> tint;
+    in property <bool> folder;
+    in property <bool> problem;
+    width: 32px;
+    height: 32px;
+
+    if root.folder && !root.problem: Image {
+        source: @image-url("icons/folder-filled.svg");
+        width: 30px;
+        height: 30px;
+        x: 1px;
+        y: 1px;
+    }
+    if !root.folder && !root.problem: Rectangle {
+        // A page with a folded corner, tinted by file type.
+        x: 4px;
+        width: 24px;
+        height: 30px;
+        y: 1px;
+        border-radius: 3px;
+        background: Theme.dark ? #3a3a3a : #ffffff;
+        border-width: 1px;
+        border-color: Theme.dark ? #ffffff1f : #0000001f;
+        Rectangle {
+            x: -4px;
+            y: 15px;
+            height: 11px;
+            width: max(18px, label-text.preferred-width + 6px);
+            border-radius: 2px;
+            background: root.tint;
+            label-text := Text {
+                text: root.label;
+                color: white;
+                font-size: 7px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+    if root.problem: Rectangle {
+        width: 28px;
+        height: 28px;
+        x: 2px;
+        y: 2px;
+        border-radius: 14px;
+        background: Theme.danger;
+        Text {
+            text: "!";
+            color: Theme.dark ? #000000 : #ffffff;
+            font-size: 16px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component ActivityItem inherits Rectangle {
+    in property <ActivityRow> entry;
+    callback open(string);
+    callback reveal(string);
+    callback share(string);
+    callback online(string);
+
+    height: 56px;
+    border-radius: 6px;
+    background: ta.pressed ? Theme.pressed : (ta.has-hover || more-ta.has-hover) ? Theme.hover : transparent;
+    accessible-role: list-item;
+    accessible-label: root.entry.name + ", " + root.entry.subtitle;
+
+    ta := TouchArea {
+        clicked => {
+            if (!root.entry.gone) { root.open(root.entry.path); }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 6px;
+        spacing: 12px;
+        FileTile {
+            label: root.entry.tile;
+            tint: root.entry.tile-color;
+            folder: root.entry.folder;
+            problem: root.entry.problem;
+            opacity: root.entry.gone ? 0.55 : 1.0;
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.entry.name;
+                font-size: 13px;
+                font-weight: 600;
+                color: Theme.text;
+                overflow: elide;
+            }
+            Text {
+                text: root.entry.subtitle;
+                font-size: 12px;
+                color: root.entry.problem ? Theme.danger : Theme.text2;
+                overflow: elide;
+            }
+        }
+        Rectangle {
+            width: 32px;
+            visible: (ta.has-hover || more-ta.has-hover) && !root.entry.gone && !root.entry.problem;
+            Rectangle {
+                width: 28px;
+                height: 28px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 4px;
+                background: more-ta.pressed ? Theme.pressed : more-ta.has-hover ? Theme.hover : transparent;
+                Image {
+                    source: @image-url("icons/more.svg");
+                    colorize: Theme.text;
+                    width: 16px;
+                    height: 16px;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+                more-ta := TouchArea {
+                    clicked => { item-menu.show(); }
+                }
+            }
+        }
+    }
+
+    item-menu := PopupWindow {
+        x: root.width - 196px;
+        y: root.height - 8px;
+        width: 190px;
+        MenuSurface {
+            VerticalLayout {
+                padding: 4px;
+                MenuItem { text: "Open"; clicked => { root.open(root.entry.path); } }
+                MenuItem { text: "Open file location"; clicked => { root.reveal(root.entry.path); } }
+                MenuSeparator { }
+                MenuItem { text: "Share"; has-icon: true; icon: @image-url("icons/link.svg"); clicked => { root.share(root.entry.path); } }
+                MenuItem { text: "View online"; has-icon: true; icon: @image-url("icons/globe.svg"); clicked => { root.online(root.entry.path); } }
+            }
+        }
+    }
+}
+
+export component Flyout inherits Window {
+    title: "Axentra OneDrive";
+    icon: @image-url("icons/logo.svg");
+    preferred-width: 380px;
+    preferred-height: 600px;
+    min-width: 340px;
+    min-height: 460px;
+    background: Theme.base;
+    default-font-family: Theme.font;
+
+    // starting, signed_out, up_to_date, syncing, paused, offline, error
+    in property <string> state: "up_to_date";
+    in property <string> headline: "Your files are synced";
+    in property <string> detail;
+    in property <float> progress;
+    in property <string> account-label: "Personal";
+    in property <string> storage-text;
+    in property <float> storage-fraction;
+    in property <[ActivityRow]> rows;
+    in property <string> toast;
+
+    callback open-folder();
+    callback view-online();
+    callback open-settings();
+    callback recycle-bin();
+    callback pause(int);
+    callback resume();
+    callback sign-in();
+    callback quit();
+    callback dismiss();
+    callback open-item(string);
+    callback reveal-item(string);
+    callback share-item(string);
+    callback item-online(string);
+
+    property <bool> paused: root.state == "paused";
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.dismiss();
+                return accept;
+            }
+            reject
+        }
+
+        VerticalLayout {
+            // ----- header
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 10px;
+                padding-top: 12px;
+                padding-bottom: 8px;
+                spacing: 4px;
+                Image {
+                    source: @image-url("icons/logo.svg");
+                    width: 26px;
+                    height: 26px;
+                }
+                VerticalLayout {
+                    padding-left: 8px;
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    Text {
+                        text: "Axentra OneDrive";
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: Theme.text;
+                    }
+                    Text {
+                        text: root.account-label;
+                        font-size: 12px;
+                        color: Theme.text2;
+                        overflow: elide;
+                    }
+                }
+                IconButton {
+                    icon: @image-url("icons/folder.svg");
+                    label: "Open folder";
+                    clicked => { root.open-folder(); }
+                }
+                IconButton {
+                    icon: @image-url("icons/globe.svg");
+                    label: "View online";
+                    clicked => { root.view-online(); }
+                }
+                gear := IconButton {
+                    icon: @image-url("icons/gear.svg");
+                    label: "Help & Settings";
+                    clicked => { gear-menu.show(); }
+                }
+            }
+
+            // ----- status card
+            Rectangle {
+                height: status-row.preferred-height;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    Rectangle {
+                        background: Theme.layer;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: Theme.stroke;
+                        status-row := VerticalLayout {
+                            padding: 14px;
+                            spacing: 10px;
+                            HorizontalLayout {
+                                spacing: 14px;
+                                Rectangle {
+                                    width: 40px;
+                                    height: 40px;
+                                    Image {
+                                        width: 40px;
+                                        height: 40px;
+                                        source: root.state == "up_to_date" ? @image-url("icons/status-synced.svg")
+                                            : root.state == "paused" ? @image-url("icons/status-paused.svg")
+                                            : root.state == "error" ? @image-url("icons/status-error.svg")
+                                            : root.state == "offline" ? @image-url("icons/status-offline.svg")
+                                            : root.state == "signed_out" ? @image-url("icons/status-signedout.svg")
+                                            : @image-url("icons/logo.svg");
+                                    }
+                                    if root.state == "syncing" || root.state == "starting": Image {
+                                        source: @image-url("icons/badge-sync.svg");
+                                        width: 20px;
+                                        height: 20px;
+                                        x: 22px;
+                                        y: 20px;
+                                        transform-rotation: (animation-tick() / 1.6s) * 360deg;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 2px;
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: root.headline;
+                                        font-size: 14px;
+                                        font-weight: 600;
+                                        color: Theme.text;
+                                        wrap: word-wrap;
+                                    }
+                                    if root.detail != "": Text {
+                                        text: root.detail;
+                                        font-size: 12px;
+                                        color: Theme.text2;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                            }
+                            if root.state == "syncing": Meter {
+                                value: root.progress;
+                            }
+                            if root.state == "paused": HorizontalLayout {
+                                alignment: end;
+                                FluentButton {
+                                    text: "Resume syncing";
+                                    primary: true;
+                                    clicked => { root.resume(); }
+                                }
+                            }
+                            if root.state == "signed_out": HorizontalLayout {
+                                alignment: end;
+                                FluentButton {
+                                    text: "Sign in";
+                                    primary: true;
+                                    clicked => { root.sign-in(); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ----- recent activity
+            if root.rows.length > 0: HorizontalLayout {
+                padding-left: 18px;
+                height: 34px;
+                Text {
+                    text: "Recent";
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Theme.text2;
+                    vertical-alignment: center;
+                }
+            }
+            if root.rows.length > 0: ListView {
+                vertical-stretch: 1;
+                for row in root.rows: HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    ActivityItem {
+                        entry: row;
+                        open(p) => { root.open-item(p); }
+                        reveal(p) => { root.reveal-item(p); }
+                        share(p) => { root.share-item(p); }
+                        online(p) => { root.item-online(p); }
+                    }
+                }
+            }
+            if root.rows.length == 0: VerticalLayout {
+                vertical-stretch: 1;
+                alignment: center;
+                spacing: 6px;
+                padding: 32px;
+                Image {
+                    source: @image-url("icons/cloud.svg");
+                    colorize: Theme.text3;
+                    height: 56px;
+                }
+                Text {
+                    text: "No recent activity";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: "Files you add, change or open in your OneDrive folder show up here.";
+                    font-size: 12px;
+                    color: Theme.text2;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+            }
+
+            // ----- toast (link copied, etc.)
+            if root.toast != "": Rectangle {
+                height: 36px;
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    Rectangle {
+                        border-radius: 6px;
+                        background: Theme.dark ? #3b3b3b : #e9f1fb;
+                        Text {
+                            text: root.toast;
+                            font-size: 12px;
+                            color: Theme.text;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+
+            // ----- footer: storage
+            Rectangle {
+                height: 1px;
+                background: Theme.divider;
+            }
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 12px;
+                padding-bottom: 14px;
+                spacing: 16px;
+                VerticalLayout {
+                    spacing: 6px;
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    Text {
+                        text: root.storage-text;
+                        font-size: 12px;
+                        color: Theme.text2;
+                        overflow: elide;
+                    }
+                    Meter {
+                        value: root.storage-fraction;
+                        fill: root.storage-fraction > 0.9 ? Theme.danger : Theme.accent;
+                    }
+                }
+                Hyperlink {
+                    text: "Recycle bin";
+                    vertical-alignment: center;
+                    clicked => { root.recycle-bin(); }
+                }
+            }
+        }
+    }
+
+    gear-menu := PopupWindow {
+        x: root.width - 238px;
+        y: 48px;
+        width: 226px;
+        MenuSurface {
+            VerticalLayout {
+                padding: 4px;
+                MenuItem {
+                    text: "Settings";
+                    has-icon: true;
+                    icon: @image-url("icons/gear.svg");
+                    clicked => { root.open-settings(); }
+                }
+                MenuSeparator { }
+                if !root.paused: MenuItem {
+                    text: "Pause syncing for 2 hours";
+                    has-icon: true;
+                    icon: @image-url("icons/pause.svg");
+                    clicked => { root.pause(2); }
+                }
+                if !root.paused: MenuItem {
+                    text: "Pause syncing for 8 hours";
+                    has-icon: true;
+                    icon: @image-url("icons/pause.svg");
+                    clicked => { root.pause(8); }
+                }
+                if !root.paused: MenuItem {
+                    text: "Pause syncing for 24 hours";
+                    has-icon: true;
+                    icon: @image-url("icons/pause.svg");
+                    clicked => { root.pause(24); }
+                }
+                if root.paused: MenuItem {
+                    text: "Resume syncing";
+                    has-icon: true;
+                    icon: @image-url("icons/play.svg");
+                    clicked => { root.resume(); }
+                }
+                MenuSeparator { }
+                MenuItem {
+                    text: "Recycle bin";
+                    has-icon: true;
+                    icon: @image-url("icons/trash.svg");
+                    clicked => { root.recycle-bin(); }
+                }
+                MenuItem {
+                    text: "Quit Axentra OneDrive";
+                    has-icon: true;
+                    icon: @image-url("icons/close.svg");
+                    clicked => { root.quit(); }
+                }
+            }
+        }
+    }
+
+    public function show-menu() { gear-menu.show(); }
+
+    init => { keys.focus(); }
+}

@@ -1,0 +1,16 @@
+import { Theme } from "theme.slint";
+import { Flyout, ActivityRow } from "flyout.slint";
+import { SettingsWindow } from "settings.slint";
+import { VersionsWindow, VersionRow } from "versions.slint";
+
+// Renders the app icon on its own, for exporting PNG sizes.
+export component LogoWindow inherits Window {
+    background: transparent;
+    Image {
+        source: @image-url("icons/logo.svg");
+        width: parent.width;
+        height: parent.height;
+    }
+}
+
+export { Theme, Flyout, ActivityRow, SettingsWindow, VersionsWindow, VersionRow }

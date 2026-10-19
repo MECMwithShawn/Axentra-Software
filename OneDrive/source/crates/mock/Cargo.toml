@@ -1,0 +1,20 @@
+[package]
+name = "axentra-onedrive-mock"
+description = "In-memory mock of the Microsoft Graph OneDrive API, for tests and offline demos"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axentra-onedrive-graph.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+parking_lot.workspace = true
+bytes.workspace = true
+tracing.workspace = true
+percent-encoding.workspace = true
+url.workspace = true

@@ -1,0 +1,32 @@
+[package]
+name = "axentra-onedrive-core"
+description = "Axentra OneDrive sync engine, local state, Files On-Demand FUSE mount and D-Bus service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axentra-onedrive-graph.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+libc.workspace = true
+rusqlite.workspace = true
+fuser.workspace = true
+zbus.workspace = true
+globset.workspace = true
+hostname.workspace = true
+parking_lot.workspace = true
+futures-util.workspace = true
+md-5 = "0.10"
+
+[dev-dependencies]
+axentra-onedrive-mock.workspace = true
+tempfile.workspace = true
+tracing-subscriber.workspace = true

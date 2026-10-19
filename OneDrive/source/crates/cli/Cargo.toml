@@ -1,0 +1,23 @@
+[package]
+name = "axentra-onedrive"
+description = "Axentra OneDrive: a OneDrive client for Linux modelled on the Windows OneDrive app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "axentra-onedrive"
+path = "src/main.rs"
+
+[dependencies]
+axentra-onedrive-graph.workspace = true
+axentra-onedrive-core.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zbus.workspace = true
+libc.workspace = true

@@ -1,0 +1,496 @@
+// OneDrive settings, following the Windows 11 layout: navigation on the
+// left, setting cards on the right. Changes apply immediately.
+
+import { Switch, SpinBox, ComboBox, LineEdit, ScrollView, AboutSlint } from "std-widgets.slint";
+import { Theme, Meter, FluentButton, Hyperlink, MenuSurface } from "theme.slint";
+
+component NavItem inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> selected;
+    callback clicked();
+
+    height: 36px;
+    border-radius: 4px;
+    background: root.selected ? Theme.hover.mix(Theme.layer, 0.6) : ta.has-hover ? Theme.hover : transparent;
+    accessible-role: tab;
+    accessible-label: text;
+
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: root.selected ? 16px : 0;
+        border-radius: 1.5px;
+        background: Theme.accent;
+        animate height { duration: 120ms; }
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: Theme.text;
+                width: 16px;
+                height: 16px;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+/// A settings row: icon, title and description on the left, control on the right.
+component Card inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    in property <image> icon;
+    in property <bool> has-icon: true;
+
+    background: Theme.layer;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: Theme.stroke;
+    min-height: 68px;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: 16px;
+        if root.has-icon: VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: Theme.text;
+                width: 20px;
+                height: 20px;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text {
+                text: root.title;
+                font-size: 14px;
+                color: Theme.text;
+                wrap: word-wrap;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                font-size: 12px;
+                color: Theme.text2;
+                wrap: word-wrap;
+            }
+        }
+        @children
+    }
+}
+
+component SectionTitle inherits Text {
+    font-size: 14px;
+    font-weight: 600;
+    color: Theme.text;
+    height: 36px;
+    vertical-alignment: bottom;
+}
+
+/// Selectable option card (the Windows "Files On-Demand" choice).
+component OptionCard inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    in property <bool> selected;
+    callback clicked();
+
+    background: ta.has-hover ? Theme.layer.mix(Theme.hover, 0.5) : Theme.layer;
+    border-radius: 6px;
+    border-width: root.selected ? 2px : 1px;
+    border-color: root.selected ? Theme.accent : Theme.stroke;
+    min-height: 64px;
+    accessible-role: button;
+    accessible-label: title;
+
+    HorizontalLayout {
+        padding: 14px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                border-width: root.selected ? 5px : 1.5px;
+                border-color: root.selected ? Theme.accent : Theme.text2;
+            }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+            Text { text: root.title; font-size: 14px; color: Theme.text; }
+            Text { text: root.description; font-size: 12px; color: Theme.text2; wrap: word-wrap; }
+        }
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component SettingsWindow inherits Window {
+    title: "Axentra OneDrive Settings";
+    icon: @image-url("icons/logo.svg");
+    preferred-width: 880px;
+    preferred-height: 620px;
+    min-width: 720px;
+    min-height: 480px;
+    background: Theme.base;
+    default-font-family: Theme.font;
+
+    in-out property <int> page: 0;
+
+    // Sync and back up
+    in-out property <bool> paused;
+    in-out property <bool> files-on-demand: true;
+    in property <string> folder-path;
+    in property <string> local-usage;
+    // Account
+    in property <bool> signed-in;
+    in property <string> account-name;
+    in property <string> account-email;
+    in property <string> account-type;
+    in property <string> account-initials;
+    in property <string> storage-text;
+    in property <float> storage-fraction;
+    // Notifications
+    in-out property <bool> notify-deletes: true;
+    in-out property <bool> notify-conflicts: true;
+    in-out property <bool> notify-errors: true;
+    // Network
+    in-out property <int> upload-mode;
+    in-out property <int> upload-kbps: 1000;
+    in-out property <int> download-mode;
+    in-out property <int> download-kbps: 5000;
+    in-out property <int> poll-index: 1;
+    // About
+    in property <string> version;
+    in property <string> notice;
+
+    callback changed();
+    callback toggle-pause(bool);
+    callback set-on-demand(bool);
+    callback open-folder();
+    callback free-up-space();
+    callback sign-in();
+    callback unlink();
+    callback manage-storage();
+    callback view-online();
+
+    HorizontalLayout {
+        // ----- navigation pane
+        VerticalLayout {
+            width: 268px;
+            padding: 12px;
+            padding-top: 16px;
+            spacing: 4px;
+            HorizontalLayout {
+                padding-left: 6px;
+                padding-bottom: 14px;
+                spacing: 12px;
+                Image {
+                    source: @image-url("icons/logo.svg");
+                    width: 28px;
+                    height: 28px;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Text { text: "Axentra OneDrive"; font-size: 14px; font-weight: 600; color: Theme.text; }
+                    Text { text: root.signed-in ? root.account-email : "Not signed in"; font-size: 12px; color: Theme.text2; overflow: elide; }
+                }
+            }
+            NavItem { text: "Sync and back up"; icon: @image-url("icons/sync.svg"); selected: root.page == 0; clicked => { root.page = 0; } }
+            NavItem { text: "Account"; icon: @image-url("icons/person.svg"); selected: root.page == 1; clicked => { root.page = 1; } }
+            NavItem { text: "Notifications"; icon: @image-url("icons/bell.svg"); selected: root.page == 2; clicked => { root.page = 2; } }
+            NavItem { text: "Network"; icon: @image-url("icons/network.svg"); selected: root.page == 3; clicked => { root.page = 3; } }
+            NavItem { text: "About"; icon: @image-url("icons/info.svg"); selected: root.page == 4; clicked => { root.page = 4; } }
+            Rectangle { vertical-stretch: 1; }
+        }
+
+        // ----- content
+        Rectangle {
+            horizontal-stretch: 1;
+            ScrollView {
+                VerticalLayout {
+                    padding-left: 28px;
+                    padding-right: 32px;
+                    padding-top: 24px;
+                    padding-bottom: 28px;
+                    spacing: 6px;
+                    alignment: start;
+
+                    Text {
+                        font-size: 28px;
+                        font-weight: 600;
+                        color: Theme.text;
+                        text: root.page == 0 ? "Sync and back up" : root.page == 1 ? "Account"
+                            : root.page == 2 ? "Notifications" : root.page == 3 ? "Network" : "About";
+                        height: 56px;
+                    }
+
+                    if root.page == 0: VerticalLayout {
+                        spacing: 6px;
+                        Card {
+                            icon: @image-url("icons/pause.svg");
+                            title: "Pause syncing";
+                            description: root.paused ? "Syncing is paused. Files you open still download."
+                                : "Stop uploading and downloading changes for 2 hours.";
+                            Switch {
+                                checked <=> root.paused;
+                                toggled => { root.toggle-pause(self.checked); }
+                            }
+                        }
+                        Card {
+                            icon: @image-url("icons/folder.svg");
+                            title: "OneDrive folder";
+                            description: root.folder-path;
+                            FluentButton { text: "Open folder"; clicked => { root.open-folder(); } }
+                        }
+                        SectionTitle { text: "Files On-Demand"; }
+                        OptionCard {
+                            title: "Free up disk space";
+                            description: "Files show up in your OneDrive folder but only download when you open them. Recommended.";
+                            selected: root.files-on-demand;
+                            clicked => { root.files-on-demand = true; root.set-on-demand(true); }
+                        }
+                        OptionCard {
+                            title: "Download all files";
+                            description: "Every file is kept on this device, so it's always available, even offline.";
+                            selected: !root.files-on-demand;
+                            clicked => { root.files-on-demand = false; root.set-on-demand(false); }
+                        }
+                        Card {
+                            icon: @image-url("icons/download.svg");
+                            title: "Space used on this device";
+                            description: root.local-usage + " of OneDrive content is stored locally. Freeing up space keeps files online only, except those set to always keep on this device.";
+                            FluentButton { text: "Free up space"; clicked => { root.free-up-space(); } }
+                        }
+                    }
+
+                    if root.page == 1: VerticalLayout {
+                        spacing: 6px;
+                        if root.signed-in: Rectangle {
+                            background: Theme.layer;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            HorizontalLayout {
+                                padding: 18px;
+                                spacing: 18px;
+                                Rectangle {
+                                    width: 56px;
+                                    height: 56px;
+                                    border-radius: 28px;
+                                    background: Theme.accent;
+                                    Text {
+                                        text: root.account-initials;
+                                        font-size: 20px;
+                                        font-weight: 600;
+                                        color: Theme.on-accent;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 2px;
+                                    horizontal-stretch: 1;
+                                    Text { text: root.account-name; font-size: 18px; font-weight: 600; color: Theme.text; }
+                                    Text { text: root.account-email; font-size: 13px; color: Theme.text2; }
+                                    Text { text: root.account-type; font-size: 12px; color: Theme.text3; }
+                                }
+                            }
+                        }
+                        if root.signed-in: Rectangle {
+                            background: Theme.layer;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 10px;
+                                HorizontalLayout {
+                                    Text { text: "Storage"; font-size: 14px; color: Theme.text; horizontal-stretch: 1; vertical-alignment: center; }
+                                    FluentButton { text: "Manage storage"; clicked => { root.manage-storage(); } }
+                                }
+                                Meter { value: root.storage-fraction; fill: root.storage-fraction > 0.9 ? Theme.danger : Theme.accent; }
+                                Text { text: root.storage-text; font-size: 12px; color: Theme.text2; }
+                            }
+                        }
+                        if root.signed-in: Card {
+                            icon: @image-url("icons/close.svg");
+                            title: "Unlink this PC";
+                            description: "Stop syncing and remove the local copies of your files from this PC. Your files stay safe on OneDrive.";
+                            FluentButton { text: "Unlink this PC"; danger: true; clicked => { confirm-unlink.show(); } }
+                        }
+                        if !root.signed-in: Card {
+                            icon: @image-url("icons/person.svg");
+                            title: "Sign in to OneDrive";
+                            description: "Sign in with your Microsoft account to start syncing.";
+                            FluentButton { text: "Sign in"; primary: true; clicked => { root.sign-in(); } }
+                        }
+                    }
+
+                    if root.page == 2: VerticalLayout {
+                        spacing: 6px;
+                        Card {
+                            icon: @image-url("icons/trash.svg");
+                            title: "When many files are deleted online";
+                            description: "Get notified when a lot of files are removed from your OneDrive at once.";
+                            Switch { checked <=> root.notify-deletes; toggled => { root.changed(); } }
+                        }
+                        Card {
+                            icon: @image-url("icons/sync.svg");
+                            title: "When a file changes here and online";
+                            description: "Both copies are always kept. Get notified so you can merge them.";
+                            Switch { checked <=> root.notify-conflicts; toggled => { root.changed(); } }
+                        }
+                        Card {
+                            icon: @image-url("icons/bell.svg");
+                            title: "When there's a problem syncing";
+                            description: "For example a file name OneDrive doesn't allow, or an upload that keeps failing.";
+                            Switch { checked <=> root.notify-errors; toggled => { root.changed(); } }
+                        }
+                    }
+
+                    if root.page == 3: VerticalLayout {
+                        spacing: 6px;
+                        Card {
+                            icon: @image-url("icons/share.svg");
+                            title: "Upload rate";
+                            description: root.upload-mode == 0 ? "Don't limit" : "Limit to " + root.upload-kbps + " KB/s";
+                            if root.upload-mode == 1: SpinBox {
+                                width: 120px;
+                                minimum: 10;
+                                maximum: 100000;
+                                value <=> root.upload-kbps;
+                                edited => { root.changed(); }
+                            }
+                            ComboBox {
+                                width: 150px;
+                                model: ["Don't limit", "Limit to"];
+                                current-index <=> root.upload-mode;
+                                selected => { root.changed(); }
+                            }
+                        }
+                        Card {
+                            icon: @image-url("icons/download.svg");
+                            title: "Download rate";
+                            description: root.download-mode == 0 ? "Don't limit" : "Limit to " + root.download-kbps + " KB/s";
+                            if root.download-mode == 1: SpinBox {
+                                width: 120px;
+                                minimum: 10;
+                                maximum: 100000;
+                                value <=> root.download-kbps;
+                                edited => { root.changed(); }
+                            }
+                            ComboBox {
+                                width: 150px;
+                                model: ["Don't limit", "Limit to"];
+                                current-index <=> root.download-mode;
+                                selected => { root.changed(); }
+                            }
+                        }
+                        Card {
+                            icon: @image-url("icons/history.svg");
+                            title: "Check for changes online";
+                            description: "How often to look for files changed on other devices or on the web.";
+                            ComboBox {
+                                width: 170px;
+                                model: ["Every 10 seconds", "Every 30 seconds", "Every minute", "Every 5 minutes"];
+                                current-index <=> root.poll-index;
+                                selected => { root.changed(); }
+                            }
+                        }
+                    }
+
+                    if root.page == 4: VerticalLayout {
+                        spacing: 6px;
+                        Rectangle {
+                            background: Theme.layer;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            HorizontalLayout {
+                                padding: 18px;
+                                spacing: 16px;
+                                Image { source: @image-url("icons/logo.svg"); width: 44px; height: 44px; }
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text { text: "Axentra OneDrive"; font-size: 16px; font-weight: 600; color: Theme.text; }
+                                    Text { text: "Version " + root.version; font-size: 12px; color: Theme.text2; }
+                                }
+                            }
+                        }
+                        Card {
+                            has-icon: false;
+                            title: "About this app";
+                            description: root.notice;
+                        }
+                        // Attribution required by Slint's royalty-free license.
+                        Rectangle {
+                            background: Theme.layer;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            HorizontalLayout {
+                                padding: 16px;
+                                alignment: start;
+                                AboutSlint {
+                                    max-width: 180px;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    confirm-unlink := PopupWindow {
+        x: (root.width - 420px) / 2;
+        y: (root.height - 200px) / 2;
+        width: 420px;
+        close-policy: close-on-click-outside;
+        MenuSurface {
+            VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+                Text { text: "Unlink this PC?"; font-size: 20px; font-weight: 600; color: Theme.text; }
+                Text {
+                    text: "Files that are only online stay on OneDrive. Local copies are removed from this PC, and changes that haven't uploaded yet are lost.";
+                    font-size: 13px;
+                    color: Theme.text2;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    FluentButton { text: "Unlink account"; primary: true; clicked => { root.unlink(); confirm-unlink.close(); } }
+                    FluentButton { text: "Cancel"; clicked => { confirm-unlink.close(); } }
+                }
+            }
+        }
+    }
+}
