@@ -429,7 +429,16 @@ impl Engine {
                 format!("{pending} changes waiting to sync"),
             )
         } else if last_sync.is_none() {
-            ("starting", "Getting your files ready".into(), String::new())
+            let listed = self.db.with(|s| s.item_count()).unwrap_or(0);
+            let detail = if listed > 0 {
+                format!(
+                    "Listing your OneDrive: {} items so far. Files download only when you open them.",
+                    group_digits(listed)
+                )
+            } else {
+                String::new()
+            };
+            ("starting", "Getting your files ready".into(), detail)
         } else {
             ("up_to_date", "Your files are synced".into(), String::new())
         };
@@ -582,14 +591,21 @@ impl Engine {
         'restart: loop {
             let saved = self.db.with(|s| s.kv("delta_link"))?;
             let full = saved.is_none();
-            if full {
+            // A first scan of a large drive takes many pages; resume it after
+            // a restart instead of listing everything again.
+            let resume = if full {
+                self.db.with(|s| s.kv("scan_next"))?
+            } else {
+                None
+            };
+            if full && resume.is_none() {
                 self.db.with(|s| s.mark_all_unseen())?;
             }
             let mut out = PullOutcome {
                 initial: self.db.with(|s| s.kv("synced_once"))?.is_none(),
                 ..Default::default()
             };
-            let mut link = saved;
+            let mut link = saved.or(resume.clone());
             let mut orphans: Vec<DriveItem> = Vec::new();
             loop {
                 let page = match self.graph.delta_page(link.as_deref()).await {
@@ -597,7 +613,18 @@ impl Engine {
                     Err(e) if e.status() == Some(410) && restarts < 3 => {
                         restarts += 1;
                         tracing::info!("change feed expired; doing a full resync");
-                        self.db.with(|s| s.del_kv("delta_link"))?;
+                        self.db.with(|s| -> Result<()> {
+                            s.del_kv("delta_link")?;
+                            s.del_kv("scan_next")
+                        })?;
+                        continue 'restart;
+                    }
+                    Err(e) if resume.is_some() && e.status() == Some(400) && restarts < 3 => {
+                        restarts += 1;
+                        tracing::info!(
+                            "saved scan position is no longer valid; starting the scan again"
+                        );
+                        self.db.with(|s| s.del_kv("scan_next"))?;
                         continue 'restart;
                     }
                     Err(e) => return Err(e.into()),
@@ -606,6 +633,9 @@ impl Engine {
                 items.extend(page.items);
                 orphans = self.db.tx(|s| self.apply_items(s, items, &mut out))?;
                 if let Some(next) = page.next_link {
+                    if full {
+                        self.db.with(|s| s.set_kv("scan_next", &next))?;
+                    }
                     link = Some(next);
                     continue;
                 }
@@ -631,6 +661,7 @@ impl Engine {
                     if let Some(d) = &page.delta_link {
                         s.set_kv("delta_link", d)?;
                     }
+                    s.del_kv("scan_next")?;
                     s.set_kv("synced_once", "1")
                 })?;
                 break;
@@ -1503,10 +1534,34 @@ impl Engine {
     }
 }
 
+/// 256599 -> "256,599".
+fn group_digits(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn folder_of(path: &str) -> String {
     let parent = path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
     match parent.rsplit('/').next() {
         Some(name) if !name.is_empty() => name.to_string(),
         _ => "OneDrive".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn digits_are_grouped() {
+        assert_eq!(super::group_digits(7), "7");
+        assert_eq!(super::group_digits(1000), "1,000");
+        assert_eq!(super::group_digits(256599), "256,599");
+        assert_eq!(super::group_digits(1234567), "1,234,567");
     }
 }

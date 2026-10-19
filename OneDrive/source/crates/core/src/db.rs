@@ -428,6 +428,16 @@ impl Store<'_> {
         )
     }
 
+    /// Files and folders known locally (not counting the root).
+    pub fn item_count(&self) -> Result<u64> {
+        let n: i64 = self
+            .0
+            .query_row("SELECT COUNT(*) FROM items WHERE ino != 1", [], |r| {
+                r.get(0)
+            })?;
+        Ok(n as u64)
+    }
+
     pub fn cached_bytes(&self) -> Result<u64> {
         let n: i64 = self.0.query_row(
             "SELECT COALESCE(SUM(size), 0) FROM items WHERE cached = 1 AND is_dir = 0",

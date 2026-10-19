@@ -1,5 +1,17 @@
 # Icon kit revisions
 
+## Glass + Precision 1.6 — 2026-10-19
+
+- Add Axentra OneDrive as the eleventh app: an ice (`#B8DEFF`) cloud, using the shared
+  tile, rim, halo, gradient and sampling unchanged. Geometry is in [ONEDRIVE.md](ONEDRIVE.md).
+- Rendered with rustc 1.99.1 on x86_64 Linux. The seven existing procedural icons
+  (Command, Ghost, Vault, PDF, Spaces, Mail, Outlook) reproduce byte for byte; no existing
+  PNG or ICO changed.
+- `assets/preview.png` gains an eleventh column, rendered alone with the renderer's own
+  `preview()` and appended without re-rendering the other ten. As a control, Outlook's
+  column rendered the same way matched the existing sheet exactly.
+  `references/production-preview.png` and the motion component are unchanged.
+
 ## Glass + Precision 1.5 — 2026-10-19
 
 - Add Axentra Outlook as the tenth app: a periwinkle (`#7C8CFF`) calendar page behind

@@ -49,6 +49,7 @@ Preserve negative-space details: Ghost's eyes, Vault's keyhole and CrystalWire's
 | `spaces` | `26,211,192` / `#1AD3C0` | Two overlapping teal browser windows |
 | `mail` | `239,136,199` / `#EF88C7` | Rose-pink closed envelope, recessed V-shaped flap and lower fold seams |
 | `archive` | `182,222,118` / `#B6DE76` | Lime archive glyph in a glass tile; preserved installed ICO |
+| `onedrive` | `184,222,255` / `#B8DEFF` | Ice cloud: three lobes over a flat base, enlarged 15% and set slightly below centre; solid at every size |
 | `outlook` | `124,140,255` / `#7C8CFF` | Periwinkle calendar page with two binder tabs, a header rule and a row-and-column of date squares, behind an envelope with a recessed V flap and a clear gap |
 
 Ghost's body has its own violet-to-cyan gradient, float RGB `[0.68,0.45,1.0]` to

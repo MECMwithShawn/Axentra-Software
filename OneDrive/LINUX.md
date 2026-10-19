@@ -14,13 +14,13 @@ The sync service runs as the systemd user unit `axentra-onedrive.service`, and t
 
 ## Available
 
-Files On-Demand through FUSE, two-way sync with Microsoft Graph's delta feed, chunked uploads, hash-checked downloads, Windows conflict naming, pin and free up space, sharing links, version history and restore, pause, bandwidth limits, desktop notifications, a StatusNotifierItem tray icon, the activity panel, Settings, and GNOME Files badges and menu.
+Files On-Demand through FUSE, two-way sync with Microsoft Graph's delta feed, chunked uploads, hash-checked downloads, Windows conflict naming, pin and free up space, sharing links, version history and restore, pause, bandwidth limits, desktop notifications, a StatusNotifierItem tray icon, the activity panel, Settings with a choice of three app icon colours, and GNOME Files badges and menu. The first scan of a large drive shows how many items it has listed and resumes after a restart instead of starting over.
 
 ## Verification
 
-26 Rust tests passed: 15 end-to-end tests on a real FUSE mount against a Graph mock (on-demand download, uploads including chunked large files, rename identity, conflicts, deletes in both directions, pin and free, save-by-rename history, delta paging and expiry, token refresh, throttling, invalid names, sharing and version restore), plus unit tests including QuickXorHash against a bit-level model. Clippy reported no warnings.
+29 Rust tests passed: 16 end-to-end tests on a real FUSE mount against a Graph mock (on-demand download, uploads including chunked large files, rename identity, conflicts, deletes in both directions, pin and free, save-by-rename history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore and resuming an interrupted first scan), plus unit tests including QuickXorHash against a bit-level model. Clippy reported no warnings.
 
-On the desktop: signed in to a real personal account with its own app registration; the mount listed the account's files and downloaded on demand. The tray registered with the AppIndicator host, its menu paused and resumed the service over D-Bus, and the panel opened with the GPU renderer. The service restarts in under a second. The installer upgraded an earlier test install without re-downloading.
+On the desktop: signed in to a real personal account with its own app registration; the mount listed the account's files and downloaded on demand. The tray registered with the AppIndicator host, its menu paused and resumed the service over D-Bus, and the panel opened with the GPU renderer. The service restarts in under a second. Switching the icon colour replaced the installed desktop icon, and switching back restored it. The installer upgraded an earlier test install without re-downloading.
 
 ## Remaining work and requirements
 

@@ -6,5 +6,7 @@
 - Tray icon, activity panel, Settings and Version history windows in Fluent light and dark; GNOME Files status badges and OneDrive menu.
 - Installs per user into `~/.local/share/axentra/apps/onedrive` with a systemd user service. Upgrades the earlier working build, Cirrus, in place, keeping sign-in and sync state.
 - Fast, safe shutdown during long first scans; on-demand downloads log the program that requested them.
+- The first scan shows how many items it has listed and resumes after a restart instead of starting over.
+- Ice glass app icon from the Axentra Icon Kit, with periwinkle and azure in Settings > Appearance.
 
 No binary release, installer or checksums are published for this version.

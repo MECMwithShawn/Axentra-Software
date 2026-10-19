@@ -240,7 +240,11 @@ fn tray_sheet(out: &str, dark: bool) -> Result<()> {
         p.copy_from_slice(&[bg[0], bg[1], bg[2], 255]);
     }
     for (i, st) in states.iter().enumerate() {
-        let icon = crate::tray::render(st, size as i32);
+        let icon = crate::tray::render(
+            st,
+            size as i32,
+            axentra_onedrive_core::config::icon_accent("ice"),
+        );
         let ox = pad + i as u32 * (size + pad);
         for y in 0..size {
             for x in 0..size {

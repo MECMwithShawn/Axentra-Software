@@ -60,6 +60,8 @@ pub struct Drive {
     tokens_issued: u64,
     /// Fail the next N API requests with this status (e.g. 503 or 429).
     pub fail_next: Option<(u16, u32)>,
+    /// Reject delta pages from this offset on (simulates a scan cut short).
+    pub fail_delta_from: Option<usize>,
 }
 
 fn etag(it: &MItem) -> String {
@@ -495,7 +497,8 @@ async fn handle(
 
     {
         let mut d = st.drive.lock();
-        d.log.push(format!("{method} {api}"));
+        let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
+        d.log.push(format!("{method} {api}{query}"));
         if let Some((status, n)) = d.fail_next {
             d.fail_next = if n > 1 { Some((status, n - 1)) } else { None };
             let mut r = error(
@@ -572,6 +575,9 @@ fn delta(d: &Drive, uri: &Uri, base: &str) -> Response {
     }
     let end: u64 = q.get("end").and_then(|t| t.parse().ok()).unwrap_or(d.seq);
     let skip: usize = q.get("skip").and_then(|t| t.parse().ok()).unwrap_or(0);
+    if d.fail_delta_from.is_some_and(|from| skip >= from) {
+        return error(StatusCode::FORBIDDEN, "injected", "scan interrupted");
+    }
 
     let mut changed: Vec<&MItem> = d
         .items

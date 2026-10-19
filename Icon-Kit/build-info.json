@@ -1,10 +1,10 @@
 {
-  "kit_revision": "glass-precision-1.5",
+  "kit_revision": "glass-precision-1.6",
   "adopted_date": "2026-10-14",
   "renderer": "Complete export: Rust procedural baseline, Sharp SVG overrides, then preserved Archive ICO extraction",
   "source_origin": "axentra-command/tools/suite-icons",
   "authoritative_source": {
-    "procedural": "renderer/src/suite.rs (Command, Ghost, Vault, PDF, Spaces, Mail, Outlook)",
+    "procedural": "renderer/src/suite.rs (Command, Ghost, Vault, PDF, Spaces, Mail, Outlook, OneDrive)",
     "outline": "svg/horizon.svg, svg/crystalwire.svg; optical sizing and export in svg/render.cjs",
     "archive": "raster/archive.ico; native frame extraction and derived PNGs in raster/render.cjs"
   },
@@ -48,7 +48,8 @@
     "spaces",
     "mail",
     "archive",
-    "outlook"
+    "outlook",
+    "onedrive"
   ],
   "canonical_assets": "assets/; SHA-256 values in manifest.json",
   "text_files": "UTF-8 with LF line endings",
@@ -127,5 +128,6 @@
     },
     "motion_accent": "#B6DE76"
   },
-  "outlook_revision": "Periwinkle calendar page behind an envelope, shared glass tile and finish; micro tier drops the date grid; rendered on Linux with rustc 1.99.1 (the six existing procedural icons reproduce byte for byte)"
+  "outlook_revision": "Periwinkle calendar page behind an envelope, shared glass tile and finish; micro tier drops the date grid; rendered on Linux with rustc 1.99.1 (the six existing procedural icons reproduce byte for byte)",
+  "onedrive_revision": "Ice cloud (three lobes over a flat base), shared glass tile and finish, solid at every size; rendered on Linux with rustc 1.99.1 (the seven existing procedural icons reproduce byte for byte)"
 }

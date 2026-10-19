@@ -17,7 +17,7 @@ use slint::{ComponentHandle, Weak};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::tray::AxentraOneDriveTray;
-use crate::{present, Flyout, SettingsWindow};
+use crate::{present, Flyout, SettingsWindow, Theme};
 
 pub enum Cmd {
     ToggleFlyout,
@@ -42,6 +42,7 @@ pub enum Cmd {
     FreeUpSpace,
     Unlink,
     Reload,
+    SetIconColor(String),
 }
 
 pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
@@ -91,6 +92,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(settings.on_unlink => Cmd::Unlink);
     wire!(settings.on_manage_storage => Cmd::ManageStorage);
     wire!(settings.on_view_online => Cmd::ViewOnline);
+    wire!(settings.on_set_icon_color(c) => Cmd::SetIconColor(c.to_string()));
 
     if show_panel {
         let _ = tx.send(Cmd::ShowFlyout);
@@ -159,16 +161,39 @@ impl Backend {
         }
     }
 
+    /// Show `color` in both windows and the tray, and in the desktop icon theme.
+    async fn show_icon_color(&self, color: &str) {
+        let c = color.to_string();
+        let _ = self.flyout.upgrade_in_event_loop({
+            let c = c.clone();
+            move |ui| ui.global::<Theme>().set_icon_color(c.into())
+        });
+        let _ = self
+            .settings
+            .upgrade_in_event_loop(move |ui| ui.global::<Theme>().set_icon_color(c.into()));
+        if let Some(tray) = &self.tray {
+            let accent = axentra_onedrive_core::config::icon_accent(color);
+            tray.update(move |t| t.accent = accent).await;
+        }
+        let c = color.to_string();
+        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || crate::icons::apply(&c)).await {
+            tracing::warn!("couldn't update the desktop icon: {e}");
+        }
+    }
+
     fn config(&self) -> Config {
         Config::load(&self.paths.config_file).unwrap_or_default()
     }
 
     async fn run(mut self, mut rx: UnboundedReceiver<Cmd>, start_with_settings: bool) {
+        let color = self.config().icon_color().to_string();
         let tray = AxentraOneDriveTray {
             state: "starting".into(),
             tooltip: "Axentra OneDrive".into(),
+            accent: axentra_onedrive_core::config::icon_accent(&color),
             tx: self.tx.clone(),
         };
+        self.show_icon_color(&color).await;
         match tray.spawn().await {
             Ok(h) => self.tray = Some(h),
             Err(e) => {
@@ -502,6 +527,15 @@ impl Backend {
                 if pin_all {
                     self.proxy()?.pin(vec![self.mount()]).await?;
                 }
+            }
+            Cmd::SetIconColor(color) => {
+                if !axentra_onedrive_core::config::ICON_COLORS.contains(&color.as_str()) {
+                    anyhow::bail!("unknown icon colour {color}");
+                }
+                let mut cfg = self.config();
+                cfg.icon_color = color.clone();
+                cfg.save(&self.paths.config_file)?;
+                self.show_icon_color(&color).await;
             }
             Cmd::Reload => {
                 self.proxy()?.reload().await?;

@@ -11,6 +11,8 @@ use crate::app::Cmd;
 pub struct AxentraOneDriveTray {
     pub state: String,
     pub tooltip: String,
+    /// Accent of the chosen app icon colour.
+    pub accent: [u8; 3],
     pub tx: UnboundedSender<Cmd>,
 }
 
@@ -32,7 +34,7 @@ impl ksni::Tray for AxentraOneDriveTray {
     fn icon_pixmap(&self) -> Vec<Icon> {
         [22, 32, 48, 64]
             .iter()
-            .map(|&s| render(&self.state, s))
+            .map(|&s| render(&self.state, s, self.accent))
             .collect()
     }
 
@@ -133,12 +135,18 @@ fn seg_dist(px: f32, py: f32, (ax, ay): (f32, f32), (bx, by): (f32, f32)) -> f32
 }
 
 /// Sample the icon at (x, y) in the 24-unit design grid.
-fn sample(state: &str, x: f32, y: f32) -> Rgba {
+fn sample(state: &str, accent: [u8; 3], x: f32, y: f32) -> Rgba {
     let grey = matches!(state, "paused" | "offline" | "signed_out");
     let (top, bottom) = if grey {
         (hex(0xB9C0C8), hex(0x7C858F))
     } else {
-        (hex(0x5DB8FF), hex(0x0C63C7))
+        // A gradient around the app icon's accent: lighter at the top.
+        let a = [
+            accent[0] as f32 / 255.0,
+            accent[1] as f32 / 255.0,
+            accent[2] as f32 / 255.0,
+        ];
+        (lerp(a, [1.0, 1.0, 1.0], 0.45), lerp(a, hex(0x0E285A), 0.45))
     };
     let mut px: Rgba = [0.0; 4];
 
@@ -196,7 +204,7 @@ fn sample(state: &str, x: f32, y: f32) -> Rgba {
 }
 
 /// ARGB32 (network byte order) pixmap of `size` x `size`.
-pub fn render(state: &str, size: i32) -> Icon {
+pub fn render(state: &str, size: i32, accent: [u8; 3]) -> Icon {
     const SS: i32 = 4;
     let scale = 24.0 / size as f32;
     let mut data = Vec::with_capacity((size * size * 4) as usize);
@@ -207,7 +215,7 @@ pub fn render(state: &str, size: i32) -> Icon {
                 for sx in 0..SS {
                     let x = (px as f32 + (sx as f32 + 0.5) / SS as f32) * scale;
                     let y = (py as f32 + (sy as f32 + 0.5) / SS as f32) * scale;
-                    let s = sample(state, x, y);
+                    let s = sample(state, accent, x, y);
                     for i in 0..3 {
                         acc[i] += s[i] * s[3];
                     }

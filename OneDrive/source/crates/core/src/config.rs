@@ -7,6 +7,18 @@ use serde::{Deserialize, Serialize};
 
 pub const DBUS_NAME: &str = "io.github.mecmwithshawn.AxentraOneDrive";
 pub const DBUS_PATH: &str = "/io/github/mecmwithshawn/AxentraOneDrive";
+/// App icon colours offered in Settings > Appearance; the first is the default.
+pub const ICON_COLORS: [&str; 3] = ["ice", "periwinkle", "azure"];
+
+/// The accent each icon colour is rendered with (also tints the tray cloud).
+pub fn icon_accent(color: &str) -> [u8; 3] {
+    match color {
+        "periwinkle" => [139, 151, 255],
+        "azure" => [72, 170, 255],
+        _ => [184, 222, 255],
+    }
+}
+
 pub const DBUS_IFACE: &str = "io.github.mecmwithshawn.AxentraOneDrive1";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,6 +48,8 @@ pub struct Config {
     pub notify_errors: bool,
     /// Glob patterns for files that stay on this device and never upload.
     pub ignore: Vec<String>,
+    /// App icon colour: "ice" (default), "periwinkle" or "azure".
+    pub icon_color: String,
 }
 
 impl Default for Config {
@@ -55,6 +69,7 @@ impl Default for Config {
             notify_deletes: true,
             notify_conflicts: true,
             notify_errors: true,
+            icon_color: "ice".into(),
             ignore: vec![
                 // Office and LibreOffice lock files, editor swap files, partial downloads.
                 "~$*".into(),
@@ -91,6 +106,15 @@ impl Config {
         std::fs::write(&tmp, text)?;
         std::fs::rename(tmp, path)?;
         Ok(())
+    }
+
+    /// The configured icon colour, or the default if it isn't one we ship.
+    pub fn icon_color(&self) -> &str {
+        if ICON_COLORS.contains(&self.icon_color.as_str()) {
+            &self.icon_color
+        } else {
+            ICON_COLORS[0]
+        }
     }
 
     pub fn mount_path(&self) -> PathBuf {
@@ -156,5 +180,24 @@ impl Paths {
         }
         std::fs::create_dir_all(&self.cache_dir)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icon_colour_defaults_to_ice() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.icon_color(), "ice");
+        cfg.icon_color = "azure".into();
+        assert_eq!(cfg.icon_color(), "azure");
+        cfg.icon_color = "chartreuse".into();
+        assert_eq!(cfg.icon_color(), "ice");
+        // Older settings files without the key still load.
+        let old: Config = toml::from_str("client_id = \"x\"").unwrap();
+        assert_eq!(old.icon_color(), "ice");
+        assert_eq!(icon_accent("periwinkle"), [139, 151, 255]);
     }
 }

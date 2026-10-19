@@ -50,14 +50,24 @@ if pkill -x AxentraOneDrive 2>/dev/null; then tray_was_open=1; fi
 install -Dm755 target/release/AxentraOneDrive "$APP/AxentraOneDrive"
 install -Dm755 target/release/axentra-onedrive "$APP/axentra-onedrive"
 install -Dm644 README.md "$APP/README.md"
-install -Dm644 extras/icons/apps/axentra-onedrive.svg "$APP/axentra-onedrive.svg"
+rm -f "$APP/axentra-onedrive.svg"
+for colour in ice periwinkle azure; do
+  for f in extras/icons/apps/$colour/*.png; do install -Dm644 "$f" "$APP/icons/$colour/$(basename "$f")"; done
+done
+install -Dm644 extras/icons/apps/ice/axentra-onedrive-512.png "$APP/axentra-onedrive.png"
 printf '%s\n' "$version" > "$APP/VERSION"
 mkdir -p "$BIN"
 ln -sf "$APP/axentra-onedrive" "$BIN/axentra-onedrive"
 
 # ----- desktop integration ----------------------------------------------------------
 fill() { sed "s|@APP@|$APP|g" "$1" > "$2"; }
-install -Dm644 extras/icons/apps/axentra-onedrive.svg "$DATA/icons/hicolor/scalable/apps/axentra-onedrive.svg"
+# The app icon in the colour chosen in Settings > Appearance (ice by default).
+colour="$(sed -n 's/^icon_color = "\(ice\|periwinkle\|azure\)"$/\1/p' "$CONFIG/axentra/onedrive/config.toml" 2>/dev/null || true)"
+colour="${colour:-ice}"
+rm -f "$DATA/icons/hicolor/scalable/apps/axentra-onedrive.svg"
+for n in 16 24 32 48 64 128 256 512; do
+  install -Dm644 "extras/icons/apps/$colour/axentra-onedrive-$n.png" "$DATA/icons/hicolor/${n}x${n}/apps/axentra-onedrive.png"
+done
 for f in extras/icons/emblems/*.svg; do
   install -Dm644 "$f" "$DATA/icons/hicolor/scalable/emblems/$(basename "$f")"
 done

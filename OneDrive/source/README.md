@@ -105,7 +105,7 @@ It prints the `config.toml` lines and token file to use. Point a separate profil
 cargo test --workspace
 ```
 
-The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing and version restore. QuickXorHash is checked against a bit-by-bit model of the algorithm.
+The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore and resuming an interrupted first scan. QuickXorHash is checked against a bit-by-bit model of the algorithm.
 
 UI screenshots render headlessly with `cargo run -p axentra-onedrive-ui -- --screenshot <view> out.png [light|dark]`. The views are `flyout`, `flyout-syncing`, `flyout-menu`, `flyout-paused`, `flyout-signed-out`, `flyout-empty`, `settings-0` to `settings-4`, `versions` and `tray`.
 

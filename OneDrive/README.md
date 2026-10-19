@@ -1,6 +1,6 @@
 # Axentra OneDrive
 
-<img src="logo.png" width="96" height="96" alt="Axentra OneDrive cloud icon">
+<img src="logo.png" width="96" height="96" alt="Axentra OneDrive ice glass cloud icon">
 
 Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder with Files On-Demand, a tray icon with the activity panel, status badges and a right-click menu in the file manager, Windows-style conflict handling and the same Settings pages. A native Rust app for Linux.
 
@@ -32,7 +32,8 @@ Not done yet: Personal Vault, folder backup (Desktop/Documents/Pictures), "Choos
 | | |
 |---|---|
 | ![Light panel](screenshots/panel-light.png) | ![Settings: Sync and back up](screenshots/settings.png) |
-| ![Version history](screenshots/version-history.png) | ![Tray icon states](screenshots/tray-states.png) |
+| ![Settings: Appearance, app icon colours](screenshots/appearance.png) | ![Version history](screenshots/version-history.png) |
+| ![Tray icon states](screenshots/tray-states.png) | |
 
 Screenshots are rendered from the app's own UI with demo data; no real account appears.
 
@@ -55,13 +56,13 @@ Requirements: Linux x86-64 (tested on Zorin OS 18.1 / Ubuntu 24.04), FUSE 3, Rus
 
 ## Icon and Command
 
-The current icon is the app's own blue cloud. A matching Axentra Glass + Precision icon has not been added to the [Icon Kit](../Icon-Kit/) yet; the kit's process requires review before a new app icon is baselined.
+The app icon is the ice cloud from the [Axentra Icon Kit](../Icon-Kit/ONEDRIVE.md) (Glass + Precision 1.6), sharing the suite's glass tile, rim and halo. **Settings > Appearance** switches it to periwinkle or azure; the choice applies to the app menu, the notification area, File Explorer and the app's own windows. The other colours come from the same glyph with only the accent changed, and the [source](source/extras/icons/) includes a script that regenerates all three from the kit.
 
 Axentra Command does not list Axentra OneDrive yet. Command's catalog describes Windows installs, and this is a Linux-only app. The Linux install includes a `VERSION` file in the standard app folder.
 
 ## Validation
 
-- 26 Rust tests passed, including 15 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- 29 Rust tests passed, including 16 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
 - Signed in to a real personal OneDrive account, listed its files through the mount and downloaded files on demand with QuickXorHash verification.
 - Tray, panel, D-Bus control and the systemd service were exercised on a live Zorin OS GNOME desktop. The file-manager extension was tested against a live mount in a test harness.
 - The app is unsigned and has no binary release, so there is no antivirus scan. See [security status](security/README.md).

@@ -9,6 +9,7 @@
 slint::include_modules!();
 
 mod app;
+mod icons;
 mod present;
 mod shot;
 mod tray;

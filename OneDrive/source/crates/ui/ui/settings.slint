@@ -148,9 +148,48 @@ component OptionCard inherits Rectangle {
     }
 }
 
+/// One selectable app-icon colour on the Appearance page.
+component IconChoice inherits Rectangle {
+    in property <string> id;
+    in property <string> name;
+    in property <string> note;
+    in property <bool> selected;
+    callback clicked();
+
+    width: 140px;
+    height: 150px;
+    background: ta.has-hover ? Theme.layer.mix(Theme.hover, 0.5) : Theme.layer;
+    border-radius: 6px;
+    border-width: root.selected ? 2px : 1px;
+    border-color: root.selected ? Theme.accent : Theme.stroke;
+    accessible-role: button;
+    accessible-label: name + " app icon";
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                width: 64px;
+                height: 64px;
+                source: root.id == "periwinkle" ? @image-url("icons/app/periwinkle.png")
+                    : root.id == "azure" ? @image-url("icons/app/azure.png")
+                    : @image-url("icons/app/ice.png");
+            }
+        }
+        Text { text: root.name; font-size: 14px; color: Theme.text; horizontal-alignment: center; }
+        Text { text: root.note; font-size: 12px; color: Theme.text2; horizontal-alignment: center; }
+    }
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
 export component SettingsWindow inherits Window {
     title: "Axentra OneDrive Settings";
-    icon: @image-url("icons/logo.svg");
+    icon: Theme.app-icon;
     preferred-width: 880px;
     preferred-height: 620px;
     min-width: 720px;
@@ -196,6 +235,7 @@ export component SettingsWindow inherits Window {
     callback unlink();
     callback manage-storage();
     callback view-online();
+    callback set-icon-color(string);
 
     HorizontalLayout {
         // ----- navigation pane
@@ -209,7 +249,7 @@ export component SettingsWindow inherits Window {
                 padding-bottom: 14px;
                 spacing: 12px;
                 Image {
-                    source: @image-url("icons/logo.svg");
+                    source: Theme.app-icon;
                     width: 28px;
                     height: 28px;
                 }
@@ -223,6 +263,7 @@ export component SettingsWindow inherits Window {
             NavItem { text: "Account"; icon: @image-url("icons/person.svg"); selected: root.page == 1; clicked => { root.page = 1; } }
             NavItem { text: "Notifications"; icon: @image-url("icons/bell.svg"); selected: root.page == 2; clicked => { root.page = 2; } }
             NavItem { text: "Network"; icon: @image-url("icons/network.svg"); selected: root.page == 3; clicked => { root.page = 3; } }
+            NavItem { text: "Appearance"; icon: @image-url("icons/palette.svg"); selected: root.page == 5; clicked => { root.page = 5; } }
             NavItem { text: "About"; icon: @image-url("icons/info.svg"); selected: root.page == 4; clicked => { root.page = 4; } }
             Rectangle { vertical-stretch: 1; }
         }
@@ -244,7 +285,7 @@ export component SettingsWindow inherits Window {
                         font-weight: 600;
                         color: Theme.text;
                         text: root.page == 0 ? "Sync and back up" : root.page == 1 ? "Account"
-                            : root.page == 2 ? "Notifications" : root.page == 3 ? "Network" : "About";
+                            : root.page == 2 ? "Notifications" : root.page == 3 ? "Network" : root.page == 5 ? "Appearance" : "About";
                         height: 56px;
                     }
 
@@ -424,6 +465,32 @@ export component SettingsWindow inherits Window {
                         }
                     }
 
+                    if root.page == 5: VerticalLayout {
+                        spacing: 6px;
+                        SectionTitle { text: "App icon"; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            for choice in [
+                                { id: "ice", name: "Ice", note: "Default" },
+                                { id: "periwinkle", name: "Periwinkle", note: "" },
+                                { id: "azure", name: "Azure", note: "" },
+                            ]: IconChoice {
+                                id: choice.id;
+                                name: choice.name;
+                                note: choice.note;
+                                selected: Theme.icon-color == choice.id;
+                                clicked => { root.set-icon-color(choice.id); }
+                            }
+                        }
+                        Text {
+                            text: "Used in the app menu, the notification area, File Explorer and these windows.";
+                            font-size: 12px;
+                            color: Theme.text2;
+                            wrap: word-wrap;
+                        }
+                    }
+
                     if root.page == 4: VerticalLayout {
                         spacing: 6px;
                         Rectangle {
@@ -434,7 +501,7 @@ export component SettingsWindow inherits Window {
                             HorizontalLayout {
                                 padding: 18px;
                                 spacing: 16px;
-                                Image { source: @image-url("icons/logo.svg"); width: 44px; height: 44px; }
+                                Image { source: Theme.app-icon; width: 48px; height: 48px; }
                                 VerticalLayout {
                                     alignment: center;
                                     spacing: 2px;

@@ -6,6 +6,12 @@ import { Palette } from "std-widgets.slint";
 export global Theme {
     in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
 
+    // App icon colour chosen in Settings > Appearance: "ice", "periwinkle" or "azure".
+    in-out property <string> icon-color: "ice";
+    out property <image> app-icon: icon-color == "periwinkle" ? @image-url("icons/app/periwinkle.png")
+        : icon-color == "azure" ? @image-url("icons/app/azure.png")
+        : @image-url("icons/app/ice.png");
+
     // Force light or dark, including Slint's own widgets (used for screenshots).
     public function use-dark(on: bool) {
         Palette.color-scheme = on ? ColorScheme.dark : ColorScheme.light;

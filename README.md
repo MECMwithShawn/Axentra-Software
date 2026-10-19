@@ -23,7 +23,7 @@ Local builds are not automatically public releases. See [current suite status](d
 
 ## Icon source and design kit
 
-The [Axentra Glass + Precision icon kit](Icon-Kit/) contains all ten app icons, including Outlook,
+The [Axentra Glass + Precision icon kit](Icon-Kit/) contains all eleven app icons, including OneDrive, Outlook,
 Archive and the current outlined Horizon and CrystalWire artwork, their Rust/SVG sources
 and Archive's preserved raster master,
 ready-to-use PNG/ICO assets, checksum verification,

@@ -14,6 +14,7 @@ pub const APPS: &[&str] = &[
     "spaces",
     "mail",
     "outlook",
+    "onedrive",
 ];
 fn mix(a: C3, b: C3, t: f32) -> C3 {
     let t = t.clamp(0.0, 1.0);
@@ -57,6 +58,7 @@ fn accent(app: &str) -> C3 {
         "spaces" => [26, 211, 192],
         "mail" => [239, 136, 199],
         "outlook" => [124, 140, 255], // #7C8CFF periwinkle, between Vault blue and Ghost violet
+        "onedrive" => [184, 222, 255], // #B8DEFF ice, lighter than Command and Vault blues
         _ => [98, 180, 255],
     };
     [
@@ -264,6 +266,16 @@ fn glyph(app: &str, micro: bool, x: f32, y: f32) -> bool {
             let fold = !micro
                 && seg(x.abs(), y, 0.306, 0.193, 0.125, -0.012) <= 0.009;
             body && !flap && !fold
+        }
+        "onedrive" => {
+            // A cloud: three lobes over a flat base, slightly below centre.
+            // A solid silhouette, so the micro tier needs no simplification.
+            let (x, y) = (x / 1.15, (y - 0.02) / 1.15);
+            let lobes = len(x + 0.13, y - 0.05) <= 0.11
+                || len(x - 0.13, y - 0.05) <= 0.11
+                || len(x, y + 0.04) <= 0.155;
+            let base = rbox(x, y, 0.0, 0.105, 0.13, 0.055, 0.0) <= 0.0;
+            lobes || base
         }
         "outlook" => {
             // A calendar page behind an envelope: mail plus calendar in one mark.

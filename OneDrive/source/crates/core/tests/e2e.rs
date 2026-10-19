@@ -519,3 +519,39 @@ async fn pinning_through_extended_attributes() {
     let other = fsop(move || set_xattr(&p, "user.something", b"1")).await;
     assert_eq!(other, -1, "other attributes aren't stored");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn interrupted_first_scan_resumes_where_it_stopped() {
+    let env = Env::new().await;
+    env.mock.with(|d| d.page_size = 2);
+    env.mock.add_folder("/", "A");
+    for i in 0..7 {
+        env.mock.add_file("/A", &format!("{i}.txt"), b"x");
+    }
+    // The scan is cut off after two pages (as if the service stopped).
+    env.mock.with(|d| d.fail_delta_from = Some(4));
+    env.engine.cycle().await;
+    // Two pages were applied (the drive root and A, then two files) and the
+    // position of the third was saved.
+    assert!(env.engine.db.with(|s| s.kv("scan_next")).unwrap().is_some());
+    assert_eq!(env.engine.db.with(|s| s.item_count()).unwrap(), 3);
+    let fresh_starts = |env: &Env| {
+        env.mock.with(|d| {
+            d.log
+                .iter()
+                .filter(|l| l.as_str() == "GET /me/drive/root/delta")
+                .count()
+        })
+    };
+    assert_eq!(fresh_starts(&env), 1);
+
+    env.mock.with(|d| d.fail_delta_from = None);
+    env.sync().await;
+    assert_eq!(
+        fresh_starts(&env),
+        1,
+        "the scan continued instead of starting over"
+    );
+    assert_eq!(list(env.p("A")).await.len(), 7);
+    assert_eq!(env.engine.status().state, "up_to_date");
+}
