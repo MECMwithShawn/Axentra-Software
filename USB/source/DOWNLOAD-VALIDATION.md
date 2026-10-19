@@ -6,7 +6,7 @@ by this path.
 
 ## Automated checks
 
-- `cargo test --locked`: 41 library tests and 2 GUI tests passed. The 10 new
+- `cargo test --locked`: 42 library tests and 2 GUI tests passed. The 10 new
   downloader tests cover successful publication/progress, unknown-length
   chunked responses, bad checksums, truncated/empty bodies, HTTP errors,
   unsafe input URLs, invalid hashes, existing/concurrently created destinations,
@@ -64,3 +64,12 @@ This validates download integrity, not RAID support or bootability. No USB was
 written, no Windows files were changed, and no RAID configuration, partition
 layout or EFI files were modified. PR #1 remains draft pending its separate
 full-image and hardware acceptance gate.
+
+The save dialog now suggests public ISO basenames for direct links and a Pro
+filename for Zorin delivery links. A regression test checks point-release
+selection from the known checksum, query-string exclusion and unsafe-name
+fallbacks. Personal delivery URLs are not embedded in code or tests.
+
+The user also confirmed progress and Stop cancellation in the native GUI;
+subsequent inspection found no completed test ISO or remaining partial file
+in the selected outputs directory. Full native-GUI Pro transfer is pending.

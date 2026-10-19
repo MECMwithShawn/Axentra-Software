@@ -17,6 +17,38 @@ pub const ZORIN_FILENAME: &str = "Zorin-OS-18.1-Core-64-bit.iso";
 pub const CHECKSUM_PAGE: &str =
     "https://help.zorin.com/docs/getting-started/check-the-integrity-of-your-copy-of-zorin-os/";
 
+/// Suggest a basename without retaining personal delivery tokens or query strings.
+/// Delivery URLs identify a release series; the checksum identifies its point release.
+pub fn suggested_filename(value: &str, checksum: &str) -> String {
+    let Ok(url) = Url::parse(value.trim()) else {
+        return "download.iso".into();
+    };
+    let name = url
+        .path_segments()
+        .and_then(|mut parts| parts.next_back())
+        .unwrap_or("");
+    if url.host_str() == Some("delivery.zorin.com") && name == "18-pro:64-bit" {
+        return if checksum.trim().eq_ignore_ascii_case(
+            "3984789a2762d1aa359eda5fe19c757e3e5ea9a1bd5a4acc52099c3979905ded",
+        ) {
+            "Zorin-OS-18.1-Pro-64-bit.iso"
+        } else {
+            "Zorin-OS-18-Pro-64-bit.iso"
+        }
+        .into();
+    }
+    if name.len() <= 180
+        && name.to_ascii_lowercase().ends_with(".iso")
+        && name.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+    {
+        return name.into();
+    }
+    "download.iso".into()
+}
+
 #[derive(Debug, Serialize)]
 pub struct Download {
     pub path: PathBuf,
@@ -255,6 +287,30 @@ mod tests {
     fn hash(body: &[u8]) -> String {
         hex::encode(Sha256::digest(body))
     }
+    #[test]
+    fn suggested_names_cover_delivery_links_and_safe_custom_urls() {
+        let pro = "https://delivery.zorin.com/downloads/example-token/18-pro:64-bit";
+        let hash = "3984789a2762d1aa359eda5fe19c757e3e5ea9a1bd5a4acc52099c3979905ded";
+        assert_eq!(
+            suggested_filename(pro, hash),
+            "Zorin-OS-18.1-Pro-64-bit.iso"
+        );
+        assert_eq!(suggested_filename(pro, ""), "Zorin-OS-18-Pro-64-bit.iso");
+        assert_eq!(suggested_filename(ZORIN_URL, ZORIN_SHA256), ZORIN_FILENAME);
+        assert_eq!(
+            suggested_filename("https://example.com/linux.iso?token=private", ""),
+            "linux.iso"
+        );
+        for url in [
+            "bad",
+            "https://delivery.zorin.com/downloads/example-token",
+            "https://example.com/%2Fsecret.iso",
+            "https://example.com/.hidden.iso",
+        ] {
+            assert_eq!(suggested_filename(url, ""), "download.iso");
+        }
+    }
+
     #[test]
     fn verified_bytes_published_and_progress_reported() {
         let (url, thread) = server(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\niso".to_vec());

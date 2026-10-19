@@ -550,7 +550,7 @@ impl App {
                 let valid = download::valid_checksum(&self.expected_hash) && !self.download_url.trim().is_empty();
                 if ui.add_enabled(!self.busy && valid, btn("Download and verify…")).clicked()
                     && let Some(path) = rfd::FileDialog::new()
-                        .set_file_name(if self.download_url == download::ZORIN_URL { download::ZORIN_FILENAME } else { "download.iso" })
+                        .set_file_name(download::suggested_filename(&self.download_url, &self.expected_hash))
                         .add_filter("ISO image", &["iso"])
                         .save_file()
                 {
