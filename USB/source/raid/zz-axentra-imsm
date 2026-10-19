@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in prereqs) echo mdadm; exit 0;; esac
+. /usr/share/initramfs-tools/hook-functions
+copy_exec /usr/sbin/mdadm /sbin/mdadm
+copy_exec /usr/sbin/mdmon /sbin/mdmon
+force_load md_mod
+force_load raid0
+force_load vmd
+force_load nvme
+force_load ahci
+force_load efivarfs
+# The packaged mdadm hook supplies udev rules and mdmon integration.
+# Override its host-scanned config: live images must never carry build-host UUIDs.
+mkdir -p "$DESTDIR/etc/mdadm"
+cp /etc/mdadm/mdadm.conf "$DESTDIR/etc/mdadm/mdadm.conf"

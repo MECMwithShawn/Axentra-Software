@@ -438,6 +438,7 @@ fn cpio(reader: &mut dyn Read, result: &mut Initrd) -> Result<()> {
             "scripts/casper",
             "scripts/casper-helpers",
             "conf/uuid.conf",
+            "etc/mdadm/mdadm.conf",
             "conf/conf.d/default-boot-to-casper.conf",
         ]
         .contains(&name.as_str())
@@ -483,6 +484,16 @@ pub fn inspect_initrd(data: &[u8]) -> Result<Initrd> {
         }
     }
     Ok(result)
+}
+
+fn imsm_startup_present(init: &Initrd) -> bool {
+    let binary = |name: &str| init.names.contains(&format!("sbin/{name}"))
+        || init.names.contains(&format!("usr/sbin/{name}"));
+    binary("mdadm") && binary("mdmon")
+        && init.names.contains("scripts/local-top/axentra-imsm")
+        && init.names.contains("scripts/casper-premount/axentra-imsm")
+        && init.texts.get("etc/mdadm/mdadm.conf")
+            .is_some_and(|s| s.lines().any(|line| line.starts_with("AUTO +imsm")))
 }
 
 pub fn boot_asset(path: &str) -> bool {
@@ -628,6 +639,16 @@ pub fn inspect(
                     if ntfs && fuse { "pass" } else { "warning" },
                     "NTFS tools and FUSE support checked inside the actual initramfs.",
                 );
+                let raid = imsm_startup_present(&init);
+                r.check(
+                    "Intel IMSM/RST startup",
+                    if raid { "info" } else { "warning" },
+                    if raid {
+                        "Axentra IMSM startup files present. Finalize the installed target before reboot. RAID assembly, EFI and firmware boot still require hardware validation."
+                    } else {
+                        "IMSM support is not established. Use the explicit Linux RAID ISO build stage for RAID installations; writing this image does not add RAID support."
+                    },
+                );
                 r.initrd_compression = init.compression;
             }
             Err(e) => r.check("Startup environment", "warning", e.to_string()),
@@ -655,6 +676,18 @@ pub fn inspect(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn imsm_requires_both_binaries_hook_and_policy() {
+        let mut init = Initrd::default();
+        for name in ["usr/sbin/mdadm", "sbin/mdmon", "scripts/local-top/axentra-imsm", "scripts/casper-premount/axentra-imsm"] {
+            init.names.insert(name.into());
+        }
+        assert!(!imsm_startup_present(&init));
+        init.texts.insert("etc/mdadm/mdadm.conf".into(), "AUTO +imsm -all\n".into());
+        assert!(imsm_startup_present(&init));
+        init.names.remove("sbin/mdmon");
+        assert!(!imsm_startup_present(&init));
+    }
     #[test]
     fn unsafe_paths() {
         for p in [

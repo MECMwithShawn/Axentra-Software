@@ -77,3 +77,12 @@ Supply an output filename on Windows because the desktop executable does not att
 `packaging/package.py` assembles `.deb`, portable archives and checksums from already-built native binaries. Python is a development packaging tool only and is not part of the app or its runtime dependencies.
 
 Axentra USB is independently implemented and is not affiliated with Rufus, balenaEtcher or Zorin. No installation ISO, OS bootloader or Zorin proprietary content is redistributed.
+
+## Experimental Zorin IMSM/RST RAID 0 images
+
+The [Linux RAID build stage](raid/README.md) can prepare a trusted Zorin 18 ISO
+with mdadm/mdmon in the live and installed filesystem. Write its output using
+**Original image**, then run the guarded installed-target finalizer before the
+first reboot. This is a separate developer workflow, not automatic RAID
+support for arbitrary ISOs or a hardware-qualified release. Manual partitioning
+must preserve Windows and the existing ESP in dual-boot installations.
