@@ -20,7 +20,7 @@ The Linux portable archive contains the same executable. Extract it and run `./a
 
 ## Create or verify a USB
 
-1. Choose an uncompressed `.iso` or `.img`. Axentra hashes it and inspects its boot files. Optionally paste the publisher's SHA-256; a mismatch blocks writing.
+1. Choose an uncompressed `.iso` or `.img`, or enable **Download an ISO** to download and verify one. Axentra hashes it and inspects its boot files. Optionally paste the publisher's SHA-256; a mismatch blocks writing.
 2. Explicitly select the USB. Internal and system disks are excluded. Devices without stable serial/device identifiers are blocked.
 3. Choose **Original image** or the inspected **UEFI compatibility** profile.
 4. Review the exact device, image and write method. Creation requires typing the displayed device-specific erase phrase. **Creation erases all existing data on that USB.**
@@ -51,7 +51,7 @@ This supports testing the FAT32 + NTFS profile; it does not prove that Alienware
 
 See `VALIDATION.txt` for the release's actual tests. Core tests use ordinary temporary files and synthetic devices; none formats a real disk. Windows device inventory and image inspection have been exercised. The Linux binary is cross-compiled and structurally checked but has not been run on Zorin. Actual Windows/Linux formatting, physical USB read-back, Alienware boot and live-session startup require testing with a spare USB.
 
-No runtime telemetry, account, cloud service or automatic network access is used. Exported reports contain local file paths and device identifiers; review them before sharing. Worker events stay in the private temporary job directory while the application owns it. Firmware boot is always reported as untested.
+No runtime telemetry or automatic downloads are used. Explicit ISO downloads contact the entered HTTPS server and its HTTPS redirects. Signed download URLs are not included in exported reports. Exported reports contain local file paths and device identifiers; review them before sharing. Worker events stay in the private temporary job directory while the application owns it. Firmware boot is always reported as untested.
 
 ## Build and development
 
@@ -86,3 +86,43 @@ with mdadm/mdmon in the live and installed filesystem. Write its output using
 first reboot. This is a separate developer workflow, not automatic RAID
 support for arbitrary ISOs or a hardware-qualified release. Manual partitioning
 must preserve Windows and the existing ESP in dual-boot installations.
+
+
+## Download and verify an ISO (preview)
+
+In **Source image**, enable **Download an ISO**. Select **Zorin OS 18.1 Core**
+to populate the public mirror URL and publisher SHA-256, or paste a direct
+HTTPS URL and its matching 64-character SHA-256 from the publisher. Pro editions
+require your own authorized direct download link; Axentra does not handle
+purchases, browser login sessions or cookies. Use **Publisher checksums** to
+check the pinned version against Zorin’s site.
+
+Choose **Download and verify…** and select a new `.iso` filename. Progress shows
+received bytes and the total when provided by the server. The existing **Stop**
+button cancels during connection, transfer or verification. Network waits poll
+cancellation every 100 ms and fail after 30 seconds without progress. Closing
+the app also cancels and waits for its download worker to clean up.
+
+Downloads use a unique temporary file in the destination directory. The saved
+file is hashed after the transfer, then published without overwriting an
+existing destination only when the publisher SHA-256 matches. HTTP errors,
+truncation, checksum mismatches, write errors and cancellation remove the
+partial file. An abrupt process kill or power loss can leave an identifiable
+`.axentra-download-*.part` file, which is never treated as a verified ISO.
+Downloads restart from the beginning; resume is not implemented.
+
+Verified downloads automatically enter the existing image-inspection flow.
+Downloading does not select a USB, elevate privileges, start the writer or
+change partitions. Image verification and actual bootability remain distinct.
+
+For reproducible testing, the same downloader is exposed on the command line:
+
+```sh
+axentra-usb --download HTTPS_URL PUBLISHER_SHA256 /path/to/new-image.iso
+```
+
+Ctrl+C cancels this command. It prints progress to stderr and a JSON receipt
+(path, byte count and SHA-256) to stdout. The GUI exports this receipt alongside
+its inspection report, without the download URL or its query parameters.
+See [download validation](DOWNLOAD-VALIDATION.md) for automated and real-Zorin
+test evidence.

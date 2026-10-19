@@ -1,4 +1,5 @@
 pub mod device;
+pub mod download;
 pub mod image;
 pub mod operation;
 pub type Progress<'a> = dyn FnMut(&str, u64, u64) + 'a;

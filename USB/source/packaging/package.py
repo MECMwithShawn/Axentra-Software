@@ -35,7 +35,7 @@ def build(windows, linux, out):
     elf = linux.read_bytes() if linux else None
     if win: assert win[:2] == b'MZ', 'Windows binary is not a PE executable'
     if elf: assert elf[:6] == b'\x7fELF\x02\x01' and struct.unpack_from('<H', elf, 18)[0] == 62, 'Linux binary is not x86-64 ELF'
-    docs = [(p.name, p.read_bytes(), 0o644) for p in [ROOT/'README.md', ROOT/'LICENSE', ROOT/'VALIDATION.txt', ROOT/'THIRD-PARTY-NOTICES.txt']]
+    docs = [(p.name, p.read_bytes(), 0o644) for p in [ROOT/'README.md', ROOT/'LICENSE', ROOT/'VALIDATION.txt', ROOT/'THIRD-PARTY-NOTICES.txt', ROOT/'DOWNLOAD-DEPENDENCY-NOTICES.txt', ROOT/'DOWNLOAD-VALIDATION.md']]
     if win:
         winzip = out/f'AxentraUSB-{VERSION}-Windows-x64.zip'
         with zipfile.ZipFile(winzip, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
