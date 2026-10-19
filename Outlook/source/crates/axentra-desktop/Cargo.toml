@@ -1,0 +1,18 @@
+[package]
+name = "axentra-desktop"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "axentra-outlook"
+path = "src/main.rs"
+
+[dependencies]
+axentra-ui.workspace = true
+dioxus = { workspace = true, features = ["macro", "html", "signals", "hooks", "document", "mounted", "launch", "desktop"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+axentra-core.workspace = true
+axentra-sync.workspace = true
+chrono.workspace = true

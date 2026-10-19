@@ -10,6 +10,7 @@ screenshots, release notes and security scan results. Installers and extension p
 | [CrystalWire](CrystalWire/) | 0.8.11 | None | [Installed preview](CrystalWire/LINUX.md) |
 | [Ghost](Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](Ghost/LINUX.md) |
 | [Mail](Mail/) | 0.1.20 | None | [Installed preview](Mail/LINUX.md) |
+| [Outlook](Outlook/) | 0.1.0 | 0.1.0 pre-release (Linux .deb) | [Pre-release package](Outlook/LINUX.md) |
 | [Spaces](Spaces/) | 0.1.2 | None | [Installed preview](Spaces/LINUX.md) |
 | [Vault](Vault/) | 0.1.0 | None | [Installed preview](Vault/LINUX.md) |
 | [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](PDF-Suite/LINUX.md) |
@@ -22,7 +23,7 @@ Local builds are not automatically public releases. See [current suite status](d
 
 ## Icon source and design kit
 
-The [Axentra Glass + Precision icon kit](Icon-Kit/) contains all nine app icons, including
+The [Axentra Glass + Precision icon kit](Icon-Kit/) contains all ten app icons, including Outlook,
 Archive and the current outlined Horizon and CrystalWire artwork, their Rust/SVG sources
 and Archive's preserved raster master,
 ready-to-use PNG/ICO assets, checksum verification,

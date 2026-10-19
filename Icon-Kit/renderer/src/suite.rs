@@ -13,6 +13,7 @@ pub const APPS: &[&str] = &[
     "pdf",
     "spaces",
     "mail",
+    "outlook",
 ];
 fn mix(a: C3, b: C3, t: f32) -> C3 {
     let t = t.clamp(0.0, 1.0);
@@ -55,6 +56,7 @@ fn accent(app: &str) -> C3 {
         "pdf" => [255, 105, 119],
         "spaces" => [26, 211, 192],
         "mail" => [239, 136, 199],
+        "outlook" => [124, 140, 255], // #7C8CFF periwinkle, between Vault blue and Ghost violet
         _ => [98, 180, 255],
     };
     [
@@ -262,6 +264,30 @@ fn glyph(app: &str, micro: bool, x: f32, y: f32) -> bool {
             let fold = !micro
                 && seg(x.abs(), y, 0.306, 0.193, 0.125, -0.012) <= 0.009;
             body && !flap && !fold
+        }
+        "outlook" => {
+            // A calendar page behind an envelope: mail plus calendar in one mark.
+            // The envelope keeps a clear gap from the page; micro drops the date grid
+            // and widens every cut.
+            let cut = if micro { 0.024 } else { 0.014 };
+            let (ex, ey) = (-0.075, 0.140);
+            let envelope = rbox(x, y, ex, ey, 0.235, 0.160, 0.035);
+            let flap = seg((x - ex).abs(), y - ey, 0.222, -0.128, 0.0, 0.040) <= cut;
+            let in_envelope = envelope <= 0.0 && !flap;
+            let (cx, cy) = (0.080, -0.045);
+            let page = rbox(x, y, cx, cy, 0.230, 0.205, 0.040) <= 0.0;
+            let rings = [-0.105, 0.105].iter().any(|dx| {
+                rbox(x, y, cx + dx, cy - 0.218, 0.024, 0.050, 0.022) <= 0.0
+            });
+            let header = (y - (cy - 0.105)).abs() <= cut * 0.5 + 0.004 && (x - cx).abs() <= 0.205;
+            // Date squares: one row under the header and a short column down the
+            // right edge, all clear of the envelope's gap.
+            let cells = [(-0.080, -0.055), (0.005, -0.055), (0.090, -0.055), (0.175, -0.055), (0.175, 0.025), (0.175, 0.105)];
+            let grid = !micro
+                && cells.iter().any(|&(dx, dy)| rbox(x, y, cx + dx, cy + dy, 0.024, 0.022, 0.006) <= 0.0);
+            let gap = envelope <= if micro { 0.040 } else { 0.032 };
+            let in_page = (page && !header && !grid || rings) && !gap;
+            in_envelope || in_page
         }
         _ => false,
     }

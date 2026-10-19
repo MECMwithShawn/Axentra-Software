@@ -1,0 +1,16 @@
+[package]
+name = "axentra-preview"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+axentra-ui.workspace = true
+dioxus = { workspace = true, features = ["macro", "html", "signals", "hooks", "document", "mounted"] }
+dioxus-liveview.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+axentra-core.workspace = true
+axentra-sync.workspace = true
+chrono.workspace = true

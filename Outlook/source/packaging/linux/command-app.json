@@ -1,0 +1,24 @@
+{
+  "id": "outlook",
+  "name": "Axentra Outlook",
+  "tagline": "Mail, calendar, people and to-do in the Outlook layout",
+  "kind": "desktop",
+  "order": 75,
+  "accent": "#7C8CFF",
+  "icon": "/usr/share/icons/hicolor/256x256/apps/axentra-outlook.png",
+  "install": {
+    "uninstall_key": "axentra-outlook",
+    "exe": "/opt/axentra/outlook/axentra-outlook"
+  },
+  "launch": {
+    "exe": "/opt/axentra/outlook/axentra-outlook"
+  },
+  "process": [
+    "axentra-outlook"
+  ],
+  "release": {
+    "repo": "MECMwithShawn/Axentra-Software",
+    "tag_prefix": "outlook-v",
+    "asset_suffix": "_amd64.deb"
+  }
+}

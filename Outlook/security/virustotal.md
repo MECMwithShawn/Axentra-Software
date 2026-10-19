@@ -1,0 +1,9 @@
+# Security scans
+
+## 0.1.0 (pre-release)
+
+- [axentra-outlook_0.1.0-1_amd64.deb](https://www.virustotal.com/gui/file/d2a254132ec3b5428801f922c494a23492b22c14e06f247e9d3c9263ad61d9e3/detection):
+  scan pending; this is a hash lookup, not a recorded result.
+
+The package is not code-signed. Verify the SHA-256 in the [release notes](../releases/0.1.0.md) before
+installing.

@@ -1,0 +1,512 @@
+/* People module (docs/spec/people-todo.md section 2). Sizes marked (estimate)
+   in the spec are the values below; colours come from --ax-* tokens, except the
+   avatar palette, which is data (end of file). */
+
+.ax-people { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--ax-pane-gap); outline: none; }
+/* The module root only holds focus as a fallback (so shortcuts keep
+   working); it is not a visible stop. */
+.ax-app .ax-people:focus-visible { outline: none; box-shadow: none; }
+.ax-people-panes { gap: 0; }
+/* Buttons styled as text: `.ax-app` raises these above base.css's
+   `.ax-app button { color: inherit }`. */
+.ax-app .ax-people-link {
+  border: none; background: transparent; padding: 0; color: var(--ax-fg-link); font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.ax-app .ax-people-link:hover { text-decoration: underline; color: var(--ax-fg-brand-hover); }
+.ax-app .ax-people-link:disabled { color: var(--ax-fg-disabled); text-decoration: none; cursor: default; }
+.ax-people-muted { color: var(--ax-fg-3); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+.ax-people-error { color: var(--ax-danger-fg); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+
+/* Kit menus scroll (overflow-y: auto), which clips their submenus; People
+   menus are short, so let submenus show (requested upstream). */
+.ax-people .ax-menu:has(.ax-submenu) { overflow: visible; }
+
+/* ------------------------------------------------------------ splitters */
+.ax-people-splitter { flex: none; width: var(--ax-pane-gap); position: relative; cursor: col-resize; outline: none; }
+.ax-people-splitter::after {
+  content: ""; position: absolute; top: 8px; bottom: 8px; left: 1px; width: 2px; border-radius: 1px;
+  background: transparent; transition: background var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-people-splitter:hover::after, .ax-people-splitter.ax-dragging::after, .ax-people-splitter:focus-visible::after { background: var(--ax-stroke-brand); }
+.ax-app .ax-people-splitter:focus-visible { outline: none; box-shadow: none; }
+.ax-people-drag-overlay { position: fixed; inset: 0; z-index: 2000; cursor: col-resize; }
+
+/* ------------------------------------------------------------ navigation pane */
+.ax-people-nav { flex: none; background: var(--ax-bg-2); }
+.ax-people-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 4px; }
+.ax-people-nav-item {
+  position: relative; display: flex; align-items: center; gap: 8px; height: var(--ax-folder-row-h);
+  padding-right: 12px; border-radius: var(--ax-radius-m); color: var(--ax-fg-2);
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300); cursor: default; outline: none;
+}
+.ax-people-nav-item .ax-icon { width: 20px; height: 20px; }
+.ax-people-nav-item:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-people-nav-item:active { background: var(--ax-bg-subtle-pressed); color: var(--ax-fg-1); }
+.ax-people-nav-item.ax-selected { background: var(--ax-bg-1-selected); color: var(--ax-fg-1); font-weight: var(--ax-weight-semibold); }
+.ax-people-nav-item.ax-selected::before {
+  content: ""; position: absolute; left: 4px; top: 50%; width: 3px; height: 16px; margin-top: -8px;
+  border-radius: var(--ax-radius-circle); background: var(--ax-stroke-brand);
+}
+.ax-people-nav-item.ax-selected .ax-icon { color: var(--ax-fg-brand); }
+.ax-people-nav-item.ax-drop-target { background: var(--ax-bg-selected); }
+.ax-people-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ax-app .ax-people-nav-chevron {
+  width: 16px; height: 20px; margin-left: -4px; margin-right: -4px; padding: 0; border: none; background: transparent;
+  color: var(--ax-fg-2); display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+.ax-people-nav-chevron .ax-icon { width: 12px; height: 12px; transition: transform var(--ax-duration-fast) var(--ax-ease); }
+.ax-people-nav-chevron.ax-expanded .ax-icon { transform: rotate(90deg); }
+.ax-people-nav-chevron-space { width: 0; flex: none; }
+.ax-people-nav-dot { width: 12px; height: 12px; margin: 0 4px; border-radius: 50%; flex: none; }
+.ax-people-nav-input { flex: 1; min-width: 0; height: 26px; padding: 0 6px; }
+.ax-people-nav-new { color: var(--ax-fg-1); }
+.ax-people-tip {
+  margin: 8px; padding: 10px 6px 10px 12px; display: flex; align-items: flex-start; gap: 8px;
+  background: var(--ax-bg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-2);
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-2);
+}
+.ax-people-tip-icon { color: var(--ax-fg-brand); }
+.ax-people-tip-body { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+
+/* ------------------------------------------------------------ list pane */
+.ax-people-list { flex: none; position: relative; min-width: 0; }
+.ax-people-list-head { flex: none; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; }
+.ax-people-list-title {
+  margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1);
+}
+.ax-people-list-count { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); flex: none; }
+.ax-btn.ax-people-sort { height: 28px; padding: 0 6px 0 8px; gap: 4px; color: var(--ax-fg-1); flex: none; }
+.ax-btn.ax-people-sort .ax-icon { width: 12px; height: 12px; color: var(--ax-fg-2); }
+.ax-people-search {
+  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; margin: 0 12px 8px; padding: 0 4px 0 8px;
+  border: 1px solid var(--ax-stroke-1); border-bottom-color: var(--ax-stroke-accessible); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-1); color: var(--ax-fg-3);
+}
+.ax-people-search:hover { border-color: var(--ax-stroke-1-hover); border-bottom-color: var(--ax-fg-3); }
+.ax-people-search:focus-within { border-bottom: 2px solid var(--ax-stroke-brand); }
+.ax-people-search input {
+  flex: 1; min-width: 0; height: 100%; border: none; outline: none; background: transparent;
+  color: var(--ax-fg-1); font-size: var(--ax-text-300);
+}
+.ax-app .ax-people-search input:focus-visible { outline: none; box-shadow: none; }
+.ax-people-search input::placeholder { color: var(--ax-fg-4); }
+.ax-app .ax-people-search-clear {
+  width: 24px; height: 24px; border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-2);
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.ax-people-search-clear:hover { background: var(--ax-bg-subtle-hover); }
+.ax-people-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative; outline: none; }
+.ax-people-virtual { position: relative; }
+.ax-people-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.ax-people-empty .ax-empty-title { max-width: 100%; overflow-wrap: anywhere; }
+
+/* Index headings: rows in the virtual list plus a sticky copy on top. */
+.ax-people-heading, .ax-people-sticky {
+  display: flex; align-items: center; padding-left: 8px; height: 28px;
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-3);
+}
+.ax-people-heading { position: absolute; left: 0; right: 0; }
+.ax-people-sticky { position: sticky; top: 0; margin-bottom: -28px; z-index: 3; background: var(--ax-bg-1); }
+.ax-people-heading-btn {
+  border: none; background: transparent; padding: 2px 4px; border-radius: var(--ax-radius-m);
+  font: inherit; color: inherit; cursor: pointer;
+}
+.ax-people-heading-btn:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); }
+.ax-people-jump {
+  position: absolute; top: 92px; left: 12px; z-index: 1001; display: grid; grid-template-columns: repeat(4, 44px);
+  gap: 4px; padding: 8px; background: var(--ax-bg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-16);
+  outline: none; animation: ax-pop var(--ax-duration-fast) var(--ax-ease-decelerate);
+}
+.ax-app .ax-people-jump-btn {
+  width: 44px; height: 40px; border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-1);
+  font-size: var(--ax-text-300); font-weight: var(--ax-weight-semibold);
+}
+.ax-app .ax-people-jump-btn:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); }
+
+/* Rows */
+.ax-people-row {
+  position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 12px;
+  background: var(--ax-bg-1); color: var(--ax-fg-1); cursor: default; outline: none;
+}
+.ax-people-row:hover { background: var(--ax-bg-1-hover); }
+.ax-people-row:active { background: var(--ax-bg-1-pressed); }
+.ax-people-row.ax-selected { background: var(--ax-bg-1-selected); }
+.ax-people-row.ax-selected:hover { background: color-mix(in srgb, var(--ax-bg-1-selected) 60%, var(--ax-bg-1-hover)); }
+.ax-people-row.ax-selected::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ax-stroke-brand);
+}
+.ax-people-row.ax-drop-before::after {
+  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--ax-stroke-brand); z-index: 1;
+}
+.ax-people-row-lead { position: relative; flex: none; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+.ax-people-row-avatar { display: inline-flex; }
+.ax-people-check {
+  position: absolute; inset: 0; margin: auto; width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid var(--ax-stroke-accessible); background: var(--ax-bg-1); color: var(--ax-fg-on-brand);
+  display: none; align-items: center; justify-content: center; cursor: pointer;
+}
+.ax-people-check.ax-checked { background: var(--ax-bg-brand); border-color: var(--ax-bg-brand); }
+.ax-people-row:hover .ax-people-check, .ax-people-row.ax-multi .ax-people-check { display: flex; }
+.ax-people-row:hover .ax-people-row-avatar, .ax-people-row.ax-multi .ax-people-row-avatar { visibility: hidden; }
+.ax-people-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ax-people-row-name { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-1); }
+.ax-people-row-sub { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-app .ax-people-star {
+  flex: none; width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--ax-radius-m); background: transparent;
+  color: var(--ax-fg-3); display: none; align-items: center; justify-content: center;
+}
+.ax-people-row:hover .ax-people-star, .ax-people-star.ax-on { display: inline-flex; }
+.ax-app .ax-people-star:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); }
+.ax-app .ax-people-star.ax-on { color: var(--ax-fg-brand); }
+.ax-people-suggested-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+
+/* Multi-column layout (list pane 640 px or wider) */
+.ax-people-colhead {
+  flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--ax-stroke-2); font-size: var(--ax-text-200); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-2);
+}
+.ax-people-colhead .ax-people-col-lead { width: 24px; flex: none; }
+.ax-people-colhead .ax-people-col-star { width: 28px; flex: none; }
+.ax-people-colhead button.ax-people-col {
+  border: none; background: transparent; padding: 4px; margin-left: -4px; border-radius: var(--ax-radius-m); text-align: left;
+  font: inherit; color: inherit; display: inline-flex; align-items: center; gap: 4px;
+}
+.ax-people-colhead button.ax-people-col:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-people-colhead .ax-sorted { color: var(--ax-fg-1); }
+.ax-people-col { min-width: 0; }
+.ax-people-col-name { flex: 2; }
+.ax-people-col-email { flex: 2; }
+.ax-people-col-company { flex: 1.5; }
+.ax-people-col-phone { flex: 1.2; }
+.ax-columns .ax-people-row { gap: 8px; }
+.ax-columns .ax-people-row-lead { width: 24px; height: 24px; }
+.ax-columns .ax-people-row .ax-people-col { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); }
+.ax-columns .ax-people-row .ax-people-col-email,
+.ax-columns .ax-people-row .ax-people-col-company,
+.ax-columns .ax-people-row .ax-people-col-phone { color: var(--ax-fg-3); }
+.ax-columns .ax-people-check { width: 16px; height: 16px; }
+/* The star keeps its column in every row so the columns line up. */
+.ax-columns .ax-people-star { display: inline-flex; visibility: hidden; }
+.ax-columns .ax-people-row:hover .ax-people-star, .ax-columns .ax-people-star.ax-on { visibility: visible; }
+.ax-columns .ax-people-suggested-actions { flex: none; }
+
+/* ------------------------------------------------------------ details pane */
+.ax-people-details { min-width: 0; overflow-y: auto; container-type: inline-size; }
+.ax-people-details > .ax-empty { flex: 1; }
+.ax-people-back { padding: 8px 12px 0; }
+.ax-people-card { display: flex; flex-direction: column; gap: 16px; padding: 24px; max-width: 920px; }
+.ax-people-card-header { display: flex; align-items: flex-start; gap: 16px; }
+.ax-people-card-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-top: 12px; }
+.ax-people-card-name {
+  margin: 0; font-size: var(--ax-text-600); line-height: var(--ax-lh-600); font-weight: var(--ax-weight-semibold);
+  color: var(--ax-fg-1); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ax-people-card-job { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-2); }
+.ax-people-card-org { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-3); }
+.ax-people-card-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.ax-people-card-tools { flex: none; display: flex; align-items: center; gap: 2px; }
+/* In a narrow details pane the Edit / star / More buttons move above the
+   name so it keeps its width. */
+@container (max-width: 520px) {
+  .ax-people-card-header { flex-wrap: wrap; }
+  .ax-people-card-tools { order: -1; flex-basis: 100%; justify-content: flex-end; margin: -8px -8px -8px 0; }
+}
+.ax-people-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.ax-people-action {
+  width: 64px; height: 56px; padding: 0; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-1);
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
+}
+.ax-people-action .ax-icon { width: 20px; height: 20px; color: var(--ax-fg-brand); }
+.ax-people-action:hover { background: var(--ax-bg-subtle-hover); }
+.ax-people-action:active { background: var(--ax-bg-subtle-pressed); }
+.ax-people-action.ax-disabled, .ax-people-action.ax-disabled .ax-icon { color: var(--ax-fg-disabled); background: transparent; }
+.ax-people-multi { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 64px 24px; }
+.ax-people-multi-title { font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold); }
+.ax-people-multi-actions { justify-content: center; }
+.ax-people-multi-actions .ax-people-action { width: auto; min-width: 64px; padding: 0 10px; white-space: nowrap; }
+.ax-people-section { border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); padding: 16px; }
+.ax-people-section-title {
+  margin: 0 0 12px; font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1);
+}
+.ax-people-section-body { display: flex; flex-direction: column; gap: 16px; }
+.ax-people-section-body:has(.ax-people-mini-row), .ax-people-section-body:has(.ax-people-member) { gap: 2px; }
+.ax-people-field { display: flex; align-items: flex-start; gap: 8px; }
+.ax-people-field-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.ax-people-field-label { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-people-field-value {
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-1); white-space: pre-line; overflow-wrap: anywhere;
+}
+.ax-app .ax-people-field-link {
+  border: none; background: transparent; padding: 0; text-align: left; color: var(--ax-fg-link); cursor: pointer; text-decoration: none;
+}
+.ax-people-field-link:hover { text-decoration: underline; }
+.ax-people-copy { opacity: 0; flex: none; }
+.ax-people-field:hover .ax-people-copy, .ax-people-field:focus-within .ax-people-copy { opacity: 1; }
+.ax-people-notes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--ax-text-300); line-height: var(--ax-lh-300); }
+.ax-people-notes.ax-clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.ax-people-notes + .ax-people-link { align-self: flex-start; }
+.ax-people-mini-row, .ax-people-member {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 6px 8px; margin: 0 -8px;
+  border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-1); text-align: left;
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300); box-sizing: content-box;
+}
+.ax-people-mini-row:hover, button.ax-people-member:hover { background: var(--ax-bg-subtle-hover); }
+.ax-people-mini-row .ax-icon { color: var(--ax-fg-3); }
+.ax-people-mini-row.ax-two-line { align-items: flex-start; }
+.ax-people-mini-row.ax-two-line .ax-icon { margin-top: 2px; }
+.ax-people-mini-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ax-people-mini-sub { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-people-source { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+
+/* ------------------------------------------------------------ forms */
+.ax-dialog.ax-people-form-dialog { max-height: 85vh; }
+.ax-people-form { display: flex; flex-direction: column; gap: 16px; padding: 4px 4px 4px 0; }
+.ax-people-form-photo { display: flex; align-items: center; gap: 12px; }
+.ax-people-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.ax-people-form-group { display: flex; flex-direction: column; gap: 8px; }
+/* Rows align to the top so an inline error under the input doesn't shift the
+   type dropdown; the 24 px remove button is centred on the 32 px input. */
+.ax-people-form-row { display: flex; align-items: flex-start; gap: 8px; }
+.ax-people-form-row > .ax-icon-btn.ax-small { margin-top: 4px; }
+.ax-people-form-row > .ax-people-input { flex: 1; }
+.ax-people-input { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ax-people-input .ax-input, .ax-people-input .ax-textarea, .ax-people-input .ax-select { width: 100%; }
+.ax-input.ax-invalid { border-bottom-color: var(--ax-danger-fg); }
+.ax-select.ax-people-type { width: 120px; flex: none; }
+.ax-people-bday .ax-select:first-child { width: 160px; }
+.ax-people-bday .ax-select:nth-child(2) { width: 88px; }
+.ax-people-bday .ax-people-input { flex: 1; }
+.ax-people-form-address { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); }
+.ax-people-add-link { align-self: flex-start; }
+.ax-people-add-link .ax-icon { color: inherit; }
+.ax-people-more { align-self: flex-start; }
+.ax-people-dup { flex: none; }
+.ax-people-inline-edit { display: flex; flex-direction: column; min-height: 100%; }
+.ax-people-inline-title {
+  padding: 24px 24px 8px; font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold);
+}
+.ax-people-inline-body { flex: 1; padding: 8px 24px 16px; max-width: 640px; }
+.ax-people-inline-footer {
+  position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 24px;
+  background: var(--ax-bg-1); border-top: 1px solid var(--ax-stroke-2);
+}
+
+/* Photo crop step (2.6.4): the image under a circular mask */
+.ax-people-crop { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 4px 0; }
+.ax-people-crop-view {
+  position: relative; overflow: hidden; flex: none; border-radius: var(--ax-radius-m); background: var(--ax-bg-3);
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.ax-people-crop-view.ax-dragging, .ax-people-crop-drag { cursor: grabbing; }
+.ax-people-crop-img { position: absolute; max-width: none; pointer-events: none; }
+.ax-people-crop-mask {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 999px var(--ax-bg-overlay), inset 0 0 0 2px var(--ax-fg-on-brand);
+}
+.ax-people-crop-zoom { display: flex; align-items: center; gap: 12px; width: 100%; }
+.ax-people-crop-zoom input { flex: 1; accent-color: var(--ax-bg-brand); }
+
+/* Contact list editor */
+.ax-people-picker { position: relative; }
+.ax-people-suggestions {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 10; margin-top: 2px; padding: 4px; max-height: 240px; overflow-y: auto;
+  background: var(--ax-bg-1); border-radius: var(--ax-radius-l); box-shadow: var(--ax-shadow-16);
+}
+.ax-people-suggestion { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--ax-radius-m); cursor: default; }
+.ax-people-suggestion:hover, .ax-people-suggestion.ax-active { background: var(--ax-bg-subtle-hover); }
+.ax-people-members-head { font-weight: var(--ax-weight-semibold); }
+.ax-people-members { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
+.ax-people-members .ax-people-member { margin: 0; width: auto; }
+
+/* Confirmations sit above other dialogs */
+.ax-people-confirm-overlay { z-index: 950; }
+.ax-people-confirm .ax-dialog-body { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-1); }
+
+/* Import / export */
+.ax-people-io { display: flex; flex-direction: column; gap: 12px; }
+.ax-people-io-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ax-people-io-file { color: var(--ax-fg-2); }
+.ax-people-io-text { margin: 0; color: var(--ax-fg-2); }
+.ax-people-io-summary { font-weight: var(--ax-weight-semibold); }
+.ax-people-preview { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+.ax-people-preview th { text-align: left; font-weight: var(--ax-weight-semibold); color: var(--ax-fg-3); padding: 4px 8px; border-bottom: 1px solid var(--ax-stroke-2); }
+.ax-people-preview td { padding: 4px 8px; border-bottom: 1px solid var(--ax-stroke-3); color: var(--ax-fg-1); }
+
+/* Keyboard shortcuts */
+.ax-people-shortcuts { display: flex; flex-direction: column; gap: 8px; }
+.ax-people-shortcuts-section { margin: 8px 0 0; font-size: var(--ax-text-300); line-height: var(--ax-lh-300); font-weight: var(--ax-weight-semibold); }
+.ax-people-shortcut { display: flex; align-items: center; min-height: 32px; gap: 12px; }
+.ax-people-keys { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ax-people-key {
+  display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 20px; padding: 0 6px;
+  border: 1px solid var(--ax-stroke-1); border-radius: var(--ax-radius-m); background: var(--ax-bg-3); color: var(--ax-fg-1);
+  font-family: inherit; font-size: var(--ax-text-200);
+}
+.ax-people-keys-plus, .ax-people-keys-or { color: var(--ax-fg-3); font-size: var(--ax-text-200); margin: 0 4px; }
+
+/* ------------------------------------------------------------ narrow windows (2.2) */
+.ax-people-back { display: none; }
+@media (max-width: 1023px) {
+  .ax-people-panes .ax-people-list { flex: 1 1 auto; width: auto !important; }
+  .ax-people-panes .ax-people-splitter-list, .ax-people-panes .ax-people-details { display: none; }
+  .ax-people-panes.ax-has-selection .ax-people-list { display: none; }
+  .ax-people-panes.ax-has-selection .ax-people-details { display: flex; }
+  .ax-people-back { display: block; }
+}
+@media (max-width: 719px) {
+  .ax-people-panes { position: relative; }
+  .ax-people-panes .ax-people-nav, .ax-people-panes .ax-people-splitter-nav { display: none; }
+  .ax-people-panes.ax-nav-peek .ax-people-nav {
+    display: flex; position: absolute; top: 0; bottom: 0; left: 0; z-index: 20; box-shadow: var(--ax-shadow-16);
+  }
+}
+
+/* ------------------------------------------------------------ avatars */
+.ax-people-avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; overflow: hidden;
+  font-weight: var(--ax-weight-semibold); line-height: 1; user-select: none; -webkit-user-select: none;
+}
+.ax-people-avatar-neutral { background: var(--ax-bg-1-selected); color: var(--ax-fg-3); }
+.ax-people-avatar-photo img { width: 100%; height: 100%; object-fit: cover; animation: ax-people-fade var(--ax-duration-fast) var(--ax-ease); }
+@keyframes ax-people-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (forced-colors: active) {
+  .ax-people-avatar { background: Canvas; color: CanvasText; border: 1px solid CanvasText; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ax-people *, .ax-people *::before, .ax-people *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* Avatar palette: the 30 Fluent persona colours in Fluent order (data colours,
+   docs/spec/people-todo.md 2.6.3). Light: tint40 background, shade30 initials;
+   dark swaps them (dark-red and plum use shade20 backgrounds). */
+.ax-app {
+  --ax-people-av-0-bg:#d69ca5; --ax-people-av-0-fg:#420610;
+  --ax-people-av-1-bg:#eeacb2; --ax-people-av-1-fg:#6e0811;
+  --ax-people-av-2-bg:#f1bbbc; --ax-people-av-2-fg:#751d1f;
+  --ax-people-av-3-bg:#efc4ad; --ax-people-av-3-fg:#712d09;
+  --ax-people-av-4-bg:#ffddb3; --ax-people-av-4-fg:#8f4e00;
+  --ax-people-av-5-bg:#f9e2ae; --ax-people-av-5-fg:#835b00;
+  --ax-people-av-6-bg:#ecdfa5; --ax-people-av-6-fg:#6c5700;
+  --ax-people-av-7-bg:#e0cea2; --ax-people-av-7-fg:#553e06;
+  --ax-people-av-8-bg:#ddc3b0; --ax-people-av-8-fg:#50301a;
+  --ax-people-av-9-bg:#bdd99b; --ax-people-av-9-fg:#294903;
+  --ax-people-av-10-bg:#a8f0cd; --ax-people-av-10-fg:#00723b;
+  --ax-people-av-11-bg:#9ad29a; --ax-people-av-11-fg:#063b06;
+  --ax-people-av-12-bg:#a6e9ed; --ax-people-av-12-fg:#00666d;
+  --ax-people-av-13-bg:#9bd9db; --ax-people-av-13-fg:#02494c;
+  --ax-people-av-14-bg:#94c8d4; --ax-people-av-14-fg:#00333f;
+  --ax-people-av-15-bg:#a9d3f2; --ax-people-av-15-fg:#004377;
+  --ax-people-av-16-bg:#9abfdc; --ax-people-av-16-fg:#002c4e;
+  --ax-people-av-17-bg:#c8d1fa; --ax-people-av-17-fg:#2c3c85;
+  --ax-people-av-18-bg:#a3b2e8; --ax-people-av-18-fg:#001665;
+  --ax-people-av-19-bg:#d2ccf8; --ax-people-av-19-fg:#3f3682;
+  --ax-people-av-20-bg:#c6b1de; --ax-people-av-20-fg:#341a51;
+  --ax-people-av-21-bg:#d9a7e0; --ax-people-av-21-fg:#4c0d55;
+  --ax-people-av-22-bg:#e6bfed; --ax-people-av-22-fg:#63276d;
+  --ax-people-av-23-bg:#f7c0e3; --ax-people-av-23-fg:#80215d;
+  --ax-people-av-24-bg:#eca5d1; --ax-people-av-24-fg:#6b0043;
+  --ax-people-av-25-bg:#d696c0; --ax-people-av-25-fg:#43002b;
+  --ax-people-av-26-bg:#d7d4d4; --ax-people-av-26-fg:#444241;
+  --ax-people-av-27-bg:#cecccb; --ax-people-av-27-fg:#343231;
+  --ax-people-av-28-bg:#cdd6d8; --ax-people-av-28-fg:#3b4447;
+  --ax-people-av-29-bg:#bcc3c7; --ax-people-av-29-fg:#202427;
+}
+.ax-app.ax-theme-dark {
+  --ax-people-av-0-bg:#590815; --ax-people-av-0-fg:#d69ca5;
+  --ax-people-av-1-bg:#6e0811; --ax-people-av-1-fg:#eeacb2;
+  --ax-people-av-2-bg:#751d1f; --ax-people-av-2-fg:#f1bbbc;
+  --ax-people-av-3-bg:#712d09; --ax-people-av-3-fg:#efc4ad;
+  --ax-people-av-4-bg:#8f4e00; --ax-people-av-4-fg:#ffddb3;
+  --ax-people-av-5-bg:#835b00; --ax-people-av-5-fg:#f9e2ae;
+  --ax-people-av-6-bg:#6c5700; --ax-people-av-6-fg:#ecdfa5;
+  --ax-people-av-7-bg:#553e06; --ax-people-av-7-fg:#e0cea2;
+  --ax-people-av-8-bg:#50301a; --ax-people-av-8-fg:#ddc3b0;
+  --ax-people-av-9-bg:#294903; --ax-people-av-9-fg:#bdd99b;
+  --ax-people-av-10-bg:#00723b; --ax-people-av-10-fg:#a8f0cd;
+  --ax-people-av-11-bg:#063b06; --ax-people-av-11-fg:#9ad29a;
+  --ax-people-av-12-bg:#00666d; --ax-people-av-12-fg:#a6e9ed;
+  --ax-people-av-13-bg:#02494c; --ax-people-av-13-fg:#9bd9db;
+  --ax-people-av-14-bg:#00333f; --ax-people-av-14-fg:#94c8d4;
+  --ax-people-av-15-bg:#004377; --ax-people-av-15-fg:#a9d3f2;
+  --ax-people-av-16-bg:#002c4e; --ax-people-av-16-fg:#9abfdc;
+  --ax-people-av-17-bg:#2c3c85; --ax-people-av-17-fg:#c8d1fa;
+  --ax-people-av-18-bg:#001665; --ax-people-av-18-fg:#a3b2e8;
+  --ax-people-av-19-bg:#3f3682; --ax-people-av-19-fg:#d2ccf8;
+  --ax-people-av-20-bg:#341a51; --ax-people-av-20-fg:#c6b1de;
+  --ax-people-av-21-bg:#4c0d55; --ax-people-av-21-fg:#d9a7e0;
+  --ax-people-av-22-bg:#63276d; --ax-people-av-22-fg:#e6bfed;
+  --ax-people-av-23-bg:#80215d; --ax-people-av-23-fg:#f7c0e3;
+  --ax-people-av-24-bg:#6b0043; --ax-people-av-24-fg:#eca5d1;
+  --ax-people-av-25-bg:#5a003b; --ax-people-av-25-fg:#d696c0;
+  --ax-people-av-26-bg:#444241; --ax-people-av-26-fg:#d7d4d4;
+  --ax-people-av-27-bg:#343231; --ax-people-av-27-fg:#cecccb;
+  --ax-people-av-28-bg:#3b4447; --ax-people-av-28-fg:#cdd6d8;
+  --ax-people-av-29-bg:#202427; --ax-people-av-29-fg:#bcc3c7;
+}
+@media (prefers-color-scheme: dark) {
+  .ax-app.ax-theme-system {
+    --ax-people-av-0-bg:#590815; --ax-people-av-0-fg:#d69ca5;
+    --ax-people-av-1-bg:#6e0811; --ax-people-av-1-fg:#eeacb2;
+    --ax-people-av-2-bg:#751d1f; --ax-people-av-2-fg:#f1bbbc;
+    --ax-people-av-3-bg:#712d09; --ax-people-av-3-fg:#efc4ad;
+    --ax-people-av-4-bg:#8f4e00; --ax-people-av-4-fg:#ffddb3;
+    --ax-people-av-5-bg:#835b00; --ax-people-av-5-fg:#f9e2ae;
+    --ax-people-av-6-bg:#6c5700; --ax-people-av-6-fg:#ecdfa5;
+    --ax-people-av-7-bg:#553e06; --ax-people-av-7-fg:#e0cea2;
+    --ax-people-av-8-bg:#50301a; --ax-people-av-8-fg:#ddc3b0;
+    --ax-people-av-9-bg:#294903; --ax-people-av-9-fg:#bdd99b;
+    --ax-people-av-10-bg:#00723b; --ax-people-av-10-fg:#a8f0cd;
+    --ax-people-av-11-bg:#063b06; --ax-people-av-11-fg:#9ad29a;
+    --ax-people-av-12-bg:#00666d; --ax-people-av-12-fg:#a6e9ed;
+    --ax-people-av-13-bg:#02494c; --ax-people-av-13-fg:#9bd9db;
+    --ax-people-av-14-bg:#00333f; --ax-people-av-14-fg:#94c8d4;
+    --ax-people-av-15-bg:#004377; --ax-people-av-15-fg:#a9d3f2;
+    --ax-people-av-16-bg:#002c4e; --ax-people-av-16-fg:#9abfdc;
+    --ax-people-av-17-bg:#2c3c85; --ax-people-av-17-fg:#c8d1fa;
+    --ax-people-av-18-bg:#001665; --ax-people-av-18-fg:#a3b2e8;
+    --ax-people-av-19-bg:#3f3682; --ax-people-av-19-fg:#d2ccf8;
+    --ax-people-av-20-bg:#341a51; --ax-people-av-20-fg:#c6b1de;
+    --ax-people-av-21-bg:#4c0d55; --ax-people-av-21-fg:#d9a7e0;
+    --ax-people-av-22-bg:#63276d; --ax-people-av-22-fg:#e6bfed;
+    --ax-people-av-23-bg:#80215d; --ax-people-av-23-fg:#f7c0e3;
+    --ax-people-av-24-bg:#6b0043; --ax-people-av-24-fg:#eca5d1;
+    --ax-people-av-25-bg:#5a003b; --ax-people-av-25-fg:#d696c0;
+    --ax-people-av-26-bg:#444241; --ax-people-av-26-fg:#d7d4d4;
+    --ax-people-av-27-bg:#343231; --ax-people-av-27-fg:#cecccb;
+    --ax-people-av-28-bg:#3b4447; --ax-people-av-28-fg:#cdd6d8;
+    --ax-people-av-29-bg:#202427; --ax-people-av-29-fg:#bcc3c7;
+  }
+}
+.ax-people-av-0 { background: var(--ax-people-av-0-bg); color: var(--ax-people-av-0-fg); }
+.ax-people-av-1 { background: var(--ax-people-av-1-bg); color: var(--ax-people-av-1-fg); }
+.ax-people-av-2 { background: var(--ax-people-av-2-bg); color: var(--ax-people-av-2-fg); }
+.ax-people-av-3 { background: var(--ax-people-av-3-bg); color: var(--ax-people-av-3-fg); }
+.ax-people-av-4 { background: var(--ax-people-av-4-bg); color: var(--ax-people-av-4-fg); }
+.ax-people-av-5 { background: var(--ax-people-av-5-bg); color: var(--ax-people-av-5-fg); }
+.ax-people-av-6 { background: var(--ax-people-av-6-bg); color: var(--ax-people-av-6-fg); }
+.ax-people-av-7 { background: var(--ax-people-av-7-bg); color: var(--ax-people-av-7-fg); }
+.ax-people-av-8 { background: var(--ax-people-av-8-bg); color: var(--ax-people-av-8-fg); }
+.ax-people-av-9 { background: var(--ax-people-av-9-bg); color: var(--ax-people-av-9-fg); }
+.ax-people-av-10 { background: var(--ax-people-av-10-bg); color: var(--ax-people-av-10-fg); }
+.ax-people-av-11 { background: var(--ax-people-av-11-bg); color: var(--ax-people-av-11-fg); }
+.ax-people-av-12 { background: var(--ax-people-av-12-bg); color: var(--ax-people-av-12-fg); }
+.ax-people-av-13 { background: var(--ax-people-av-13-bg); color: var(--ax-people-av-13-fg); }
+.ax-people-av-14 { background: var(--ax-people-av-14-bg); color: var(--ax-people-av-14-fg); }
+.ax-people-av-15 { background: var(--ax-people-av-15-bg); color: var(--ax-people-av-15-fg); }
+.ax-people-av-16 { background: var(--ax-people-av-16-bg); color: var(--ax-people-av-16-fg); }
+.ax-people-av-17 { background: var(--ax-people-av-17-bg); color: var(--ax-people-av-17-fg); }
+.ax-people-av-18 { background: var(--ax-people-av-18-bg); color: var(--ax-people-av-18-fg); }
+.ax-people-av-19 { background: var(--ax-people-av-19-bg); color: var(--ax-people-av-19-fg); }
+.ax-people-av-20 { background: var(--ax-people-av-20-bg); color: var(--ax-people-av-20-fg); }
+.ax-people-av-21 { background: var(--ax-people-av-21-bg); color: var(--ax-people-av-21-fg); }
+.ax-people-av-22 { background: var(--ax-people-av-22-bg); color: var(--ax-people-av-22-fg); }
+.ax-people-av-23 { background: var(--ax-people-av-23-bg); color: var(--ax-people-av-23-fg); }
+.ax-people-av-24 { background: var(--ax-people-av-24-bg); color: var(--ax-people-av-24-fg); }
+.ax-people-av-25 { background: var(--ax-people-av-25-bg); color: var(--ax-people-av-25-fg); }
+.ax-people-av-26 { background: var(--ax-people-av-26-bg); color: var(--ax-people-av-26-fg); }
+.ax-people-av-27 { background: var(--ax-people-av-27-bg); color: var(--ax-people-av-27-fg); }
+.ax-people-av-28 { background: var(--ax-people-av-28-bg); color: var(--ax-people-av-28-fg); }
+.ax-people-av-29 { background: var(--ax-people-av-29-bg); color: var(--ax-people-av-29-fg); }

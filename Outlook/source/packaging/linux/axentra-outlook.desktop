@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Axentra Outlook
+GenericName=Mail and Calendar
+Comment=Mail, calendar, people and to-do with the Outlook layout
+Exec=/opt/axentra/outlook/axentra-outlook
+Icon=axentra-outlook
+Terminal=false
+Categories=Office;Email;Calendar;ContactManagement;
+Keywords=mail;email;outlook;calendar;contacts;people;tasks;todo;microsoft;imap;
+StartupNotify=true
+StartupWMClass=axentra-outlook

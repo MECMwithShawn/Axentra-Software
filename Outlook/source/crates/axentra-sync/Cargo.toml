@@ -1,0 +1,39 @@
+[package]
+name = "axentra-sync"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+axentra-core.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+# full_encoding: legacy CJK charsets (Shift_JIS, GB18030, Big5…) via encoding_rs.
+mail-parser = { workspace = true, features = ["full_encoding"] }
+
+# IMAP over TLS / STARTTLS (pure Rust, ring crypto provider).
+async-imap = { version = "=0.11.3", default-features = false, features = ["runtime-tokio"] }
+tokio-rustls = { version = "=0.26.4", default-features = false, features = ["ring", "logging", "tls12"] }
+rustls-native-certs = "=0.8.3"
+webpki-roots = "=1.0.9"
+futures = "=0.3.34"
+async-channel = "=2.5.0"
+
+# SMTP submission and MIME building.
+lettre = { version = "=0.11.23", default-features = false, features = ["smtp-transport", "tokio1-rustls", "ring", "webpki-roots", "hostname"] }
+mail-builder = "=1.0.0"
+
+# Microsoft Graph / OAuth.
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls-webpki-roots", "rustls-tls-native-roots", "json", "gzip", "http2"] }
+url = "=2.5.8"
+sha2 = "=0.10.9"
+base64 = "=0.22.1"
+getrandom = "=0.3.4"
+
+# OS keyring (freedesktop Secret Service over D-Bus, pure Rust).
+secret-service = { version = "=5.1.0", features = ["rt-tokio-crypto-rust"] }

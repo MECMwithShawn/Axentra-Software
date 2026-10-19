@@ -2,12 +2,14 @@
 
 All nine applications have native Linux development previews installed and launch-tested on Zorin OS 18.1 / Ubuntu 24.04 x86_64. The source snapshots and Linux changes are maintained in separate private repositories. These are previews with the limits below, not a new stable binary release.
 
+
 | App | Source snapshot version | Published release | Zorin OS |
 |---|---|---|---|
 | [Command](../Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](../Command/LINUX.md) |
 | [CrystalWire](../CrystalWire/) | 0.8.11 | None | [Installed preview](../CrystalWire/LINUX.md) |
 | [Ghost](../Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](../Ghost/LINUX.md) |
 | [Mail](../Mail/) | 0.1.20 | None | [Installed preview](../Mail/LINUX.md) |
+| [Outlook](../Outlook/) | 0.1.0 | 0.1.0 pre-release (Linux .deb) | [Pre-release package](../Outlook/LINUX.md) |
 | [Spaces](../Spaces/) | 0.1.2 | None | [Installed preview](../Spaces/LINUX.md) |
 | [Vault](../Vault/) | 0.1.0 | None | [Installed preview](../Vault/LINUX.md) |
 | [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
@@ -17,6 +19,10 @@ All nine applications have native Linux development previews installed and launc
 ## Axentra OneDrive (added 2026-10-19)
 
 [Axentra OneDrive](../OneDrive/) 0.1.0 is a Linux-only development preview that mirrors the Windows OneDrive client: Files On-Demand, tray and activity panel, file-manager badges and Windows conflict rules. It is installed on Zorin OS 18.1 under `~/.local/share/axentra/apps/onedrive` and syncing a real personal account. Its source is included in this repository under the MIT license. 26 Rust tests passed. No binary release is published, and it is not yet in Command's catalog or the Icon Kit. See its [Linux notes](../OneDrive/LINUX.md).
+
+## Axentra Outlook (added 2026-10-19)
+
+[Axentra Outlook](../Outlook/) 0.1.0 is a Linux-native mail, calendar, people and to-do client in the new Outlook layout. Its source is published in [Outlook/source](../Outlook/source/), and its `.deb` (installing to `/opt/axentra/outlook` with a Command manifest) is a public GitHub pre-release, `outlook-v0.1.0`. 348 Rust tests passed; Microsoft Graph sign-in and sync were checked with a real Outlook.com account on a test build. Limits are in its [Linux page](../Outlook/LINUX.md).
 
 ## Installation locations
 

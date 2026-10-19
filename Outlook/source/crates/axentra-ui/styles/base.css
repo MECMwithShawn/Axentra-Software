@@ -1,0 +1,81 @@
+/* Reset, app frame, focus indicator, shared helpers. */
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+#main { height: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+
+.ax-app {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  font-family: var(--ax-font);
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300);
+  font-optical-sizing: auto;
+  color: var(--ax-fg-1);
+  background: var(--ax-bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  user-select: none; -webkit-user-select: none;
+  outline: none;
+  overflow: hidden;
+}
+/* Element resets carry no specificity (:where), so any class rule wins. */
+:where(.ax-app) :where(input, textarea, select, button) { font: inherit; color: inherit; }
+:where(.ax-app) :where(button) { cursor: default; }
+:where(.ax-app) :where(h1, h2, h3, h4) { margin: 0; font: inherit; }
+:where(.ax-app) :where(p) { margin: 0; }
+.ax-app [contenteditable="true"], .ax-app input, .ax-app textarea, .ax-selectable { user-select: text; -webkit-user-select: text; }
+:where(.ax-app) a { color: var(--ax-fg-link); }
+:where(.ax-app) a:hover { color: var(--ax-fg-link-hover); }
+
+/* Focus (§1.12, keyboard spec §19): keyboard focus only, 2px ring in
+   colorStrokeFocus2 drawn inside the control (never clipped by scrolling
+   parents), with a 1px colorStrokeFocus1 line so it reads on brand fills.
+   Text inputs show the brand underline instead. */
+.ax-app :focus { outline: none; }
+.ax-app :focus-visible,
+html[data-ax-kbd] .ax-app :focus:not(input):not(textarea):not(select):not([contenteditable="true"]) {
+  outline: var(--ax-stroke-thick) solid var(--ax-stroke-focus-outer);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 3px var(--ax-stroke-focus-inner);
+}
+.ax-app input:focus-visible, .ax-app textarea:focus-visible, .ax-app select:focus-visible,
+.ax-app [contenteditable="true"]:focus-visible { outline: none; box-shadow: none; }
+.ax-app [role="dialog"]:focus-visible, .ax-app [role="alertdialog"]:focus-visible,
+.ax-app [role="menu"]:focus-visible, .ax-app .ax-pane:focus-visible { outline: none; box-shadow: none; }
+
+/* Scrollbars: thin, visible on hover. */
+.ax-app ::-webkit-scrollbar { width: 12px; height: 12px; }
+.ax-app ::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; border: 3px solid transparent; background-clip: content-box; }
+.ax-app :hover::-webkit-scrollbar-thumb { background-color: var(--ax-stroke-1); }
+.ax-app ::-webkit-scrollbar-thumb:hover { background-color: var(--ax-stroke-accessible); }
+.ax-app ::-webkit-scrollbar-track, .ax-app ::-webkit-scrollbar-corner { background: transparent; }
+
+/* Helpers */
+.ax-visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ax-grow { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.ax-row { display: flex; align-items: center; }
+.ax-col { display: flex; flex-direction: column; }
+.ax-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ax-muted { color: var(--ax-fg-3); }
+.ax-semibold { font-weight: var(--ax-weight-semibold); }
+.ax-caption { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+.ax-subtitle-2 { font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); }
+.ax-subtitle-1 { font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold); }
+.ax-flash { animation: ax-flash var(--ax-duration-slow) var(--ax-ease) 2; border-radius: var(--ax-radius-m); }
+@keyframes ax-flash { 50% { background: var(--ax-bg-selected); } }
+
+/* Skip links (keyboard spec §12.3): hidden until focused. */
+.ax-skip-link {
+  position: fixed; left: 8px; top: 8px; z-index: 2000; padding: 8px 12px; border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-1); color: var(--ax-fg-link); box-shadow: var(--ax-shadow-16); transform: translateY(-200%);
+}
+.ax-skip-link:focus { transform: none; }
+
+/* Overlay root for page-level popups drawn by the runtime (tooltips, key tips). */
+.ax-overlay-root { position: fixed; inset: 0; pointer-events: none; z-index: 2100; }
+
+/* High contrast: separation by strokes, selection by Highlight outlines. */
+.ax-app[data-contrast="high"] [aria-selected="true"], .ax-app[data-contrast="high"] .ax-selected,
+.ax-app[data-contrast="high"] [aria-current="page"] { outline: 2px solid var(--colorCompoundBrandStroke); outline-offset: -2px; }
+.ax-app[data-contrast="high"] button:not(.ax-menu-item):not(.ax-ribbon-tab) { border-color: var(--colorNeutralStroke1); }
+@media (forced-colors: active) {
+  .ax-app :focus-visible { outline-color: Highlight; }
+}

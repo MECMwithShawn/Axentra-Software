@@ -1,5 +1,19 @@
 # Icon kit revisions
 
+## Glass + Precision 1.5 — 2026-10-19
+
+- Add Axentra Outlook as the tenth app: a periwinkle (`#7C8CFF`) calendar page behind
+  an envelope, using the shared tile, rim, halo, gradient and sampling unchanged.
+  Geometry and micro-tier rules are in [OUTLOOK.md](OUTLOOK.md).
+- Rendered with rustc 1.99.1 on x86_64 Linux. The six existing procedural icons
+  (Command, Ghost, Vault, PDF, Spaces, Mail) reproduce byte for byte from this
+  toolchain; no existing PNG or ICO changed.
+- `assets/preview.png` gains a tenth column, drawn with the renderer's own `rgba()`
+  and blend and appended without re-rendering the other nine (the Mail column was
+  re-rendered as a control and matched exactly). `references/production-preview.png`
+  and the motion component still show nine apps until the complete exporter is rerun.
+- `build-info.json` app order and manifest baseline updated (126 files, 10 apps).
+
 ## Glass + Precision 1.4 — 2026-10-18
 
 - Add Archive as the ninth app, preserving its installed eight-frame Windows ICO.

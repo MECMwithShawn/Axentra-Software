@@ -1,0 +1,347 @@
+/* Compose / reply / forward (ui/src/mail/compose). Sizes follow mail spec
+   section 6; values marked (estimate) there are estimates here too. */
+
+/* ---------------------------------------------------------------- frame */
+.ax-compose {
+  position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  background: var(--ax-bg-1); color: var(--ax-fg-1);
+}
+.ax-compose-full { flex: 1 1 auto; height: 100%; }
+.ax-compose-inline { flex: none; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); }
+.ax-compose-popped { flex: 1 1 auto; border-radius: var(--ax-radius-xl); overflow: hidden; }
+.ax-compose-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.ax-compose-inline .ax-compose-scroll { overflow: visible; }
+.ax-compose-fields { padding: 0 16px; flex: none; }
+
+/* Field rows: 40px, separated by hairlines (mail spec 6.2). */
+.ax-compose-row {
+  display: flex; align-items: center; gap: 8px; min-height: 40px;
+  border-bottom: 1px solid var(--ax-stroke-3); flex: none;
+}
+.ax-app.ax-density-roomy .ax-compose-row { min-height: 44px; }
+.ax-app.ax-density-compact .ax-compose-row { min-height: 36px; }
+.ax-compose-label {
+  flex: none; min-width: 48px; height: 28px; padding: 0 8px;
+  border: 1px solid var(--ax-stroke-1); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-1); color: var(--ax-fg-1); font-size: var(--ax-text-300);
+  transition: background var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-compose-label:hover { background: var(--ax-bg-1-hover); border-color: var(--ax-stroke-1-hover); }
+.ax-compose-label:active { background: var(--ax-bg-1-pressed); }
+.ax-compose-label-static { display: inline-flex; align-items: center; justify-content: center; border-color: transparent; background: transparent; color: var(--ax-fg-2); }
+.ax-compose-row-tail { display: flex; align-items: center; gap: 2px; flex: none; margin-left: auto; }
+.ax-compose-row-tail .ax-icon-btn { width: 28px; height: 28px; }
+.ax-compose-toggle {
+  height: 28px; padding: 0 8px; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-2); font-size: var(--ax-text-300);
+}
+.ax-compose-toggle:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-compose-toggle:active { background: var(--ax-bg-subtle-pressed); }
+.ax-compose-error {
+  display: flex; align-items: center; gap: 6px; padding: 4px 0 6px 56px;
+  color: var(--ax-danger-fg); font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
+}
+.ax-compose-schedule .ax-compose-error { padding-left: 0; }
+
+/* ---------------------------------------------------------------- recipients */
+/* Recipient rows grow when chips wrap; the label and the Cc / Bcc toggles
+   stay on the first 28px line, centred as in a one-line row (40px cozy,
+   36px compact, 44px roomy, each with a 1px hairline). */
+.ax-compose-recipients { align-items: flex-start; --ax-compose-line-top: 6px; --ax-compose-line-bottom: 5px; }
+.ax-app.ax-density-compact .ax-compose-recipients { --ax-compose-line-top: 4px; --ax-compose-line-bottom: 3px; }
+.ax-app.ax-density-roomy .ax-compose-recipients { --ax-compose-line-top: 8px; --ax-compose-line-bottom: 7px; }
+.ax-compose-recipients > .ax-compose-label, .ax-compose-recipients > .ax-compose-row-tail { margin-top: var(--ax-compose-line-top); }
+.ax-compose-well {
+  flex: 1 1 auto; min-width: 0; position: relative; cursor: text;
+  padding: var(--ax-compose-line-top, 4px) 0 var(--ax-compose-line-bottom, 4px);
+}
+.ax-compose-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; }
+.ax-compose-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 24px; max-width: 280px; padding: 0 2px 0 4px; border: 1px solid transparent; border-radius: 12px;
+  background: var(--ax-bg-3); color: var(--ax-fg-1); font-size: var(--ax-text-300); cursor: default;
+  transition: background var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-compose-chip:hover { background: var(--ax-bg-1-hover); border-color: var(--ax-stroke-2); }
+.ax-compose-well:focus-within .ax-compose-chip.ax-selected { background: var(--ax-bg-selected); border-color: var(--ax-stroke-brand); }
+.ax-compose-chip.ax-invalid { background: transparent; color: var(--ax-danger-fg); border: 1px dashed var(--ax-danger-fg); }
+.ax-compose-chip.ax-invalid > .ax-icon { color: var(--ax-danger-fg); }
+.ax-compose-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ax-compose-chip .ax-avatar { font-size: 8px !important; }
+.ax-compose-chip-remove {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; color: var(--ax-fg-3); visibility: hidden;
+}
+.ax-compose-chip:hover .ax-compose-chip-remove,
+.ax-compose-chip.ax-selected .ax-compose-chip-remove,
+.ax-compose-chip.ax-invalid .ax-compose-chip-remove { visibility: visible; }
+.ax-compose-chip-remove:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-compose-chip.ax-invalid .ax-compose-chip-remove { color: var(--ax-danger-fg); }
+.ax-compose-input {
+  flex: 1 1 120px; min-width: 80px; height: 28px; padding: 0 2px;
+  border: none; outline: none; background: transparent; color: var(--ax-fg-1); font-size: var(--ax-text-300);
+}
+.ax-app .ax-compose-input:focus-visible { outline: none; box-shadow: none; }
+
+/* Autocomplete (44px rows, at most 8; mail spec 6.3). */
+.ax-compose-suggest {
+  position: absolute; top: calc(100% + 2px); left: -4px; z-index: 40;
+  width: min(400px, calc(100% + 8px)); max-height: 360px; overflow-y: auto; padding: 4px 0;
+  background: var(--ax-bg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-16);
+  animation: ax-pop var(--ax-duration-fast) var(--ax-ease-decelerate);
+}
+.ax-compose-suggest-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 12px; cursor: default; }
+.ax-compose-suggest-row.ax-active { background: var(--ax-bg-subtle-hover); }
+.ax-compose-suggest-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ax-compose-suggest-name { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-1); }
+.ax-compose-suggest-addr { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-compose-suggest strong { font-weight: var(--ax-weight-semibold); }
+.ax-compose-suggest-remove {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 24px; padding: 0; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-3); visibility: hidden;
+}
+.ax-compose-suggest-row:hover .ax-compose-suggest-remove, .ax-compose-suggest-row.ax-active .ax-compose-suggest-remove { visibility: visible; }
+.ax-compose-suggest-remove:hover { background: var(--ax-bg-subtle-pressed); color: var(--ax-fg-1); }
+
+.ax-compose-hovercard {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 45; width: 280px;
+  display: flex; align-items: center; gap: 12px; padding: 12px;
+  background: var(--ax-bg-1); color: var(--ax-fg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-16);
+  animation: ax-pop var(--ax-duration-fast) var(--ax-ease-decelerate); cursor: default;
+}
+.ax-compose-hovercard-text { display: flex; flex-direction: column; min-width: 0; font-size: var(--ax-text-300); }
+.ax-compose-hovercard-text .ax-muted { font-size: var(--ax-text-200); }
+.ax-compose-invalid-text { color: var(--ax-danger-fg); font-size: var(--ax-text-200); }
+
+/* ---------------------------------------------------------------- other rows */
+.ax-compose-from { font-weight: var(--ax-weight-regular); max-width: 100%; }
+.ax-compose-from span { overflow: hidden; text-overflow: ellipsis; }
+.ax-compose-subject-input {
+  flex: 1 1 auto; min-width: 0; height: 32px; padding: 0;
+  border: none; outline: none; background: transparent; color: var(--ax-fg-1); font-size: var(--ax-text-300);
+}
+.ax-compose-subject-input::placeholder { color: var(--ax-fg-4); }
+.ax-app .ax-compose-subject-input:focus-visible { outline: none; box-shadow: none; }
+
+.ax-compose-compact { gap: 4px; }
+.ax-compose-kind {
+  display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 4px; flex: none;
+  border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-2);
+}
+.ax-compose-kind .ax-icon:first-child { width: 20px; height: 20px; }
+.ax-compose-kind:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); }
+.ax-compose-kind:disabled { color: var(--ax-fg-2); background: transparent; }
+.ax-compose-summary {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px;
+  border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-1);
+  font-size: var(--ax-text-300); text-align: left;
+}
+.ax-compose-summary:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-summary-label { color: var(--ax-fg-3); }
+.ax-compose-summary-label.ax-next { margin-left: 12px; }
+
+.ax-compose-banner { margin: 8px 16px 0; flex: none; }
+.ax-compose-banner > span { min-width: 0; }
+
+/* ---------------------------------------------------------------- attachments */
+.ax-compose-attachments { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 0; flex: none; }
+.ax-compose-attachment {
+  position: relative; display: flex; align-items: center; gap: 8px; width: 240px; height: 52px; padding: 0 4px 0 10px;
+  background: var(--ax-bg-3); border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-m);
+  transition: background var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-compose-attachment:hover { background: var(--ax-bg-1-hover); border-color: var(--ax-stroke-1); }
+.ax-compose-attachment:active { background: var(--ax-bg-1-pressed); }
+.ax-compose-attachment-icon { color: var(--ax-fg-brand); }
+.ax-compose-attachment-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ax-compose-attachment-name { display: flex; min-width: 0; font-size: var(--ax-text-300); line-height: var(--ax-lh-300); white-space: nowrap; }
+.ax-compose-attachment-stem { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ax-compose-attachment-size { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-compose-attachment-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 24px; height: 28px; padding: 0; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-2);
+}
+.ax-compose-attachment-btns { display: flex; flex: none; }
+.ax-compose-attachment-btn:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-compose-attachment-btn:active { background: var(--ax-bg-subtle-pressed); }
+
+.ax-compose-preview { display: flex; justify-content: center; max-height: 60vh; overflow: auto; }
+.ax-compose-preview-img { max-width: 100%; max-height: 60vh; object-fit: contain; }
+.ax-compose-preview-text {
+  margin: 0; width: 100%; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: var(--ax-font-mono); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-1);
+}
+.ax-compose-preview-empty { padding: 32px; color: var(--ax-fg-3); }
+
+/* ---------------------------------------------------------------- body */
+/* The attachment well follows the body in the DOM (tab order) but shows
+   above it; the body comes last. */
+.ax-compose-editor {
+  order: 2; flex: 1 0 auto; min-height: 200px; padding: 16px; outline: none; cursor: text;
+  color: var(--ax-fg-1); overflow-wrap: anywhere; user-select: text; -webkit-user-select: text;
+  line-height: normal;
+}
+.ax-app .ax-compose-editor:focus-visible { outline: none; box-shadow: none; }
+.ax-compose-editor img { max-width: 100%; height: auto; }
+.ax-compose-editor a { color: var(--ax-fg-link); }
+.ax-compose-editor table { border-collapse: collapse; }
+.ax-compose-editor blockquote { margin: 0 0 0 4px; padding-left: 12px; border-left: 3px solid var(--ax-stroke-1); }
+.ax-compose-editor pre { font-family: var(--ax-font-mono); white-space: pre-wrap; }
+.ax-compose-editor ul, .ax-compose-editor ol { margin: 0; padding-left: 40px; }
+.ax-compose-editor h1, .ax-compose-editor h2, .ax-compose-editor h3 { margin: 0.4em 0; }
+.ax-compose-editor hr { border: none; border-top: 1px solid var(--ax-stroke-1); }
+.ax-compose-editor.ax-plain { font-family: var(--ax-font) !important; }
+.ax-compose-editor a[data-ax-mention] {
+  color: var(--ax-fg-brand); background: var(--ax-bg-selected); border-radius: var(--ax-radius-s);
+  padding: 0 2px; text-decoration: none; font-weight: var(--ax-weight-semibold);
+}
+
+/* "@" mention list, under the caret (viewport position from the editor). */
+.ax-compose-suggest.ax-compose-mention { position: fixed; z-index: 1001; width: 320px; }
+
+/* ---------------------------------------------------------------- action bar */
+.ax-compose-actions {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex: none;
+  background: var(--ax-bg-1); border-top: 1px solid var(--ax-stroke-3);
+  border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+}
+.ax-compose-inline .ax-compose-actions { position: sticky; bottom: 0; z-index: 5; }
+.ax-compose-actions.ax-top { border-top: none; border-bottom: 1px solid var(--ax-stroke-3); border-radius: 0; padding: 8px 16px; }
+.ax-compose-send > .ax-btn:first-child { min-width: 72px; }
+.ax-compose-send > .ax-split-chevron { border-left: 1px solid color-mix(in srgb, var(--ax-fg-on-brand) 30%, transparent); }
+.ax-compose-status { display: flex; align-items: center; gap: 8px; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); white-space: nowrap; }
+.ax-compose-status-error { color: var(--ax-danger-fg); }
+.ax-compose-link-btn {
+  border: none; background: transparent; padding: 0; color: var(--ax-fg-link);
+  font: inherit; font-weight: var(--ax-weight-semibold); white-space: nowrap;
+}
+.ax-compose-link-btn:hover { text-decoration: underline; color: var(--ax-fg-brand-hover, var(--ax-fg-link)); }
+
+/* Drop zone (shown by the editor script while files are dragged over). */
+.ax-compose-drop {
+  display: none; position: absolute; inset: 0; z-index: 60; pointer-events: none;
+  flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: color-mix(in srgb, var(--ax-bg-1) 90%, transparent);
+  border: 2px dashed var(--ax-stroke-brand); border-radius: inherit;
+  color: var(--ax-fg-brand); font-size: var(--ax-text-400); font-weight: var(--ax-weight-semibold);
+}
+.ax-compose[data-drag] .ax-compose-drop { display: flex; }
+
+/* ---------------------------------------------------------------- pop-out window */
+.ax-compose-placeholder { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; background: var(--ax-bg-1); }
+/* Centred without `transform`: a transformed ancestor would become the
+   containing block of the fixed-position menus and dialogs inside. */
+.ax-compose-window {
+  position: fixed; z-index: 850;
+  left: calc((100vw - min(900px, 100vw - 48px)) / 2); top: calc((100vh - min(700px, 100vh - 48px)) / 2);
+  width: min(900px, calc(100vw - 48px)); height: min(700px, calc(100vh - 48px));
+  display: flex; flex-direction: column; padding: 0 8px 8px; gap: 4px;
+  background: var(--ax-bg-canvas); border: 1px solid var(--ax-stroke-2);
+  border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28);
+  animation: ax-fade var(--ax-duration-normal);
+}
+.ax-compose-titlebar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 0 0 8px; flex: none; color: var(--ax-fg-1); }
+.ax-compose-titlebar-text { flex: 1 1 auto; font-weight: var(--ax-weight-semibold); }
+.ax-compose-window-ribbon { flex: none; }
+
+/* ---------------------------------------------------------------- dialogs */
+.ax-compose-dialog-text { margin: 0; color: var(--ax-fg-2); }
+.ax-compose-dialog-fields { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+.ax-compose-dialog-fields .ax-input { width: 100%; }
+.ax-compose-dialog-hint { font-size: var(--ax-text-200); color: var(--ax-danger-fg); }
+.ax-compose-dialog-left { margin-right: auto; }
+
+.ax-compose-schedule { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.ax-compose-schedule-option {
+  display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 8px;
+  border-radius: var(--ax-radius-m); cursor: default;
+}
+.ax-compose-schedule-option:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-schedule-option .ax-icon { color: var(--ax-fg-3); }
+.ax-compose-schedule-option.ax-selected .ax-icon { color: var(--ax-fg-brand); }
+.ax-compose-schedule-caption { font-size: var(--ax-text-200); color: var(--ax-fg-3); }
+.ax-compose-schedule-custom { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; padding: 4px 0 8px 38px; }
+
+.ax-compose-datepicker { width: 200px; flex: none; }
+.ax-compose-datepicker-head { display: flex; align-items: center; height: 28px; font-size: var(--ax-text-300); }
+.ax-compose-datepicker-grid { display: grid; grid-template-columns: repeat(7, 28px); row-gap: 2px; }
+.ax-compose-datepicker-dow { display: inline-flex; align-items: center; justify-content: center; height: 24px; font-size: var(--ax-text-200); color: var(--ax-fg-3); }
+.ax-compose-datepicker-day {
+  width: 24px; height: 24px; margin: 0 2px; padding: 0; border: none; border-radius: 50%;
+  background: transparent; color: var(--ax-fg-1); font-size: var(--ax-text-200);
+}
+.ax-compose-datepicker-day:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-datepicker-day.ax-outside { color: var(--ax-fg-3); }
+.ax-compose-datepicker-day.ax-today { color: var(--ax-fg-brand); font-weight: var(--ax-weight-semibold); }
+.ax-compose-datepicker-day.ax-selected { background: var(--ax-bg-brand); color: var(--ax-fg-on-brand); }
+.ax-compose-datepicker-day:disabled { color: var(--ax-fg-disabled); background: transparent; }
+.ax-compose-timecombo { display: flex; flex-direction: column; gap: 4px; width: 150px; }
+.ax-compose-timecombo .ax-input { width: 112px; }
+
+.ax-compose-book { display: flex; flex-direction: column; gap: 12px; }
+.ax-compose-book .ax-input { width: 100%; }
+.ax-compose-book-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; }
+.ax-compose-book-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 8px; border-radius: var(--ax-radius-m); cursor: default; }
+.ax-compose-book-row:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-book-row[aria-selected="true"] { background: var(--ax-bg-selected); }
+.ax-compose-book-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.ax-compose-book-text .ax-muted { font-size: var(--ax-text-200); }
+.ax-compose-book-empty { padding: 24px 8px; color: var(--ax-fg-3); text-align: center; }
+
+/* ---------------------------------------------------------------- flyouts */
+.ax-compose-flyout {
+  position: fixed; z-index: 1001; padding: 8px; outline: none;
+  background: var(--ax-bg-1); color: var(--ax-fg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-16);
+  animation: ax-pop var(--ax-duration-fast) var(--ax-ease-decelerate);
+}
+.ax-compose-flyout-title { padding: 2px 4px 6px; font-size: var(--ax-text-200); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-2); }
+.ax-compose-tablegrid { display: grid; grid-template-columns: repeat(10, 18px); gap: 2px; padding: 0 4px 8px; }
+.ax-compose-tablecell { width: 18px; height: 18px; padding: 0; border: 1px solid var(--ax-stroke-1); border-radius: var(--ax-radius-s); background: var(--ax-bg-1); }
+.ax-compose-tablecell.ax-on { background: var(--ax-bg-selected); border-color: var(--ax-stroke-brand); }
+
+.ax-compose-emoji { width: 320px; display: flex; flex-direction: column; gap: 6px; }
+.ax-compose-emoji .ax-input { width: 100%; }
+.ax-compose-emoji-tabs { display: flex; gap: 2px; }
+.ax-compose-emoji-tab { width: 34px; height: 32px; padding: 0; border: none; border-radius: var(--ax-radius-m); background: transparent; font-size: 18px; position: relative; }
+.ax-compose-emoji-tab:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-emoji-tab.ax-selected::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 3px; border-radius: 2px; background: var(--ax-stroke-brand); }
+.ax-compose-emoji-heading { padding: 4px 2px 0; font-size: var(--ax-text-200); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-2); }
+.ax-compose-emoji-grid { display: grid; grid-template-columns: repeat(8, 36px); gap: 2px; }
+.ax-compose-emoji-scroll { max-height: 216px; overflow-y: auto; }
+.ax-compose-emoji-btn { width: 36px; height: 36px; padding: 0; border: none; border-radius: var(--ax-radius-m); background: transparent; font-size: 22px; line-height: 1; }
+.ax-compose-emoji-btn:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-emoji-empty { grid-column: 1 / -1; padding: 16px; text-align: center; color: var(--ax-fg-3); }
+
+.ax-compose-palette { display: grid; grid-template-columns: repeat(10, 20px); gap: 4px; padding: 0 4px 8px; }
+.ax-compose-swatch { width: 20px; height: 20px; padding: 0; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-s); flex: none; }
+.ax-compose-swatch:hover { outline: 2px solid var(--ax-stroke-brand); outline-offset: 1px; }
+.ax-compose-swatch.ax-static:hover { outline: none; }
+.ax-compose-custom-color { display: flex; align-items: center; gap: 8px; padding: 0 4px 4px; }
+.ax-compose-custom-color .ax-input { width: 104px; }
+
+/* ---------------------------------------------------------------- drawing canvas */
+.ax-compose-draw-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding-bottom: 8px; }
+.ax-compose-draw-tools .ax-ribbon-sep { margin: 0 4px; }
+.ax-compose-ink { border-radius: 50%; margin: 0 2px; }
+.ax-compose-ink.ax-selected { outline: 2px solid var(--ax-stroke-brand); outline-offset: 2px; }
+.ax-compose-ink:disabled { opacity: 0.4; outline: none; }
+.ax-compose-ink-width {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0;
+  border: none; border-radius: var(--ax-radius-m); background: transparent;
+}
+.ax-compose-ink-width > span { width: 16px; border-radius: 4px; background: var(--ax-fg-1); }
+.ax-compose-ink-width:hover { background: var(--ax-bg-subtle-hover); }
+.ax-compose-ink-width.ax-selected { background: var(--ax-bg-1-selected); }
+/* The paper is white in both themes: it is part of the picture that is
+   inserted into the message (content colour, not a UI colour). */
+.ax-compose-canvas {
+  display: block; width: 100%; height: 320px; touch-action: none; cursor: crosshair;
+  background: #ffffff; border: 1px solid var(--ax-stroke-1); border-radius: var(--ax-radius-m);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-compose-suggest, .ax-compose-hovercard, .ax-compose-flyout, .ax-compose-window { animation: none; }
+}

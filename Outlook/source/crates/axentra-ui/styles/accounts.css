@@ -1,0 +1,234 @@
+/* Settings > Accounts > Email accounts, the Add account dialog and the
+   account health message bar (docs/spec/protocols.md §2, shell.md §7.2, §8.5).
+   Owned by the sync area; only --ax-* tokens. */
+
+/* ---------------------------------------------------------------- page */
+.ax-acct-page { display: flex; flex-direction: column; gap: var(--ax-space-l); min-width: 0; color: var(--ax-fg-1); }
+.ax-acct-page-title { margin: 0; font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); }
+.ax-acct-section { display: flex; flex-direction: column; gap: var(--ax-space-s); }
+.ax-acct-section + .ax-acct-section { padding-top: var(--ax-space-l); border-top: 1px solid var(--ax-stroke-2); }
+.ax-acct-section-head { display: flex; align-items: center; gap: var(--ax-space-s); min-height: var(--ax-command-h); }
+.ax-acct-section-head > :first-child { flex: 1 1 auto; min-width: 0; }
+.ax-acct-section-title { margin: 0; font-size: var(--ax-text-300); line-height: var(--ax-lh-300); font-weight: var(--ax-weight-semibold); }
+.ax-acct-hint { margin: 0; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-acct-text { margin: 0; font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-2); }
+.ax-acct-strong { font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
+
+/* Account list ("Your accounts") */
+.ax-acct-list {
+  list-style: none; margin: var(--ax-space-xs) 0 0; padding: 0;
+  border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); overflow: hidden;
+  background: var(--ax-bg-1);
+}
+.ax-acct-row {
+  display: flex; align-items: center; gap: var(--ax-space-m);
+  padding: var(--ax-density-pad-y) var(--ax-space-l);
+  transition: background var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-acct-row + .ax-acct-row { border-top: 1px solid var(--ax-stroke-2); }
+.ax-acct-row:hover { background: var(--ax-bg-subtle-hover); }
+.ax-acct-row-target { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--ax-space-m); border-radius: var(--ax-radius-m); }
+.ax-app .ax-acct-row-target:focus-visible { outline-offset: 2px; box-shadow: none; }
+.ax-acct-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ax-acct-row-name { display: flex; align-items: center; gap: var(--ax-space-s); min-width: 0; font-weight: var(--ax-weight-semibold); }
+.ax-acct-row-email { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-2); }
+.ax-acct-row-meta {
+  display: flex; align-items: center; gap: var(--ax-space-xs); min-width: 0;
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3);
+}
+.ax-acct-provider-name { flex: none; }
+.ax-acct-dot { flex: none; }
+.ax-acct-row-actions { display: flex; align-items: center; gap: var(--ax-space-xs); flex: none; }
+.ax-acct-btn-row { min-width: 96px; }
+
+.ax-acct-pill {
+  display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 var(--ax-space-s);
+  border-radius: var(--ax-radius-circle); background: var(--ax-info-bg); color: var(--ax-fg-brand);
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200); font-weight: var(--ax-weight-semibold);
+}
+
+/* Sync status in rows and the manage panel */
+.ax-acct-status { display: inline-flex; align-items: center; gap: var(--ax-space-xs); min-width: 0; color: var(--ax-fg-3); }
+.ax-acct-status .ax-icon { width: 16px; height: 16px; }
+.ax-acct-status.ax-acct-tone-error { color: var(--ax-danger-fg); }
+.ax-acct-status.ax-acct-tone-warning { color: var(--ax-warning-fg); }
+.ax-acct-status.ax-acct-tone-error .ax-ellipsis, .ax-acct-status.ax-acct-tone-warning .ax-ellipsis { color: var(--ax-fg-2); }
+
+/* Fluent extra-tiny spinner (16 px, 2 px stroke) */
+.ax-acct-spinner {
+  display: inline-block; flex: none; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--ax-stroke-2); border-top-color: var(--ax-fg-brand);
+  animation: ax-spin 0.8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .ax-acct-spinner { animation-duration: 2.4s; } }
+.ax-acct-busy { display: flex; align-items: center; gap: var(--ax-space-s); min-height: var(--ax-command-h); color: var(--ax-fg-2); }
+
+/* ---------------------------------------------------------------- manage panel */
+.ax-acct-manage { display: flex; flex-direction: column; gap: var(--ax-space-l); }
+.ax-app .ax-acct-back {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: var(--ax-space-xs);
+  height: 28px; padding: 0 var(--ax-space-s) 0 var(--ax-space-xs); margin-left: calc(-1 * var(--ax-space-xs));
+  border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-2);
+}
+.ax-app .ax-acct-back .ax-icon { width: 16px; height: 16px; }
+.ax-app .ax-acct-back:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-app .ax-acct-back:active { background: var(--ax-bg-subtle-pressed); }
+.ax-acct-manage-head { display: flex; align-items: center; gap: var(--ax-space-l); min-width: 0; }
+.ax-acct-manage-id { display: flex; flex-direction: column; min-width: 0; }
+.ax-acct-manage-name {
+  display: flex; align-items: center; gap: var(--ax-space-s); min-width: 0;
+  font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold);
+}
+.ax-acct-form-narrow { max-width: 420px; }
+.ax-acct-inline-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ax-space-s); padding-top: var(--ax-space-xs); }
+.ax-acct-facts {
+  display: grid; grid-template-columns: minmax(120px, 180px) 1fr; column-gap: var(--ax-space-l); row-gap: var(--ax-space-s);
+  margin: 0; font-size: var(--ax-text-300); line-height: var(--ax-lh-300);
+}
+.ax-acct-facts dt { color: var(--ax-fg-3); }
+.ax-acct-facts dd { margin: 0; min-width: 0; color: var(--ax-fg-1); overflow-wrap: anywhere; }
+.ax-acct-caps { font-family: var(--ax-font-mono); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-2); }
+.ax-acct-manage-rows { display: flex; flex-direction: column; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); }
+.ax-acct-manage-row { display: flex; align-items: center; gap: var(--ax-space-l); padding: var(--ax-space-m) var(--ax-space-l); }
+.ax-acct-manage-row > :first-child { flex: 1 1 auto; min-width: 0; }
+.ax-acct-manage-row + .ax-acct-manage-row { border-top: 1px solid var(--ax-stroke-2); }
+
+/* ---------------------------------------------------------------- buttons and links */
+.ax-btn.ax-acct-btn { min-width: 96px; }
+/* Fluent disabled button: neutral fill and stroke; keeps pointer events so
+   the tooltip explaining why can show. */
+.ax-btn.ax-acct-btn:disabled, .ax-btn.ax-acct-btn.ax-primary:disabled, .ax-btn.ax-acct-btn.ax-danger:disabled {
+  background: var(--ax-bg-3); border-color: var(--ax-stroke-2); color: var(--ax-fg-disabled); pointer-events: auto;
+}
+.ax-btn.ax-acct-btn.ax-danger:hover { background: var(--ax-danger-fg); }
+.ax-app .ax-acct-link {
+  display: inline-flex; align-items: center; padding: 0; border: none; background: transparent;
+  color: var(--ax-fg-link); font-size: var(--ax-text-300); line-height: var(--ax-lh-300); text-align: left;
+}
+.ax-app .ax-acct-link:hover { color: var(--ax-fg-brand-hover); text-decoration: underline; }
+.ax-app .ax-acct-link:active { color: var(--ax-fg-brand); }
+.ax-app .ax-acct-link:disabled { color: var(--ax-fg-disabled); text-decoration: none; }
+.ax-acct-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ax-space-xs) var(--ax-space-l); }
+
+/* ---------------------------------------------------------------- dialog (Fluent DialogSurface, §2.1) */
+.ax-acct-overlay {
+  position: fixed; inset: 0; z-index: 950; display: flex; align-items: center; justify-content: center;
+  background: var(--ax-bg-overlay); animation: ax-fade var(--ax-duration-normal) var(--ax-ease);
+  cursor: default; text-align: left;
+}
+.ax-acct-sentinel { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+.ax-acct-dialog {
+  display: flex; flex-direction: column; max-width: calc(100vw - 48px); max-height: calc(100vh - 48px);
+  padding: var(--ax-space-xxl); border: 1px solid transparent; border-radius: var(--ax-radius-xl);
+  background: var(--ax-bg-1); box-shadow: var(--ax-shadow-64); color: var(--ax-fg-1);
+  animation: ax-acct-enter var(--ax-duration-normal) var(--ax-ease-decelerate);
+}
+@keyframes ax-acct-enter { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ax-acct-dialog, .ax-acct-overlay { animation: none; } }
+.ax-acct-dialog-head { display: flex; align-items: flex-start; gap: var(--ax-space-s); margin-bottom: var(--ax-space-s); }
+.ax-acct-dialog-title {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold);
+}
+.ax-acct-dialog-close { margin: -4px -8px 0 0; color: var(--ax-fg-1); }
+.ax-acct-dialog-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px;
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-2);
+}
+.ax-acct-dialog-actions { display: flex; align-items: center; gap: var(--ax-space-s); padding-top: var(--ax-space-xxl); }
+.ax-acct-dialog-actions-start { display: flex; align-items: center; min-width: 0; }
+
+.ax-acct-step { display: flex; flex-direction: column; gap: var(--ax-space-m); }
+.ax-acct-step-form { gap: var(--ax-space-m); }
+.ax-acct-identity { display: flex; align-items: center; gap: var(--ax-space-s); color: var(--ax-fg-1); }
+.ax-acct-identity .ax-icon { color: var(--ax-fg-3); }
+.ax-acct-done { flex-direction: row; align-items: flex-start; }
+.ax-acct-done-icon { width: 24px; height: 24px; color: var(--ax-success-fg); }
+
+/* Device code (§2.2 step 3c) */
+.ax-acct-code {
+  align-self: flex-start; padding: var(--ax-space-s) var(--ax-space-l); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-3); color: var(--ax-fg-1); font-family: var(--ax-font-mono);
+  font-size: var(--ax-text-700); line-height: var(--ax-lh-700); letter-spacing: 2px; cursor: text;
+}
+.ax-acct-countdown { margin: calc(-1 * var(--ax-space-xs)) 0 0; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+
+/* Provider picker ("Other account") */
+.ax-acct-providers { display: flex; flex-direction: column; gap: var(--ax-space-xs); }
+.ax-app .ax-acct-provider {
+  display: flex; align-items: center; gap: var(--ax-space-m); width: 100%; min-height: 52px; padding: var(--ax-space-s) var(--ax-space-m);
+  border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-m); background: var(--ax-bg-1); text-align: left;
+  transition: background var(--ax-duration-fast) var(--ax-ease), border-color var(--ax-duration-fast) var(--ax-ease);
+}
+.ax-app .ax-acct-provider:hover { background: var(--ax-bg-1-hover); border-color: var(--ax-stroke-1); }
+.ax-app .ax-acct-provider:active { background: var(--ax-bg-1-pressed); }
+.ax-acct-provider-icon { width: 20px; height: 20px; color: var(--ax-fg-brand); }
+.ax-acct-provider-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ax-acct-provider-label { color: var(--ax-fg-1); font-weight: var(--ax-weight-semibold); }
+.ax-acct-provider-sub { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-acct-provider-chevron { width: 16px; height: 16px; color: var(--ax-fg-3); }
+
+/* ---------------------------------------------------------------- fields (Fluent Field / Input, §2.1, §2.3) */
+.ax-acct-form { display: flex; flex-direction: column; gap: var(--ax-space-m); }
+.ax-acct-field { display: flex; flex-direction: column; gap: var(--ax-space-xxs); min-width: 0; }
+.ax-acct-label, .ax-acct-dialog .ax-field-label, .ax-acct-form .ax-field-label {
+  font-size: var(--ax-text-300); line-height: var(--ax-lh-300); font-weight: var(--ax-weight-regular); color: var(--ax-fg-1);
+}
+.ax-acct-input {
+  width: 100%; min-height: 32px; height: 32px; padding: 0 var(--ax-space-mnudge);
+  border: 1px solid var(--ax-stroke-1); border-bottom-color: var(--ax-stroke-accessible); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-1); color: var(--ax-fg-1); outline: none;
+}
+.ax-acct-input::placeholder { color: var(--ax-fg-4); }
+.ax-acct-input:hover { border-color: var(--ax-stroke-1-hover); border-bottom-color: var(--ax-fg-3); }
+.ax-app .ax-acct-input:focus, .ax-app .ax-acct-input:focus-visible {
+  border-bottom: 2px solid var(--ax-stroke-brand); padding-bottom: 0; outline: none; box-shadow: none;
+}
+.ax-acct-input:disabled { border-color: var(--ax-stroke-2); background: var(--ax-bg-3); color: var(--ax-fg-disabled); }
+.ax-acct-input.ax-invalid, .ax-acct-input.ax-invalid:hover { border-color: var(--ax-danger-fg); }
+.ax-acct-field-error { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-danger-fg); }
+.ax-acct-field-hint { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-acct-dialog .ax-select, .ax-acct-form .ax-select { width: 100%; }
+
+.ax-acct-server-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 116px; gap: var(--ax-space-s); align-items: start; }
+.ax-acct-port .ax-acct-input { text-align: left; }
+
+/* Advanced expander */
+.ax-acct-expander { display: flex; flex-direction: column; gap: var(--ax-space-s); }
+.ax-app .ax-acct-expander-head {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: var(--ax-space-xs);
+  height: 28px; padding: 0 var(--ax-space-s) 0 var(--ax-space-xs); margin-left: calc(-1 * var(--ax-space-xs));
+  border: none; border-radius: var(--ax-radius-m); background: transparent;
+  color: var(--ax-fg-1); font-weight: var(--ax-weight-semibold);
+}
+.ax-app .ax-acct-expander-head .ax-icon { width: 16px; height: 16px; color: var(--ax-fg-2); }
+.ax-app .ax-acct-expander-head:hover { background: var(--ax-bg-subtle-hover); }
+.ax-acct-expander-body { display: flex; flex-direction: column; gap: var(--ax-space-m); padding-left: var(--ax-space-xl); }
+
+/* ---------------------------------------------------------------- message bar (Fluent MessageBar, §8.5) */
+.ax-acct-bar {
+  display: flex; flex-direction: column; min-height: 36px; padding: 0 var(--ax-space-s) 0 var(--ax-space-m);
+  border: 1px solid var(--ax-stroke-1); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-3); color: var(--ax-fg-1); font-size: var(--ax-text-300); line-height: var(--ax-lh-300);
+}
+.ax-acct-bar-main { display: flex; align-items: center; gap: var(--ax-space-s); min-height: 34px; }
+.ax-acct-bar-icon { width: 16px; height: 16px; color: var(--ax-fg-3); }
+.ax-acct-bar-text { flex: 1 1 auto; min-width: 0; padding: var(--ax-space-snudge) 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--ax-space-s); }
+.ax-acct-bar-more { font-size: var(--ax-text-300); }
+.ax-acct-bar-actions { display: flex; align-items: center; gap: var(--ax-space-s); flex: none; }
+.ax-acct-bar-actions .ax-btn.ax-small { height: 24px; }
+.ax-acct-bar .ax-icon-btn.ax-small { flex: none; color: var(--ax-fg-2); }
+.ax-acct-bar-detail {
+  margin: 0 0 var(--ax-space-s); padding: var(--ax-space-s); border-radius: var(--ax-radius-m);
+  background: var(--ax-bg-1); color: var(--ax-fg-2); font-family: var(--ax-font-mono);
+  font-size: var(--ax-text-200); line-height: var(--ax-lh-200); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.ax-acct-bar-error { background: var(--ax-danger-bg); border-color: var(--ax-danger-border); }
+.ax-acct-bar-error .ax-acct-bar-icon { color: var(--ax-danger-fg); }
+.ax-acct-bar-warning { background: var(--ax-warning-bg); border-color: var(--ax-warning-border); }
+.ax-acct-bar-warning .ax-acct-bar-icon { color: var(--ax-warning-fg); }
+.ax-acct-bar-success { background: var(--ax-success-bg); border-color: color-mix(in srgb, var(--ax-success-fg) 35%, transparent); }
+.ax-acct-bar-success .ax-acct-bar-icon { color: var(--ax-success-fg); }
+
+/* Health bar above the message list (other areas embed AccountHealthBar). */
+.ax-acct-health { margin: var(--ax-space-xs) var(--ax-space-s); flex: none; }

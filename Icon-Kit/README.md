@@ -1,8 +1,8 @@
 # Axentra icon kit — Glass + Precision, v1.4
 
 This is the canonical, self-contained source kit for the Axentra app icons adopted on
-October 14, 2026, with subsequent additions. It includes all nine production icons:
-Command, Ghost, Vault, CrystalWire, Horizon, PDF, Spaces, Mail and Archive.
+October 14, 2026, with subsequent additions. It includes all ten production icons:
+Command, Ghost, Vault, CrystalWire, Horizon, PDF, Spaces, Mail, Archive and Outlook.
 Use this kit to reproduce the existing icons or
 give a new app the same glass tile, geometry, lighting and optical-size treatment.
 
@@ -43,7 +43,7 @@ Ready-to-use files are in [`assets/`](assets/):
   exports are resized from its native 256 px frame; see [provenance](ARCHIVE.md).
 - Windows ICOs: Horizon/CrystalWire have seven frames at 16, 24, 32, 48, 64, 128 and
   256 px; the other seven have eight at 16, 20, 24, 32, 40, 48, 64 and 256 px.
-- `preview.png`: all nine apps in catalog order, at 160 px and magnified 32/16 px.
+- `preview.png`: all ten apps in catalog order, at 160 px and magnified 32/16 px.
 
 **PDF documents keep the separate [glass PDF file icon](document-icons/README.md).**
 `assets/pdf.ico` identifies the application; it must not replace the document icon.
@@ -104,6 +104,7 @@ repository root is historical and does not describe the current production rende
 | `assets/` | Approved production PNG/ICO exports and contact sheet |
 | `motion/` | Orbital animation component, demo, portable-preview builder and browser checks |
 | `MAIL.md` | Mail symbol specification and build handoff |
+| `OUTLOOK.md` | Outlook symbol specification (calendar page and envelope) |
 | `manifest.json`, `build-info.json` | SHA-256 baseline and build provenance |
 | `document-icons/` | Preserved PDF document ICOs and their legacy SVG design sources |
 | `references/` | Original concept, current production preview, Vault reference, PDF installer preview |

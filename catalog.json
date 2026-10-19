@@ -176,6 +176,30 @@
       ]
     },
     {
+      "id": "outlook",
+      "name": "Axentra Outlook",
+      "tagline": "Mail, calendar, people and to-do in the Outlook layout",
+      "kind": "desktop",
+      "order": 75,
+      "accent": "#7C8CFF",
+      "icon": "%ProgramFiles%/Axentra/Outlook/icons/axentra-outlook.ico",
+      "install": {
+        "uninstall_key": "axentra-outlook",
+        "exe": "%ProgramFiles%/Axentra/Outlook/axentra-outlook.exe"
+      },
+      "launch": {
+        "exe": "%ProgramFiles%/Axentra/Outlook/axentra-outlook.exe"
+      },
+      "process": [
+        "axentra-outlook.exe"
+      ],
+      "release": {
+        "repo": "MECMwithShawn/Axentra-Software",
+        "tag_prefix": "outlook-v",
+        "asset_suffix": "-Setup.exe"
+      }
+    },
+    {
       "id": "pdf",
       "name": "AxentraPDF",
       "tagline": "Edit, sign, convert and compress PDFs",

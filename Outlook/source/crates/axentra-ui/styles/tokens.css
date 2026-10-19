@@ -1,0 +1,306 @@
+/* Design tokens (Fluent 2 values, docs/spec/shell.md §1). Variable NAMES are a
+   frozen contract used by every module stylesheet; values may be tuned.
+
+   Three layers:
+   1. Palette: --ax-brand-10..160 (Fluent brandWeb, swapped by colour themes)
+      and --ax-grey-2..99.
+   2. Fluent alias tokens (--colorNeutralForeground1 ...). Their light, dark and
+      high-contrast values are generated from one table in src/shell/theme.rs
+      and injected by the shell, keyed on .ax-theme-{light|dark|system},
+      data-color-theme and data-contrast on .ax-app.
+   3. The --ax-* names below, which modules use. They only reference layer 2,
+      so they follow the mode automatically. */
+
+.ax-app {
+  /* brand ramp (Fluent web "Outlook blue"); colour themes override it */
+  --ax-brand-10: #061724;
+  --ax-brand-20: #082338;
+  --ax-brand-30: #0a2e4a;
+  --ax-brand-40: #0c3b5e;
+  --ax-brand-50: #0e4775;
+  --ax-brand-60: #0f548c;
+  --ax-brand-70: #115ea3;
+  --ax-brand-80: #0f6cbd;
+  --ax-brand-90: #2886de;
+  --ax-brand-100: #479ef5;
+  --ax-brand-110: #62abf5;
+  --ax-brand-120: #77b7f7;
+  --ax-brand-130: #96c6fa;
+  --ax-brand-140: #b4d6fa;
+  --ax-brand-150: #cfe4fa;
+  --ax-brand-160: #ebf3fc;
+
+  /* neutral ramp */
+  --ax-grey-2: #050505;  --ax-grey-4: #0a0a0a;  --ax-grey-6: #0f0f0f;  --ax-grey-8: #141414;
+  --ax-grey-10: #1a1a1a; --ax-grey-12: #1f1f1f; --ax-grey-14: #242424; --ax-grey-16: #292929;
+  --ax-grey-18: #2e2e2e; --ax-grey-20: #333333; --ax-grey-22: #383838; --ax-grey-24: #3d3d3d;
+  --ax-grey-26: #424242; --ax-grey-28: #474747; --ax-grey-30: #4d4d4d; --ax-grey-32: #525252;
+  --ax-grey-34: #575757; --ax-grey-36: #5c5c5c; --ax-grey-38: #616161; --ax-grey-40: #666666;
+  --ax-grey-42: #6b6b6b; --ax-grey-44: #707070; --ax-grey-46: #757575; --ax-grey-48: #7a7a7a;
+  --ax-grey-50: #808080; --ax-grey-52: #858585; --ax-grey-54: #8a8a8a; --ax-grey-56: #8f8f8f;
+  --ax-grey-58: #949494; --ax-grey-60: #999999; --ax-grey-62: #9e9e9e; --ax-grey-64: #a3a3a3;
+  --ax-grey-66: #a8a8a8; --ax-grey-68: #adadad; --ax-grey-70: #b3b3b3; --ax-grey-72: #b8b8b8;
+  --ax-grey-74: #bdbdbd; --ax-grey-76: #c2c2c2; --ax-grey-78: #c7c7c7; --ax-grey-80: #cccccc;
+  --ax-grey-82: #d1d1d1; --ax-grey-84: #d6d6d6; --ax-grey-86: #dbdbdb; --ax-grey-88: #e0e0e0;
+  --ax-grey-90: #e6e6e6; --ax-grey-92: #ebebeb; --ax-grey-94: #f0f0f0; --ax-grey-96: #f5f5f5;
+  --ax-grey-98: #fafafa; --ax-grey-99: #fcfcfc;
+
+  /* typography (§1.7; Selawik is metric-compatible with Segoe UI) */
+  --ax-font: "Segoe UI Variable Text", "Segoe UI", Selawik, "Noto Sans", Cantarell, Ubuntu, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ax-font-display: "Segoe UI Variable Display", "Segoe UI", Selawik, "Noto Sans", Cantarell, Ubuntu, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ax-font-mono: Consolas, "Cascadia Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Courier New", monospace;
+  --ax-font-numeric: Bahnschrift, var(--ax-font);
+  --ax-text-100: 10px;   --ax-lh-100: 14px;   /* caption 2 */
+  --ax-text-200: 12px;   --ax-lh-200: 16px;   /* caption 1 */
+  --ax-text-300: 14px;   --ax-lh-300: 20px;   /* body 1 */
+  --ax-text-400: 16px;   --ax-lh-400: 22px;   /* subtitle 2, body 2 */
+  --ax-text-500: 20px;   --ax-lh-500: 28px;   /* subtitle 1 */
+  --ax-text-600: 24px;   --ax-lh-600: 32px;   /* title 3 */
+  --ax-text-700: 28px;   --ax-lh-700: 36px;   /* title 2 */
+  --ax-text-800: 32px;   --ax-lh-800: 40px;   /* title 1 */
+  --ax-text-900: 40px;   --ax-lh-900: 52px;   /* large title */
+  --ax-text-1000: 68px;  --ax-lh-1000: 92px;  /* display */
+  --ax-weight-regular: 400;
+  --ax-weight-medium: 500;
+  --ax-weight-semibold: 600;
+  --ax-weight-bold: 700;
+
+  /* shape (§1.8) */
+  --ax-radius-none: 0;
+  --ax-radius-s: 2px;
+  --ax-radius-m: 4px;
+  --ax-radius-l: 6px;
+  --ax-radius-xl: 8px;
+  --ax-radius-2xl: 12px;
+  --ax-radius-circle: 10000px;
+  --ax-stroke-thin: 1px;
+  --ax-stroke-thick: 2px;
+  --ax-stroke-thicker: 3px;
+  --ax-stroke-thickest: 4px;
+
+  /* spacing (§1.10) */
+  --ax-space-xxs: 2px;
+  --ax-space-xs: 4px;
+  --ax-space-snudge: 6px;
+  --ax-space-s: 8px;
+  --ax-space-mnudge: 10px;
+  --ax-space-m: 12px;
+  --ax-space-l: 16px;
+  --ax-space-xl: 20px;
+  --ax-space-xxl: 24px;
+  --ax-space-xxxl: 32px;
+
+  /* motion (§1.13) */
+  --ax-duration-ultra-fast: 50ms;
+  --ax-duration-faster: 100ms;
+  --ax-duration-fast: 150ms;
+  --ax-duration-normal: 200ms;
+  --ax-duration-gentle: 250ms;
+  --ax-duration-slow: 300ms;
+  --ax-duration-slower: 400ms;
+  --ax-duration-ultra-slow: 500ms;
+  --ax-ease: cubic-bezier(0.33, 0, 0.67, 1);                 /* curveEasyEase */
+  --ax-ease-max: cubic-bezier(0.8, 0, 0.2, 1);               /* curveEasyEaseMax */
+  --ax-ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);      /* curveDecelerateMax */
+  --ax-ease-decelerate-mid: cubic-bezier(0, 0, 0, 1);
+  --ax-ease-decelerate-min: cubic-bezier(0.33, 0, 0.1, 1);
+  --ax-ease-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);      /* curveAccelerateMax */
+  --ax-ease-accelerate-mid: cubic-bezier(1, 0, 1, 1);
+  --ax-ease-accelerate-min: cubic-bezier(0.8, 0, 0.78, 1);
+  --ax-ease-linear: cubic-bezier(0, 0, 1, 1);
+
+  /* layering (§1.9) */
+  --ax-z-sidepane: 800;
+  --ax-z-menu: 900;
+  --ax-z-tooltip: 1000;
+  --ax-z-toast: 1100;
+  --ax-z-dialog: 1200;
+
+  /* layout (docs/spec/reference-measurements.md wins for geometry) */
+  --ax-header-h: 48px;
+  --ax-rail-w: 48px;
+  --ax-rail-item-w: 40px;
+  --ax-rail-item-h: 36px;
+  --ax-ribbon-tabs-h: 31px;
+  --ax-ribbon-commands-h: 40px;
+  --ax-ribbon-classic-h: 92px;
+  --ax-command-h: 32px;
+  --ax-folder-row-h: 32px;
+  --ax-settings-row-h: 40px;
+  --ax-list-row-h: 72px;            /* two/three-line message item (reading pane on) */
+  --ax-list-row-single-h: 37px;     /* single-line columns layout */
+  --ax-pane-gap: 4px;
+  --ax-pane-radius: var(--ax-radius-xl);
+  --ax-pane-shadow: var(--ax-shadow-2);
+  --ax-pane-border: 1px solid transparent;
+  --ax-content-gutter: 21px;        /* right edge of the content area */
+  --ax-search-left: 266px;          /* lines up with the message list */
+  --ax-search-w: 356px;
+  --ax-side-pane-w: 320px;
+
+  /* density adjustments (overridden below) */
+  --ax-density-pad-y: 10px;
+}
+
+/* Density (§1.14): mainly the mail list; folder and settings rows follow. */
+.ax-app.ax-density-roomy { --ax-folder-row-h: 36px; --ax-settings-row-h: 44px; --ax-list-row-h: 84px; --ax-list-row-single-h: 41px; --ax-density-pad-y: 14px; }
+.ax-app.ax-density-cozy { --ax-folder-row-h: 32px; --ax-settings-row-h: 40px; --ax-list-row-h: 72px; --ax-list-row-single-h: 37px; --ax-density-pad-y: 10px; }
+.ax-app.ax-density-compact { --ax-folder-row-h: 28px; --ax-settings-row-h: 36px; --ax-list-row-h: 56px; --ax-list-row-single-h: 32px; --ax-density-pad-y: 6px; }
+
+/* ---------------------------------------------------------------- colour names
+   Mapped onto the Fluent alias layer. Re-declared on .ax-surface-light so an
+   element can stay light inside dark mode (e.g. message bodies). */
+.ax-app, .ax-surface-light {
+  /* surfaces */
+  --ax-bg-canvas: var(--colorNeutralBackground3);    /* behind the floating panes */
+  --ax-canvas: var(--colorNeutralBackground3);
+  --ax-pane-bg: var(--colorNeutralBackground1);
+  --ax-bg-1: var(--colorNeutralBackground1);         /* panes, cards, menus, dialogs */
+  --ax-bg-1-hover: var(--colorNeutralBackground1Hover);
+  --ax-bg-1-pressed: var(--colorNeutralBackground1Pressed);
+  --ax-bg-1-selected: var(--colorNeutralBackground1Selected);
+  --ax-bg-2: var(--colorNeutralBackground2);
+  --ax-bg-2-hover: var(--colorNeutralBackground2Hover);
+  --ax-bg-2-pressed: var(--colorNeutralBackground2Pressed);
+  --ax-bg-2-selected: var(--colorNeutralBackground2Selected);
+  --ax-bg-3: var(--colorNeutralBackground3);
+  --ax-bg-3-hover: var(--colorNeutralBackground3Hover);
+  --ax-bg-3-pressed: var(--colorNeutralBackground3Pressed);
+  --ax-bg-3-selected: var(--colorNeutralBackground3Selected);
+  --ax-bg-4: var(--colorNeutralBackground4);
+  --ax-bg-5: var(--colorNeutralBackground5);
+  --ax-bg-6: var(--colorNeutralBackground6);
+  --ax-bg-disabled: var(--colorNeutralBackgroundDisabled);
+  --ax-bg-subtle: var(--colorSubtleBackground);
+  --ax-bg-subtle-hover: var(--colorSubtleBackgroundHover);
+  --ax-bg-subtle-pressed: var(--colorSubtleBackgroundPressed);
+  --ax-bg-subtle-selected: var(--colorSubtleBackgroundSelected);
+  --ax-bg-selected: var(--colorBrandBackground2);          /* selected list row / folder */
+  --ax-bg-selected-hover: var(--colorBrandBackground2Hover);
+  --ax-bg-selected-pressed: var(--colorBrandBackground2Pressed);
+  --ax-row-selected: var(--colorBrandBackground2);
+  --ax-bg-brand: var(--colorBrandBackground);
+  --ax-bg-brand-hover: var(--colorBrandBackgroundHover);
+  --ax-bg-brand-pressed: var(--colorBrandBackgroundPressed);
+  --ax-bg-brand-selected: var(--colorBrandBackgroundSelected);
+  --ax-bg-compound-brand: var(--colorCompoundBrandBackground);   /* checked switch / checkbox */
+  --ax-bg-compound-brand-hover: var(--colorCompoundBrandBackgroundHover);
+  --ax-bg-compound-brand-pressed: var(--colorCompoundBrandBackgroundPressed);
+  --ax-bg-inverted: var(--colorNeutralBackgroundInverted);
+  --ax-bg-overlay: var(--colorBackgroundOverlay);
+  --ax-stencil-1: var(--colorNeutralStencil1);
+  --ax-stencil-2: var(--colorNeutralStencil2);
+
+  /* foreground */
+  --ax-fg-1: var(--colorNeutralForeground1);
+  --ax-fg-2: var(--colorNeutralForeground2);
+  --ax-fg-2-hover: var(--colorNeutralForeground2Hover);
+  --ax-fg-2-brand-hover: var(--colorNeutralForeground2BrandHover);
+  --ax-fg-2-brand-pressed: var(--colorNeutralForeground2BrandPressed);
+  --ax-fg-2-brand-selected: var(--colorNeutralForeground2BrandSelected);
+  --ax-fg-3: var(--colorNeutralForeground3);
+  --ax-fg-3-hover: var(--colorNeutralForeground3Hover);
+  --ax-fg-4: var(--colorNeutralForeground4);
+  --ax-fg-disabled: var(--colorNeutralForegroundDisabled);
+  --ax-fg-brand: var(--colorBrandForeground1);
+  --ax-fg-brand-2: var(--colorBrandForeground2);
+  --ax-fg-brand-hover: var(--colorCompoundBrandForeground1Hover);
+  --ax-fg-brand-pressed: var(--colorCompoundBrandForeground1Pressed);
+  --ax-fg-compound-brand: var(--colorCompoundBrandForeground1);
+  --ax-fg-on-brand: var(--colorNeutralForegroundOnBrand);
+  --ax-fg-link: var(--colorBrandForegroundLink);
+  --ax-fg-link-hover: var(--colorBrandForegroundLinkHover);
+  --ax-fg-link-pressed: var(--colorBrandForegroundLinkPressed);
+  --ax-fg-inverted: var(--colorNeutralForegroundInverted);
+
+  /* strokes */
+  --ax-stroke-1: var(--colorNeutralStroke1);
+  --ax-stroke-1-hover: var(--colorNeutralStroke1Hover);
+  --ax-stroke-1-pressed: var(--colorNeutralStroke1Pressed);
+  --ax-stroke-1-selected: var(--colorNeutralStroke1Selected);
+  --ax-stroke-2: var(--colorNeutralStroke2);
+  --ax-stroke-3: var(--colorNeutralStroke3);
+  --ax-stroke-accessible: var(--colorNeutralStrokeAccessible);
+  --ax-stroke-accessible-hover: var(--colorNeutralStrokeAccessibleHover);
+  --ax-stroke-accessible-selected: var(--colorNeutralStrokeAccessibleSelected);
+  --ax-stroke-disabled: var(--colorNeutralStrokeDisabled);
+  --ax-stroke-brand: var(--colorCompoundBrandStroke);
+  --ax-stroke-brand-hover: var(--colorCompoundBrandStrokeHover);
+  --ax-stroke-brand-pressed: var(--colorCompoundBrandStrokePressed);
+  --ax-stroke-brand-soft: var(--colorBrandStroke2);
+  --ax-stroke-focus-outer: var(--colorStrokeFocus2);
+  --ax-stroke-focus-inner: var(--colorStrokeFocus1);
+
+  /* status (§1.5) */
+  --ax-danger-fg: var(--colorStatusDangerForeground1);
+  --ax-danger-fg-3: var(--colorStatusDangerForeground3);
+  --ax-danger-bg: var(--colorStatusDangerBackground1);
+  --ax-danger-border: var(--colorStatusDangerBorder1);
+  --ax-danger-solid: var(--colorStatusDangerBackground3);
+  --ax-danger-solid-hover: var(--colorStatusDangerBackground3Hover);
+  --ax-danger-solid-pressed: var(--colorStatusDangerBackground3Pressed);
+  --ax-success-fg: var(--colorStatusSuccessForeground1);
+  --ax-success-bg: var(--colorStatusSuccessBackground1);
+  --ax-success-border: var(--colorStatusSuccessBorder1);
+  --ax-success-solid: var(--colorStatusSuccessBackground3);
+  --ax-warning-fg: var(--colorStatusWarningForeground1);
+  --ax-warning-fg-3: var(--colorStatusWarningForeground3);
+  --ax-warning-bg: var(--colorStatusWarningBackground1);
+  --ax-warning-border: var(--colorStatusWarningBorder1);
+  --ax-warning-solid: var(--colorStatusWarningBackground3);
+  --ax-info-bg: var(--colorBrandBackground2);          /* brand-tinted info chips */
+  --ax-info-fg: var(--colorNeutralForeground3);
+
+  /* Axentra app colours (§1.6) */
+  --ax-unread-accent: var(--colorCompoundBrandForeground1);
+  --ax-unread-bar: var(--colorCompoundBrandForeground1);
+  --ax-badge-bg: var(--colorStatusDangerBackground3);
+  --ax-pin: var(--colorBrandForeground1);
+  --ax-important: var(--colorStatusDangerForeground3);
+  --ax-now-line: var(--colorStatusDangerBackground3);   /* calendar current-time line */
+  --ax-cal-oof: #8764b8;                                /* calendar "out of office" (data colour) */
+
+  /* elevation (§1.9): geometry fixed, colours follow the mode */
+  --ax-shadow-2: 0 0 2px var(--colorNeutralShadowAmbient), 0 1px 2px var(--colorNeutralShadowKey);
+  --ax-shadow-4: 0 0 2px var(--colorNeutralShadowAmbient), 0 2px 4px var(--colorNeutralShadowKey);
+  --ax-shadow-8: 0 0 2px var(--colorNeutralShadowAmbient), 0 4px 8px var(--colorNeutralShadowKey);
+  --ax-shadow-16: 0 0 2px var(--colorNeutralShadowAmbient), 0 8px 16px var(--colorNeutralShadowKey);
+  --ax-shadow-28: 0 0 8px var(--colorNeutralShadowAmbient), 0 14px 28px var(--colorNeutralShadowKey);
+  --ax-shadow-64: 0 0 8px var(--colorNeutralShadowAmbient), 0 32px 64px var(--colorNeutralShadowKey);
+  --ax-shadow-64-darker: 0 0 8px var(--colorNeutralShadowAmbientDarker), 0 32px 64px var(--colorNeutralShadowKeyDarker);
+}
+
+/* Dark mode: floating panes drop the shadow for a hairline border (§1.9). */
+.ax-app.ax-theme-dark { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  .ax-app.ax-theme-system { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; }
+}
+.ax-app.ax-theme-light, .ax-surface-light { color-scheme: light; }
+
+/* Classic look (§1.15): flat chrome, panes separated by hairlines. */
+.ax-app[data-chrome="flat"] {
+  --ax-pane-gap: 0px;
+  --ax-pane-radius: 0;
+  --ax-pane-shadow: none;
+  --ax-pane-border: 1px solid var(--colorNeutralStroke2);
+  --ax-content-gutter: 0px;
+}
+
+/* High contrast (§1.15, keyboard spec §20): no shadows, 2px strokes. */
+.ax-app[data-contrast="high"] { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke1); --ax-stroke-thin: 2px; }
+@media (prefers-contrast: more) {
+  .ax-app[data-contrast="system"] { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke1); }
+}
+
+/* Reduced motion (§1.13): slides and scales become (near) instant. */
+.ax-app[data-motion="reduce"] {
+  --ax-duration-fast: 1ms; --ax-duration-normal: 1ms; --ax-duration-gentle: 1ms; --ax-duration-slow: 1ms;
+}
+.ax-app[data-motion="reduce"] *, .ax-app[data-motion="reduce"] *::before, .ax-app[data-motion="reduce"] *::after {
+  animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ax-app[data-motion="system"] *, .ax-app[data-motion="system"] *::before, .ax-app[data-motion="system"] *::after {
+    animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important;
+  }
+}

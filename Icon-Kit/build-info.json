@@ -1,10 +1,10 @@
 {
-  "kit_revision": "glass-precision-1.4",
+  "kit_revision": "glass-precision-1.5",
   "adopted_date": "2026-10-14",
   "renderer": "Complete export: Rust procedural baseline, Sharp SVG overrides, then preserved Archive ICO extraction",
   "source_origin": "axentra-command/tools/suite-icons",
   "authoritative_source": {
-    "procedural": "renderer/src/suite.rs (Command, Ghost, Vault, PDF, Spaces, Mail)",
+    "procedural": "renderer/src/suite.rs (Command, Ghost, Vault, PDF, Spaces, Mail, Outlook)",
     "outline": "svg/horizon.svg, svg/crystalwire.svg; optical sizing and export in svg/render.cjs",
     "archive": "raster/archive.ico; native frame extraction and derived PNGs in raster/render.cjs"
   },
@@ -47,7 +47,8 @@
     "pdf",
     "spaces",
     "mail",
-    "archive"
+    "archive",
+    "outlook"
   ],
   "canonical_assets": "assets/; SHA-256 values in manifest.json",
   "text_files": "UTF-8 with LF line endings",
@@ -61,7 +62,7 @@
   "vault_reference": "references/vault-circuit-reference.png; used for visual direction only, not embedded by the renderer",
   "mail_revision": "Rose-pink envelope, shared glass tile and finish, simplified micro glyph; exact geometry and build handoff in MAIL.md",
   "motion_revision": "orbital-2: all nine apps, dynamic orbit spacing and centered final mobile tile",
-  "updated_date": "2026-10-18",
+  "updated_date": "2026-10-19",
   "svg_renderer": {
     "node": "v24.19.0",
     "platform": "win32",
@@ -125,5 +126,6 @@
       "512": "256 px native ICO frame, Lanczos3 upscale"
     },
     "motion_accent": "#B6DE76"
-  }
+  },
+  "outlook_revision": "Periwinkle calendar page behind an envelope, shared glass tile and finish; micro tier drops the date grid; rendered on Linux with rustc 1.99.1 (the six existing procedural icons reproduce byte for byte)"
 }
