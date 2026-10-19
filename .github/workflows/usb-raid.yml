@@ -19,7 +19,7 @@ jobs:
           bash -n USB/source/raid/build-iso.sh
           sh -n USB/source/raid/zz-axentra-imsm
           sh -n USB/source/raid/axentra-imsm
-          shellcheck -S error USB/source/raid/build-iso.sh USB/source/raid/zz-axentra-imsm USB/source/raid/axentra-imsm
+          shellcheck USB/source/raid/build-iso.sh USB/source/raid/zz-axentra-imsm USB/source/raid/axentra-imsm
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
       - name: USB Rust tests

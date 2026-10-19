@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 case "${1:-}" in prereqs) echo mdadm; exit 0;; esac
+# Supplied by initramfs-tools inside the image/installed target.
+# shellcheck source=/dev/null
 . /usr/share/initramfs-tools/hook-functions
 copy_exec /usr/sbin/mdadm /sbin/mdadm
 copy_exec /usr/sbin/mdmon /sbin/mdmon

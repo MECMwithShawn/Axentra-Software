@@ -93,6 +93,8 @@ cp "$root/tmp/axentra-live-initrd" "$iso/casper/initrd.zstd"
 rm "$root/tmp/axentra-live-initrd" "$root/etc/axentra-live-uuid" "$root/etc/initramfs-tools/hooks/zzz-axentra-live" "$root/usr/sbin/policy-rc.d"
 rm "$root/etc/resolv.conf"
 cp -a "$work/resolv.conf.original" "$root/etc/resolv.conf"
+# dpkg-query expands these placeholders, not the build shell.
+# shellcheck disable=SC2016
 chroot "$root" dpkg-query -W '-f=${Package} ${Version}\n' > "$iso/casper/filesystem.manifest"
 # Ubiquity must retain mdadm in the installed target.
 for manifest in "$iso/casper/filesystem.manifest-remove" "$iso/casper/filesystem.manifest-desktop"; do
@@ -109,7 +111,8 @@ mksquashfs "$root" "$work/filesystem.squashfs" -noappend -comp xz
 mv "$work/filesystem.squashfs" "$iso/casper/filesystem.squashfs"
 du -sx --block-size=1 "$root" | cut -f1 > "$iso/casper/filesystem.size"
 # Recompute media checksums; preserve original EFI executables and boot catalog.
-(cd "$iso" && find . -type f ! -name md5sum.txt ! -path './boot.catalog' -print0 | sort -z | xargs -0 md5sum > md5sum.txt)
+(cd "$iso" && find . -type f ! -name md5sum.txt ! -path './boot.catalog' -print0 | sort -z | xargs -0 md5sum > "$work/md5sum.txt")
+mv "$work/md5sum.txt" "$iso/md5sum.txt"
 xorriso -indev "$source_iso" -outdev "$output" -boot_image any replay \
     -map "$iso/casper" /casper -map "$iso/md5sum.txt" /md5sum.txt -commit
 sha256sum "$source_iso" "$output" | tee "$work/image-sha256.txt"
