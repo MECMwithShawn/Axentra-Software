@@ -55,8 +55,9 @@ impl ksni::Tray for AxentraOneDriveTray {
         }
     }
 
-    fn activate(&mut self, _x: i32, _y: i32) {
-        self.send(Cmd::ToggleFlyout);
+    fn activate(&mut self, x: i32, y: i32) {
+        // The tray host passes where it was clicked; (0, 0) means it didn't say.
+        self.send(Cmd::ToggleFlyout((x != 0 || y != 0).then_some((x, y))));
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
@@ -83,7 +84,7 @@ impl ksni::Tray for AxentraOneDriveTray {
             .into()
         };
         vec![
-            item("Open Axentra OneDrive", || Cmd::ShowFlyout),
+            item("Open Axentra OneDrive", || Cmd::ShowFlyout(None)),
             item("Open your OneDrive folder", || Cmd::OpenFolder),
             item("View online", || Cmd::ViewOnline),
             MenuItem::Separator,

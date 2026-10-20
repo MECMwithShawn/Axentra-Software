@@ -19,10 +19,11 @@ chrono.workspace = true
 zbus.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "renderer-software", "software-renderer-systemfonts", "software-renderer-path", "image-default-formats", "accessibility"] }
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-femtovg", "renderer-software", "software-renderer-systemfonts", "software-renderer-path", "image-default-formats", "accessibility", "unstable-winit-030"] }
 ksni = { version = "0.3", features = ["tokio"], default-features = false }
 png = "0.17"
 arboard = { version = "3", default-features = false }
+x11rb = { version = "0.13", default-features = false, features = ["randr"] }
 futures-util.workspace = true
 url.workspace = true
 

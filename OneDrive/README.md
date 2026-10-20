@@ -6,7 +6,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 
 **0.1.0 is a development preview for Linux.** It is installed and syncing a real personal OneDrive on Zorin OS 18.1, but no binary release is published and there is no Windows build (Windows has OneDrive built in). Sign-in uses your own free Microsoft Entra app registration; see [Setting it up](#setting-it-up).
 
-![Axentra OneDrive activity panel on Linux (demo data)](screenshots/linux-2026-10-19.png)
+![Axentra OneDrive activity panel on Linux (demo data)](screenshots/linux-2026-10-20.png)
 
 ## What matches the Windows client
 
@@ -18,7 +18,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `free`, or an extended attribute |
 | Share, View online, Version history with Restore | Right-click OneDrive submenu; history opens its own window |
 | Tray icon: synced, syncing, paused, problem | The same states, drawn for any panel |
-| Activity panel: status, recent files, storage, Recycle bin | Same layout in Fluent light and dark |
+| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. On X11 it opens just above the tray icon, stays out of the taskbar and closes when you click elsewhere |
 | Pause syncing for 2, 8 or 24 hours | Panel, tray menu, Settings or `axentra-onedrive pause` |
 | Conflicts keep both copies as `File-PCNAME.ext` | Same naming, with a notification |
 | Edited here but deleted online: your copy is kept | Same |
@@ -62,7 +62,7 @@ Axentra Command does not list Axentra OneDrive yet. Command's catalog describes 
 
 ## Validation
 
-- 31 Rust tests passed, including 18 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- 37 Rust tests passed, including 18 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
 - Signed in to a real personal OneDrive account, listed its files through the mount and downloaded files on demand with QuickXorHash verification.
 - Tray, panel, D-Bus control and the systemd service were exercised on a live Zorin OS GNOME desktop. The file-manager extension was tested against a live mount in a test harness.
 - The app is unsigned and has no binary release, so there is no antivirus scan. See [security status](security/README.md).

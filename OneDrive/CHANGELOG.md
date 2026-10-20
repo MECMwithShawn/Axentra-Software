@@ -9,6 +9,8 @@
 - The first scan shows how many items it has listed and resumes after a restart instead of starting over.
 - Ice glass app icon from the Axentra Icon Kit, with periwinkle and azure in Settings > Appearance.
 - Starting before the network is up shows "You're offline" instead of a sync error.
+- The tray panel follows the Windows 11 activity center: "OneDrive - Personal" with Help & Settings, a one-line status, recent files with file-type icons and their folder as a link, and Open folder / View online / Recycle bin along the bottom; storage moved into the Help & Settings menu. On X11 it opens above the tray icon, stays out of the taskbar and closes when you click elsewhere.
+- Windows now match `axentra-onedrive.desktop`, so the taskbar shows the app icon instead of a generic one.
 - Stopping no longer waits for programs that still have a folder in OneDrive open; it closes the folder after 5 seconds and logs which programs had it open.
 
 No binary release, installer or checksums are published for this version.

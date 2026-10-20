@@ -6,7 +6,7 @@ use std::path::Path;
 use axentra_onedrive_core::config::Config;
 use axentra_onedrive_core::db::Activity;
 use axentra_onedrive_core::status::{human_size, Account, Issue, Status};
-use slint::{Color, ModelRc, SharedString, VecModel};
+use slint::{ModelRc, SharedString, VecModel};
 
 use crate::{ActivityRow, Flyout, SettingsWindow};
 
@@ -25,49 +25,52 @@ pub fn relative_time(ts: i64, now: i64) -> String {
     }
 }
 
-/// File-type label and colour for the activity tile.
-pub fn tile(name: &str) -> (String, Color) {
+/// Which file-type icon a name gets in the activity list.
+pub fn file_kind(name: &str) -> &'static str {
     let ext = name
         .rsplit_once('.')
         .map(|(_, e)| e.to_ascii_lowercase())
         .unwrap_or_default();
-    let rgb = |r, g, b| Color::from_rgb_u8(r, g, b);
-    let color = match ext.as_str() {
-        "doc" | "docx" | "odt" | "rtf" => rgb(0x18, 0x5a, 0xbd),
-        "xls" | "xlsx" | "ods" | "csv" => rgb(0x10, 0x7c, 0x41),
-        "ppt" | "pptx" | "odp" | "key" => rgb(0xc4, 0x3e, 0x1c),
-        "pdf" => rgb(0xd1, 0x34, 0x38),
+    match ext.as_str() {
         "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "bmp" | "svg" | "tif" | "tiff"
-        | "raw" => rgb(0x87, 0x64, 0xb8),
-        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" => rgb(0xc2, 0x39, 0xb3),
-        "mp3" | "flac" | "wav" | "m4a" | "ogg" | "opus" => rgb(0xe3, 0x00, 0x8c),
-        "zip" | "7z" | "tar" | "gz" | "xz" | "rar" | "bz2" | "zst" => rgb(0x8e, 0x56, 0x2e),
+        | "raw" | "avif" | "ico" => "image",
+        "doc" | "docx" | "odt" | "rtf" => "doc",
+        "xls" | "xlsx" | "ods" | "csv" => "sheet",
+        "ppt" | "pptx" | "odp" | "key" => "slides",
+        "pdf" => "pdf",
+        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" => "video",
+        "mp3" | "flac" | "wav" | "m4a" | "ogg" | "opus" => "audio",
+        "zip" | "7z" | "tar" | "gz" | "xz" | "rar" | "bz2" | "zst" => "archive",
         "rs" | "py" | "js" | "ts" | "c" | "h" | "cpp" | "go" | "java" | "sh" | "json" | "toml"
-        | "yaml" | "yml" | "html" | "css" => rgb(0x03, 0x83, 0x87),
-        _ => rgb(0x61, 0x61, 0x61),
-    };
-    let mut label = if ext.is_empty() {
-        "FILE".to_string()
-    } else {
-        ext.to_ascii_uppercase()
-    };
-    label.truncate(4);
-    (label, color)
+        | "yaml" | "yml" | "html" | "css" | "xml" => "code",
+        "txt" | "md" | "log" => "text",
+        _ => "generic",
+    }
 }
 
-fn subtitle(a: &Activity) -> String {
-    match a.kind.as_str() {
-        "uploaded" => format!("Uploaded to {}", a.folder),
-        "downloaded" => "Downloaded to this device".into(),
-        "deleted" => format!("Deleted from {}", a.folder),
-        "deleted_online" => format!("Removed from {} online", a.folder),
-        "added_online" => format!("Added to {}", a.folder),
-        "updated_online" => format!("Updated in {}", a.folder),
-        "renamed" => format!("Renamed in {}", a.folder),
-        "moved" => format!("Moved to {}", a.folder),
-        "conflict" => a.detail.clone(),
-        "error" => format!("Couldn't sync: {}", a.detail),
-        other => other.to_string(),
+/// What happened, and the folder it's linked to ("Uploaded to", "Documents").
+fn action(a: &Activity) -> (String, String) {
+    let verb = match a.kind.as_str() {
+        "uploaded" => "Uploaded to",
+        "downloaded" => "Downloaded to",
+        "deleted" => "Deleted from",
+        "deleted_online" => "Deleted online from",
+        "added_online" => "Added to",
+        "updated_online" => "Updated in",
+        "renamed" => "Renamed in",
+        "moved" => "Moved to",
+        "conflict" => return (a.detail.clone(), String::new()),
+        other => return (other.to_string(), String::new()),
+    };
+    (verb.into(), a.folder.clone())
+}
+
+/// The folder holding `rel` (a path inside OneDrive), on this device.
+fn parent_dir(mount: &Path, rel: &str) -> String {
+    let rel = rel.trim_start_matches('/');
+    match rel.rsplit_once('/') {
+        Some((dir, _)) => mount.join(dir).display().to_string(),
+        None => mount.display().to_string(),
     }
 }
 
@@ -76,11 +79,13 @@ pub fn rows(activity: &[Activity], issues: &[Issue], mount: &Path, now: i64) -> 
     for i in issues {
         let name = i.path.rsplit('/').next().unwrap_or(&i.path).to_string();
         out.push(ActivityRow {
+            kind: file_kind(&name).into(),
             name: name.into(),
-            subtitle: i.message.clone().into(),
-            tile: SharedString::default(),
-            tile_color: Color::default(),
-            folder: false,
+            action: i.message.clone().into(),
+            folder: SharedString::default(),
+            folder_path: parent_dir(mount, &i.path).into(),
+            time: SharedString::default(),
+            is_folder: false,
             path: mount
                 .join(i.path.trim_start_matches('/'))
                 .display()
@@ -96,20 +101,21 @@ pub fn rows(activity: &[Activity], issues: &[Issue], mount: &Path, now: i64) -> 
         if a.kind == "error" || !seen.insert(a.path.clone()) {
             continue;
         }
-        let (label, color) = tile(&a.name);
-        let gone = matches!(a.kind.as_str(), "deleted" | "deleted_online");
+        let (verb, folder) = action(a);
         out.push(ActivityRow {
             name: a.name.clone().into(),
-            subtitle: format!("{} · {}", subtitle(a), relative_time(a.ts, now)).into(),
-            tile: label.into(),
-            tile_color: color,
-            folder: a.is_dir,
+            action: verb.into(),
+            folder: folder.into(),
+            folder_path: parent_dir(mount, &a.path).into(),
+            time: relative_time(a.ts, now).into(),
+            kind: file_kind(&a.name).into(),
+            is_folder: a.is_dir,
             path: mount
                 .join(a.path.trim_start_matches('/'))
                 .display()
                 .to_string()
                 .into(),
-            gone,
+            gone: matches!(a.kind.as_str(), "deleted" | "deleted_online"),
             problem: false,
         });
         if out.len() >= 40 {
@@ -125,7 +131,7 @@ pub fn storage_text(a: &Account) -> String {
     }
     let pct = (a.used as f64 / a.total as f64 * 100.0).round();
     format!(
-        "{} used of {} ({}%)",
+        "{} of {} used ({}%)",
         human_size(a.used),
         human_size(a.total),
         pct
@@ -137,22 +143,6 @@ pub fn storage_fraction(a: &Account) -> f32 {
         0.0
     } else {
         (a.used as f64 / a.total as f64) as f32
-    }
-}
-
-pub fn account_label(a: &Account) -> String {
-    if !a.signed_in {
-        return "Not signed in".into();
-    }
-    let kind = if a.drive_type == "business" {
-        "Work or school"
-    } else {
-        "Personal"
-    };
-    if a.name.is_empty() {
-        kind.into()
-    } else {
-        format!("{kind} · {}", a.name)
     }
 }
 
@@ -174,7 +164,11 @@ pub fn apply_flyout(ui: &Flyout, st: &Status, acct: &Account, activity: &[Activi
     } else {
         0.0
     });
-    ui.set_account_label(account_label(acct).into());
+    ui.set_account_title(if acct.signed_in {
+        acct.title().into()
+    } else {
+        "OneDrive".into()
+    });
     ui.set_storage_text(storage_text(acct).into());
     ui.set_storage_fraction(storage_fraction(acct));
     let rows = rows(activity, &st.issues, Path::new(&st.mount_point), now);
@@ -259,11 +253,41 @@ mod tests {
     }
 
     #[test]
-    fn tiles_and_initials() {
-        assert_eq!(tile("Budget.XLSX").0, "XLSX");
-        assert_eq!(tile("archive.tar.gz").0, "GZ");
-        assert_eq!(tile("Makefile").0, "FILE");
+    fn kinds_and_initials() {
+        assert_eq!(file_kind("Budget.XLSX"), "sheet");
+        assert_eq!(file_kind("archive.tar.gz"), "archive");
+        assert_eq!(file_kind("Makefile"), "generic");
+        assert_eq!(file_kind("Beach.png"), "image");
         assert_eq!(initials("Test User"), "TU");
         assert_eq!(initials("cher"), "C");
+    }
+
+    #[test]
+    fn rows_link_the_folder() {
+        let a = Activity {
+            seq: 1,
+            ts: 0,
+            kind: "downloaded".into(),
+            name: "Beach.png".into(),
+            folder: "Trip photos".into(),
+            path: "/Trip photos/Beach.png".into(),
+            is_dir: false,
+            detail: String::new(),
+        };
+        let top = Activity {
+            path: "/notes.txt".into(),
+            name: "notes.txt".into(),
+            folder: "OneDrive".into(),
+            kind: "uploaded".into(),
+            ..a.clone()
+        };
+        let r = rows(&[a, top], &[], Path::new("/home/u/OneDrive"), 7200);
+        assert_eq!(r[0].action, "Downloaded to");
+        assert_eq!(r[0].folder, "Trip photos");
+        assert_eq!(r[0].folder_path, "/home/u/OneDrive/Trip photos");
+        assert_eq!(r[0].time, "2 hours ago");
+        assert_eq!(r[0].kind, "image");
+        assert_eq!(r[1].action, "Uploaded to");
+        assert_eq!(r[1].folder_path, "/home/u/OneDrive");
     }
 }

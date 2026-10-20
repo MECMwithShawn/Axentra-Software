@@ -9,6 +9,7 @@ Terminal=false
 Categories=Network;FileTransfer;Utility;
 Keywords=onedrive;cloud;sync;microsoft;files;
 StartupNotify=false
+StartupWMClass=axentra-onedrive
 Actions=Settings;Folder;
 
 [Desktop Action Settings]

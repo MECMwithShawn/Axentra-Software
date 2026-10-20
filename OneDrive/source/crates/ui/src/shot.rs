@@ -191,7 +191,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         present::apply_flyout(&ui, &demo_status(view), &acct, &activity);
         ui.show()?;
-        (380, 600, Box::new(ui))
+        (360, 600, Box::new(ui))
     };
 
     let (pw, ph) = ((w as f32 * SCALE) as u32, (h as f32 * SCALE) as u32);

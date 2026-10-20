@@ -1,16 +1,25 @@
 // The panel that opens from the tray icon, laid out like the Windows 11
-// OneDrive flyout: header actions, sync status, recent activity, storage.
+// OneDrive activity center: account and Help & Settings at the top, one
+// line of sync status, recent files, and Open folder / View online /
+// Recycle bin along the bottom.
 
 import { ListView } from "std-widgets.slint";
 import { Theme, IconButton, MenuItem, MenuSeparator, MenuSurface, Meter, FluentButton, Hyperlink } from "theme.slint";
 
 export struct ActivityRow {
     name: string,
-    subtitle: string,
-    // Short file-type label shown on the tile ("DOCX"); empty for folders.
-    tile: string,
-    tile-color: color,
-    folder: bool,
+    // "Uploaded to", "Downloaded to"...; the whole message for problems.
+    action: string,
+    // Folder shown as a link after the action; empty for none.
+    folder: string,
+    // Absolute path of that folder.
+    folder-path: string,
+    // "8 minutes ago".
+    time: string,
+    // File-type icon: image, doc, sheet, slides, pdf, video, audio,
+    // archive, code, text or generic.
+    kind: string,
+    is-folder: bool,
     // Absolute path, for the row's actions.
     path: string,
     // Item no longer exists locally (deleted).
@@ -19,62 +28,71 @@ export struct ActivityRow {
     problem: bool,
 }
 
-component FileTile inherits Rectangle {
-    in property <string> label;
-    in property <color> tint;
-    in property <bool> folder;
+component FileIcon inherits Rectangle {
+    in property <string> kind;
+    in property <bool> is-folder;
     in property <bool> problem;
     width: 32px;
     height: 32px;
 
-    if root.folder && !root.problem: Image {
-        source: @image-url("icons/folder-filled.svg");
-        width: 30px;
-        height: 30px;
-        x: 1px;
-        y: 1px;
-    }
-    if !root.folder && !root.problem: Rectangle {
-        // A page with a folded corner, tinted by file type.
-        x: 4px;
-        width: 24px;
-        height: 30px;
-        y: 1px;
-        border-radius: 3px;
-        background: Theme.dark ? #3a3a3a : #ffffff;
-        border-width: 1px;
-        border-color: Theme.dark ? #ffffff1f : #0000001f;
-        Rectangle {
-            x: -4px;
-            y: 15px;
-            height: 11px;
-            width: max(18px, label-text.preferred-width + 6px);
-            border-radius: 2px;
-            background: root.tint;
-            label-text := Text {
-                text: root.label;
-                color: white;
-                font-size: 7px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
+    if !root.problem: Image {
+        width: 32px;
+        height: 32px;
+        source: root.is-folder ? @image-url("icons/folder-filled.svg")
+            : root.kind == "image" ? @image-url("icons/files/image.svg")
+            : root.kind == "doc" ? @image-url("icons/files/doc.svg")
+            : root.kind == "sheet" ? @image-url("icons/files/sheet.svg")
+            : root.kind == "slides" ? @image-url("icons/files/slides.svg")
+            : root.kind == "pdf" ? @image-url("icons/files/pdf.svg")
+            : root.kind == "video" ? @image-url("icons/files/video.svg")
+            : root.kind == "audio" ? @image-url("icons/files/audio.svg")
+            : root.kind == "archive" ? @image-url("icons/files/archive.svg")
+            : root.kind == "code" ? @image-url("icons/files/code.svg")
+            : root.kind == "text" ? @image-url("icons/files/text.svg")
+            : @image-url("icons/files/generic.svg");
     }
     if root.problem: Rectangle {
-        width: 28px;
-        height: 28px;
-        x: 2px;
-        y: 2px;
-        border-radius: 14px;
+        x: 4px;
+        y: 4px;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
         background: Theme.danger;
-        Text {
-            text: "!";
-            color: Theme.dark ? #000000 : #ffffff;
-            font-size: 16px;
-            font-weight: 700;
-            horizontal-alignment: center;
-            vertical-alignment: center;
+        Image {
+            source: @image-url("icons/x.svg");
+            colorize: Theme.dark ? #000000 : #ffffff;
+            width: 16px;
+            height: 16px;
+        }
+    }
+}
+
+// The small round sign before the status line.
+component StatusGlyph inherits Rectangle {
+    in property <string> state;
+    property <bool> spinning: root.state == "syncing" || root.state == "starting";
+    width: 16px;
+    height: 16px;
+
+    if root.spinning: Image {
+        source: @image-url("icons/sync.svg");
+        colorize: Theme.accent;
+        width: 16px;
+        height: 16px;
+        transform-rotation: (animation-tick() / 1.6s) * 360deg;
+    }
+    if !root.spinning: Rectangle {
+        border-radius: 8px;
+        background: root.state == "up_to_date" ? Theme.success : root.state == "error" ? Theme.danger : Theme.text3;
+        Image {
+            width: 11px;
+            height: 11px;
+            colorize: Theme.dark ? #000000 : #ffffff;
+            source: root.state == "up_to_date" ? @image-url("icons/check.svg")
+                : root.state == "error" ? @image-url("icons/x.svg")
+                : root.state == "paused" ? @image-url("icons/pause.svg")
+                : root.state == "offline" ? @image-url("icons/cloud-off.svg")
+                : @image-url("icons/person.svg");
         }
     }
 }
@@ -82,48 +100,73 @@ component FileTile inherits Rectangle {
 component ActivityItem inherits Rectangle {
     in property <ActivityRow> entry;
     callback open(string);
+    callback open-folder(string);
     callback reveal(string);
     callback share(string);
     callback online(string);
 
-    height: 56px;
-    border-radius: 6px;
+    height: 58px;
+    border-radius: 4px;
     background: ta.pressed ? Theme.pressed : (ta.has-hover || more-ta.has-hover) ? Theme.hover : transparent;
     accessible-role: list-item;
-    accessible-label: root.entry.name + ", " + root.entry.subtitle;
+    accessible-label: root.entry.name + ", " + root.entry.action + " " + root.entry.folder + ", " + root.entry.time;
 
     ta := TouchArea {
         clicked => {
-            if (!root.entry.gone) { root.open(root.entry.path); }
+            if (root.entry.problem || root.entry.gone) {
+                root.open-folder(root.entry.folder-path);
+            } else {
+                root.open(root.entry.path);
+            }
         }
     }
 
     HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 6px;
+        padding-left: 10px;
+        padding-right: 4px;
         spacing: 12px;
-        FileTile {
-            label: root.entry.tile;
-            tint: root.entry.tile-color;
-            folder: root.entry.folder;
-            problem: root.entry.problem;
-            opacity: root.entry.gone ? 0.55 : 1.0;
+        VerticalLayout {
+            alignment: center;
+            FileIcon {
+                kind: root.entry.kind;
+                is-folder: root.entry.is-folder;
+                problem: root.entry.problem;
+                opacity: root.entry.gone ? 0.55 : 1.0;
+            }
         }
         VerticalLayout {
             alignment: center;
-            spacing: 2px;
+            spacing: 1px;
             horizontal-stretch: 1;
             Text {
                 text: root.entry.name;
                 font-size: 13px;
-                font-weight: 600;
                 color: Theme.text;
                 overflow: elide;
             }
-            Text {
-                text: root.entry.subtitle;
-                font-size: 12px;
-                color: root.entry.problem ? Theme.danger : Theme.text2;
+            HorizontalLayout {
+                spacing: 4px;
+                Text {
+                    text: root.entry.action;
+                    font-size: 12px;
+                    color: root.entry.problem ? Theme.danger : Theme.text2;
+                    overflow: elide;
+                    horizontal-stretch: root.entry.folder == "" ? 1 : 0;
+                }
+                if root.entry.folder != "": Hyperlink {
+                    text: root.entry.folder;
+                    overflow: elide;
+                    max-width: self.preferred-width;
+                    clicked => { root.open-folder(root.entry.folder-path); }
+                }
+                if root.entry.folder != "": Rectangle {
+                    horizontal-stretch: 1;
+                }
+            }
+            if root.entry.time != "": Text {
+                text: root.entry.time;
+                font-size: 11px;
+                color: Theme.text3;
                 overflow: elide;
             }
         }
@@ -133,7 +176,6 @@ component ActivityItem inherits Rectangle {
             Rectangle {
                 width: 28px;
                 height: 28px;
-                y: (parent.height - self.height) / 2;
                 border-radius: 4px;
                 background: more-ta.pressed ? Theme.pressed : more-ta.has-hover ? Theme.hover : transparent;
                 Image {
@@ -141,8 +183,6 @@ component ActivityItem inherits Rectangle {
                     colorize: Theme.text;
                     width: 16px;
                     height: 16px;
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
                 }
                 more-ta := TouchArea {
                     clicked => { item-menu.show(); }
@@ -168,14 +208,53 @@ component ActivityItem inherits Rectangle {
     }
 }
 
+// One command in the bar along the bottom: an icon over its label.
+component BarButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    callback clicked();
+
+    horizontal-stretch: 1;
+    border-radius: 4px;
+    background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
+    accessible-role: button;
+    accessible-label: root.text;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        HorizontalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                colorize: Theme.text;
+                width: 20px;
+                height: 20px;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 12px;
+            color: Theme.text;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 export component Flyout inherits Window {
     title: "Axentra OneDrive";
     icon: Theme.app-icon;
-    preferred-width: 380px;
-    preferred-height: 600px;
-    min-width: 340px;
-    min-height: 460px;
-    background: Theme.base;
+    width: 360px;
+    height: 600px;
+    no-frame: true;
+    always-on-top: true;
+    background: transparent;
     default-font-family: Theme.font;
 
     // starting, signed_out, up_to_date, syncing, paused, offline, error
@@ -183,279 +262,316 @@ export component Flyout inherits Window {
     in property <string> headline: "Your files are synced";
     in property <string> detail;
     in property <float> progress;
-    in property <string> account-label: "Personal";
+    // "OneDrive - Personal"
+    in property <string> account-title: "OneDrive";
     in property <string> storage-text;
     in property <float> storage-fraction;
     in property <[ActivityRow]> rows;
     in property <string> toast;
+    // False while the window is being placed; showing fades and slides the
+    // panel in, as on Windows.
+    in property <bool> shown: true;
 
     callback open-folder();
     callback view-online();
     callback open-settings();
     callback recycle-bin();
+    callback manage-storage();
     callback pause(int);
     callback resume();
     callback sign-in();
     callback quit();
     callback dismiss();
     callback open-item(string);
+    callback open-path(string);
     callback reveal-item(string);
     callback share-item(string);
     callback item-online(string);
 
     property <bool> paused: root.state == "paused";
+    // States that need the user: shown as a card with a button.
+    property <bool> needs-action: root.state == "paused" || root.state == "signed_out";
 
-    keys := FocusScope {
-        key-pressed(event) => {
-            if (event.text == Key.Escape) {
-                root.dismiss();
-                return accept;
-            }
-            reject
-        }
+    panel := Rectangle {
+        opacity: root.shown ? 1 : 0;
+        y: root.shown ? 0 : 16px;
+        animate opacity { duration: 150ms; easing: ease-out; }
+        animate y { duration: 200ms; easing: ease-out; }
 
-        VerticalLayout {
-            // ----- header
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 10px;
-                padding-top: 12px;
-                padding-bottom: 8px;
-                spacing: 4px;
-                Image {
-                    source: Theme.app-icon;
-                    width: 26px;
-                    height: 26px;
+        surface := Rectangle {
+            background: Theme.flyout;
+            border-radius: 8px;
+            clip: true;
+
+            keys := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.dismiss();
+                        return accept;
+                    }
+                    reject
                 }
+
                 VerticalLayout {
-                    padding-left: 8px;
-                    alignment: center;
-                    horizontal-stretch: 1;
-                    Text {
-                        text: "Axentra OneDrive";
-                        font-size: 15px;
-                        font-weight: 600;
-                        color: Theme.text;
+                    // ----- header: account, Help & Settings, status
+                    VerticalLayout {
+                        vertical-stretch: 0;
+                        padding-left: 16px;
+                        padding-right: 8px;
+                        padding-top: 8px;
+                        padding-bottom: 8px;
+                        spacing: 2px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            height: 36px;
+                            VerticalLayout {
+                                alignment: center;
+                                Image {
+                                    source: Theme.cloud-icon;
+                                    width: 20px;
+                                    height: 15px;
+                                }
+                            }
+                            Text {
+                                text: root.account-title;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                IconButton {
+                                    icon: @image-url("icons/gear.svg");
+                                    icon-size: 18px;
+                                    label: "Help & Settings";
+                                    clicked => { gear-menu.show(); }
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            padding-left: 2px;
+                            padding-right: 8px;
+                            spacing: 8px;
+                            VerticalLayout {
+                                alignment: center;
+                                StatusGlyph { state: root.state; }
+                            }
+                            Text {
+                                text: root.headline;
+                                font-size: 12px;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                        }
+                        if root.detail != "" && !root.needs-action: HorizontalLayout {
+                            padding-left: 26px;
+                            padding-right: 8px;
+                            Text {
+                                text: root.detail;
+                                font-size: 12px;
+                                color: Theme.text2;
+                                wrap: word-wrap;
+                            }
+                        }
+                        if root.state == "syncing" && root.progress > 0: HorizontalLayout {
+                            padding-left: 26px;
+                            padding-right: 8px;
+                            padding-top: 6px;
+                            Meter { value: root.progress; }
+                        }
                     }
-                    Text {
-                        text: root.account-label;
-                        font-size: 12px;
-                        color: Theme.text2;
-                        overflow: elide;
-                    }
-                }
-                IconButton {
-                    icon: @image-url("icons/folder.svg");
-                    label: "Open folder";
-                    clicked => { root.open-folder(); }
-                }
-                IconButton {
-                    icon: @image-url("icons/globe.svg");
-                    label: "View online";
-                    clicked => { root.view-online(); }
-                }
-                gear := IconButton {
-                    icon: @image-url("icons/gear.svg");
-                    label: "Help & Settings";
-                    clicked => { gear-menu.show(); }
-                }
-            }
 
-            // ----- status card
-            Rectangle {
-                height: status-row.preferred-height;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    Rectangle {
-                        background: Theme.layer;
-                        border-radius: 8px;
-                        border-width: 1px;
-                        border-color: Theme.stroke;
-                        status-row := VerticalLayout {
-                            padding: 14px;
-                            spacing: 10px;
+                    // ----- a card when the user has something to do
+                    if root.needs-action: HorizontalLayout {
+                        vertical-stretch: 0;
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        padding-bottom: 8px;
+                        Rectangle {
+                            background: Theme.card;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
                             HorizontalLayout {
-                                spacing: 14px;
-                                Rectangle {
-                                    width: 40px;
-                                    height: 40px;
+                                padding: 12px;
+                                spacing: 12px;
+                                VerticalLayout {
+                                    alignment: start;
                                     Image {
-                                        width: 40px;
-                                        height: 40px;
-                                        source: root.state == "up_to_date" ? @image-url("icons/status-synced.svg")
-                                            : root.state == "paused" ? @image-url("icons/status-paused.svg")
-                                            : root.state == "error" ? @image-url("icons/status-error.svg")
-                                            : root.state == "offline" ? @image-url("icons/status-offline.svg")
-                                            : root.state == "signed_out" ? @image-url("icons/status-signedout.svg")
-                                            : @image-url("icons/logo.svg");
-                                    }
-                                    if root.state == "syncing" || root.state == "starting": Image {
-                                        source: @image-url("icons/badge-sync.svg");
-                                        width: 20px;
-                                        height: 20px;
-                                        x: 22px;
-                                        y: 20px;
-                                        transform-rotation: (animation-tick() / 1.6s) * 360deg;
+                                        source: @image-url("icons/info.svg");
+                                        colorize: Theme.text2;
+                                        width: 28px;
+                                        height: 28px;
                                     }
                                 }
                                 VerticalLayout {
-                                    alignment: center;
-                                    spacing: 2px;
+                                    spacing: 10px;
                                     horizontal-stretch: 1;
                                     Text {
-                                        text: root.headline;
-                                        font-size: 14px;
-                                        font-weight: 600;
+                                        text: root.detail != "" ? root.detail : root.headline;
+                                        font-size: 12px;
                                         color: Theme.text;
                                         wrap: word-wrap;
                                     }
-                                    if root.detail != "": Text {
-                                        text: root.detail;
-                                        font-size: 12px;
-                                        color: Theme.text2;
-                                        wrap: word-wrap;
+                                    HorizontalLayout {
+                                        alignment: start;
+                                        FluentButton {
+                                            text: root.paused ? "Resume syncing" : "Sign in";
+                                            primary: true;
+                                            clicked => {
+                                                if (root.paused) { root.resume(); } else { root.sign-in(); }
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            if root.state == "syncing": Meter {
-                                value: root.progress;
-                            }
-                            if root.state == "paused": HorizontalLayout {
-                                alignment: end;
-                                FluentButton {
-                                    text: "Resume syncing";
-                                    primary: true;
-                                    clicked => { root.resume(); }
-                                }
-                            }
-                            if root.state == "signed_out": HorizontalLayout {
-                                alignment: end;
-                                FluentButton {
-                                    text: "Sign in";
-                                    primary: true;
-                                    clicked => { root.sign-in(); }
-                                }
+                        }
+                    }
+
+                    // ----- recent files
+                    if root.rows.length > 0: ListView {
+                        vertical-stretch: 1;
+                        for row in root.rows: HorizontalLayout {
+                            padding-left: 6px;
+                            padding-right: 6px;
+                            ActivityItem {
+                                entry: row;
+                                open(p) => { root.open-item(p); }
+                                open-folder(p) => { root.open-path(p); }
+                                reveal(p) => { root.reveal-item(p); }
+                                share(p) => { root.share-item(p); }
+                                online(p) => { root.item-online(p); }
                             }
                         }
                     }
-                }
-            }
-
-            // ----- recent activity
-            if root.rows.length > 0: HorizontalLayout {
-                padding-left: 18px;
-                height: 34px;
-                Text {
-                    text: "Recent";
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: Theme.text2;
-                    vertical-alignment: center;
-                }
-            }
-            if root.rows.length > 0: ListView {
-                vertical-stretch: 1;
-                for row in root.rows: HorizontalLayout {
-                    padding-left: 6px;
-                    padding-right: 6px;
-                    ActivityItem {
-                        entry: row;
-                        open(p) => { root.open-item(p); }
-                        reveal(p) => { root.reveal-item(p); }
-                        share(p) => { root.share-item(p); }
-                        online(p) => { root.item-online(p); }
-                    }
-                }
-            }
-            if root.rows.length == 0: VerticalLayout {
-                vertical-stretch: 1;
-                alignment: center;
-                spacing: 6px;
-                padding: 32px;
-                Image {
-                    source: @image-url("icons/cloud.svg");
-                    colorize: Theme.text3;
-                    height: 56px;
-                }
-                Text {
-                    text: "No recent activity";
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: Theme.text;
-                    horizontal-alignment: center;
-                }
-                Text {
-                    text: "Files you add, change or open in your OneDrive folder show up here.";
-                    font-size: 12px;
-                    color: Theme.text2;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
-                }
-            }
-
-            // ----- toast (link copied, etc.)
-            if root.toast != "": Rectangle {
-                height: 36px;
-                HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
-                    Rectangle {
-                        border-radius: 6px;
-                        background: Theme.dark ? #3b3b3b : #e9f1fb;
+                    if root.rows.length == 0: VerticalLayout {
+                        vertical-stretch: 1;
+                        alignment: center;
+                        spacing: 6px;
+                        padding: 32px;
+                        Image {
+                            source: @image-url("icons/cloud.svg");
+                            colorize: Theme.text3;
+                            height: 56px;
+                        }
                         Text {
-                            text: root.toast;
-                            font-size: 12px;
+                            text: "No recent activity";
+                            font-size: 14px;
+                            font-weight: 600;
                             color: Theme.text;
                             horizontal-alignment: center;
-                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Files you add, change or open in your OneDrive folder show up here.";
+                            font-size: 12px;
+                            color: Theme.text2;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    // ----- toast (link copied, etc.)
+                    if root.toast != "": HorizontalLayout {
+                        padding: 8px;
+                        padding-top: 4px;
+                        Rectangle {
+                            height: 34px;
+                            border-radius: 6px;
+                            background: Theme.card;
+                            border-width: 1px;
+                            border-color: Theme.stroke;
+                            Text {
+                                text: root.toast;
+                                font-size: 12px;
+                                color: Theme.text;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+
+                    // ----- command bar
+                    Rectangle {
+                        height: 1px;
+                        background: Theme.divider;
+                    }
+                    Rectangle {
+                        background: Theme.flyout-bar;
+                        height: 68px;
+                        HorizontalLayout {
+                            padding: 6px;
+                            spacing: 4px;
+                            BarButton {
+                                icon: @image-url("icons/folder.svg");
+                                text: "Open folder";
+                                clicked => { root.open-folder(); }
+                            }
+                            BarButton {
+                                icon: @image-url("icons/globe.svg");
+                                text: "View online";
+                                clicked => { root.view-online(); }
+                            }
+                            BarButton {
+                                icon: @image-url("icons/trash.svg");
+                                text: "Recycle bin";
+                                clicked => { root.recycle-bin(); }
+                            }
+                            if root.storage-fraction > 0.9: BarButton {
+                                icon: @image-url("icons/cloud.svg");
+                                text: "Get more storage";
+                                clicked => { root.manage-storage(); }
+                            }
                         }
                     }
                 }
             }
+        }
 
-            // ----- footer: storage
-            Rectangle {
-                height: 1px;
-                background: Theme.divider;
-            }
-            HorizontalLayout {
-                padding-left: 16px;
-                padding-right: 16px;
-                padding-top: 12px;
-                padding-bottom: 14px;
-                spacing: 16px;
-                VerticalLayout {
-                    spacing: 6px;
-                    horizontal-stretch: 1;
-                    alignment: center;
-                    Text {
-                        text: root.storage-text;
-                        font-size: 12px;
-                        color: Theme.text2;
-                        overflow: elide;
-                    }
-                    Meter {
-                        value: root.storage-fraction;
-                        fill: root.storage-fraction > 0.9 ? Theme.danger : Theme.accent;
-                    }
-                }
-                Hyperlink {
-                    text: "Recycle bin";
-                    vertical-alignment: center;
-                    clicked => { root.recycle-bin(); }
-                }
-            }
+        // The outline goes on top so the command bar doesn't cover it.
+        Rectangle {
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: Theme.flyout-stroke;
         }
     }
 
     gear-menu := PopupWindow {
-        x: root.width - 238px;
-        y: 48px;
-        width: 226px;
+        x: root.width - 240px;
+        y: 44px;
+        width: 228px;
         MenuSurface {
             VerticalLayout {
                 padding: 4px;
+                Rectangle {
+                    border-radius: 4px;
+                    background: storage-ta.has-hover ? Theme.hover : transparent;
+                    accessible-role: button;
+                    accessible-label: root.storage-text;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 6px;
+                        Text {
+                            text: root.storage-text;
+                            font-size: 12px;
+                            color: Theme.text2;
+                            wrap: word-wrap;
+                        }
+                        Meter {
+                            value: root.storage-fraction;
+                            fill: root.storage-fraction > 0.9 ? Theme.danger : Theme.accent;
+                        }
+                    }
+                    storage-ta := TouchArea {
+                        clicked => { root.manage-storage(); }
+                    }
+                }
+                MenuSeparator { }
                 MenuItem {
                     text: "Settings";
                     has-icon: true;
@@ -488,12 +604,6 @@ export component Flyout inherits Window {
                     clicked => { root.resume(); }
                 }
                 MenuSeparator { }
-                MenuItem {
-                    text: "Recycle bin";
-                    has-icon: true;
-                    icon: @image-url("icons/trash.svg");
-                    clicked => { root.recycle-bin(); }
-                }
                 MenuItem {
                     text: "Quit Axentra OneDrive";
                     has-icon: true;

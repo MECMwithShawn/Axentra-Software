@@ -10,6 +10,7 @@ slint::include_modules!();
 
 mod app;
 mod icons;
+mod panel;
 mod present;
 mod shot;
 mod tray;
@@ -23,6 +24,13 @@ fn main() -> anyhow::Result<()> {
         )
         .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("--screenshot") {
+        // Lets the desktop match our windows to axentra-onedrive.desktop and its icon.
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .select()?;
+        slint::set_xdg_app_id("axentra-onedrive")?;
+    }
     match args.first().map(String::as_str) {
         Some("--screenshot") => shot::run(&args[1..]),
         Some("--settings") => app::run(true, false),

@@ -11,6 +11,10 @@ export global Theme {
     out property <image> app-icon: icon-color == "periwinkle" ? @image-url("icons/app/periwinkle.png")
         : icon-color == "azure" ? @image-url("icons/app/azure.png")
         : @image-url("icons/app/ice.png");
+    // The cloud in the panel header, in the same colour.
+    out property <image> cloud-icon: icon-color == "periwinkle" ? @image-url("icons/cloud-periwinkle.svg")
+        : icon-color == "azure" ? @image-url("icons/cloud-azure.svg")
+        : @image-url("icons/cloud-ice.svg");
 
     // Force light or dark, including Slint's own widgets (used for screenshots).
     public function use-dark(on: bool) {
@@ -33,6 +37,11 @@ export global Theme {
     out property <color> track: dark ? #ffffff26 : #00000021;
     out property <color> danger: dark ? #ff99a4 : #c42b1c;
     out property <color> success: dark ? #6ccb5f : #0f7b0f;
+    // The tray panel: an acrylic-like surface with a slightly darker command bar.
+    out property <color> flyout: dark ? #2c2c2c : #f9f9f9;
+    out property <color> flyout-bar: dark ? #202020 : #eeeeee;
+    out property <color> flyout-stroke: dark ? #ffffff1f : #0000002e;
+    out property <color> card: dark ? #353535 : #ffffff;
     out property <string> font: "Inter";
 }
 

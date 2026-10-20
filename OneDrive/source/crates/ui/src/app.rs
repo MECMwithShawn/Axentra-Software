@@ -1,10 +1,11 @@
 //! The running tray app: Slint windows on the main thread, a tokio task
 //! talking to the sync service over D-Bus, and the tray icon.
 
+use std::cell::Cell;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use axentra_onedrive_core::config::{Config, Paths};
@@ -13,6 +14,8 @@ use axentra_onedrive_core::ipc::{AxentraOneDriveProxy, ChangedStream};
 use axentra_onedrive_core::status::{Account, Status};
 use futures_util::StreamExt;
 use ksni::TrayMethods;
+use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
 use slint::{ComponentHandle, Weak};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
@@ -20,8 +23,9 @@ use crate::tray::AxentraOneDriveTray;
 use crate::{present, Flyout, SettingsWindow, Theme};
 
 pub enum Cmd {
-    ToggleFlyout,
-    ShowFlyout,
+    /// From a tray click, with where it was clicked if the tray host said.
+    ToggleFlyout(Option<(i32, i32)>),
+    ShowFlyout(Option<(i32, i32)>),
     HideFlyout,
     ShowSettings,
     OpenFolder,
@@ -34,6 +38,7 @@ pub enum Cmd {
     SignIn,
     Quit,
     OpenItem(String),
+    OpenPath(String),
     RevealItem(String),
     ShareItem(String),
     ItemOnline(String),
@@ -74,12 +79,14 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(flyout.on_view_online => Cmd::ViewOnline);
     wire!(flyout.on_open_settings => Cmd::ShowSettings);
     wire!(flyout.on_recycle_bin => Cmd::RecycleBin);
+    wire!(flyout.on_manage_storage => Cmd::ManageStorage);
     wire!(flyout.on_pause(h) => Cmd::Pause(h as u32));
     wire!(flyout.on_resume => Cmd::Resume);
     wire!(flyout.on_sign_in => Cmd::SignIn);
     wire!(flyout.on_quit => Cmd::Quit);
     wire!(flyout.on_dismiss => Cmd::HideFlyout);
     wire!(flyout.on_open_item(p) => Cmd::OpenItem(p.to_string()));
+    wire!(flyout.on_open_path(p) => Cmd::OpenPath(p.to_string()));
     wire!(flyout.on_reveal_item(p) => Cmd::RevealItem(p.to_string()));
     wire!(flyout.on_share_item(p) => Cmd::ShareItem(p.to_string()));
     wire!(flyout.on_item_online(p) => Cmd::ItemOnline(p.to_string()));
@@ -94,8 +101,9 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(settings.on_view_online => Cmd::ViewOnline);
     wire!(settings.on_set_icon_color(c) => Cmd::SetIconColor(c.to_string()));
 
+    close_on_focus_loss(&flyout);
     if show_panel {
-        let _ = tx.send(Cmd::ShowFlyout);
+        let _ = tx.send(Cmd::ShowFlyout(None));
     }
     rt.spawn(
         Backend::new(tx.clone(), flyout.as_weak(), settings.as_weak()).run(rx, start_with_settings),
@@ -103,6 +111,119 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     slint::run_event_loop_until_quit()?;
     rt.shutdown_timeout(Duration::from_secs(1));
     Ok(())
+}
+
+/// The panel's size in Flyout (logical pixels).
+const FLYOUT_SIZE: (f32, f32) = (360.0, 600.0);
+
+thread_local! {
+    /// When the panel last closed because it lost focus. Clicking the tray
+    /// icon to close it takes the focus first, so that click mustn't reopen it.
+    static FOCUS_CLOSED: Cell<Option<Instant>> = const { Cell::new(None) };
+    /// Whether the panel has had the focus since it opened. Windows report
+    /// losing a focus they never had while they are being created.
+    static HAD_FOCUS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Like the Windows panel, close when another window gets the focus.
+fn close_on_focus_loss(flyout: &Flyout) {
+    let weak = flyout.as_weak();
+    flyout.window().on_winit_window_event(move |_, event| {
+        if let winit::event::WindowEvent::Focused(true) = event {
+            HAD_FOCUS.with(|h| h.set(true));
+        }
+        if let winit::event::WindowEvent::Focused(false) = event {
+            if !HAD_FOCUS.with(|h| h.replace(false)) {
+                return EventResult::Propagate;
+            }
+            let weak = weak.clone();
+            slint::Timer::single_shot(Duration::ZERO, move || {
+                if let Some(ui) = weak.upgrade() {
+                    if ui.window().is_visible() {
+                        FOCUS_CLOSED.with(|c| c.set(Some(Instant::now())));
+                        let _ = ui.hide();
+                    }
+                }
+            });
+        }
+        EventResult::Propagate
+    });
+}
+
+fn x11_id(window: &slint::Window) -> Option<u32> {
+    window
+        .with_winit_window(|w| {
+            w.window_handle().ok().and_then(|h| match h.as_raw() {
+                RawWindowHandle::Xlib(x) => Some(x.window as u32),
+                RawWindowHandle::Xcb(x) => Some(x.window.get()),
+                _ => None,
+            })
+        })
+        .flatten()
+}
+
+/// Open the panel above the tray icon at `click` (or the screen's
+/// bottom-right corner), out of the taskbar, with the keyboard focus.
+fn show_flyout(ui: &Flyout, click: Option<(i32, i32)>) {
+    HAD_FOCUS.with(|h| h.set(false));
+    ui.set_shown(false);
+    let window = ui.window();
+    let x11 = crate::panel::is_x11();
+    let mut spot = None;
+    if x11 {
+        let sf = window.scale_factor();
+        let (w, h) = (
+            (FLYOUT_SIZE.0 * sf).round() as i32,
+            (FLYOUT_SIZE.1 * sf).round() as i32,
+        );
+        let anchor = click
+            .or_else(|| crate::panel::primary_monitor().map(|m| (m.x + m.w - 1, m.y + m.h - 1)));
+        let id = x11_id(window);
+        if let Some(anchor) = anchor {
+            let (x, y) = crate::panel::place(w, h, anchor, &crate::panel::work_areas());
+            window.set_position(slint::PhysicalPosition::new(x, y));
+            if let Some(id) = id {
+                crate::panel::set_open_position(id, x, y);
+            }
+            spot = Some((x, y));
+        }
+        if let Some(id) = id {
+            crate::panel::keep_out_of_taskbar(id);
+        }
+    }
+    let _ = ui.show();
+    finish_show(ui.as_weak(), x11.then_some(spot).flatten(), x11, 0);
+}
+
+/// Once the window manager has mapped the panel: keep it out of the
+/// taskbar, move it into place (the first time it was just created where
+/// the window manager chose), give it the focus and fade it in.
+fn finish_show(weak: Weak<Flyout>, spot: Option<(i32, i32)>, x11: bool, tries: u32) {
+    slint::Timer::single_shot(Duration::from_millis(25), move || {
+        let Some(ui) = weak.upgrade() else { return };
+        if !ui.window().is_visible() {
+            return;
+        }
+        if x11 {
+            let id = x11_id(ui.window());
+            if !id.is_some_and(crate::panel::is_mapped) && tries < 40 {
+                finish_show(weak, spot, x11, tries + 1);
+                return;
+            }
+            if let Some(id) = id {
+                crate::panel::keep_out_of_taskbar(id);
+            }
+            if let Some((x, y)) = spot {
+                ui.window().with_winit_window(|w| {
+                    w.set_outer_position(winit::dpi::PhysicalPosition::new(x, y));
+                });
+            }
+            if let Some(id) = id {
+                crate::panel::activate(id);
+            }
+        }
+        ui.set_shown(true);
+    });
 }
 
 struct Backend {
@@ -200,7 +321,7 @@ impl Backend {
                 // No tray host (e.g. GNOME without the AppIndicator extension):
                 // the flyout is the main window then.
                 tracing::warn!("no system tray available ({e}); showing the panel instead");
-                let _ = self.tx.send(Cmd::ShowFlyout);
+                let _ = self.tx.send(Cmd::ShowFlyout(None));
             }
         }
         if start_with_settings {
@@ -360,6 +481,12 @@ impl Backend {
         });
     }
 
+    fn hide_flyout(&self) {
+        let _ = self.flyout.upgrade_in_event_loop(|ui| {
+            let _ = ui.hide();
+        });
+    }
+
     fn mount(&self) -> String {
         self.config().mount_path().display().to_string()
     }
@@ -379,13 +506,16 @@ impl Backend {
 
     async fn handle(&mut self, cmd: Cmd) -> Result<()> {
         match cmd {
-            Cmd::ToggleFlyout | Cmd::ShowFlyout => {
-                let toggle = matches!(cmd, Cmd::ToggleFlyout);
+            Cmd::ToggleFlyout(click) | Cmd::ShowFlyout(click) => {
+                let toggle = matches!(cmd, Cmd::ToggleFlyout(_));
                 let _ = self.flyout.upgrade_in_event_loop(move |ui| {
-                    if toggle && ui.window().is_visible() {
+                    let just_closed = FOCUS_CLOSED
+                        .with(|c| c.get())
+                        .is_some_and(|t| t.elapsed() < Duration::from_millis(400));
+                    if toggle && (ui.window().is_visible() || just_closed) {
                         let _ = ui.hide();
                     } else {
-                        let _ = ui.show();
+                        show_flyout(&ui, click);
                     }
                 });
                 self.refresh().await;
@@ -407,20 +537,30 @@ impl Backend {
                 });
                 self.refresh().await;
             }
-            Cmd::OpenFolder => open(&self.mount()),
+            Cmd::OpenFolder => {
+                self.hide_flyout();
+                open(&self.mount());
+            }
             Cmd::ViewOnline => {
                 let url = match self.proxy() {
                     Ok(p) => p.web_url(self.mount()).await.ok(),
                     Err(_) => None,
                 };
+                self.hide_flyout();
                 open(&url.unwrap_or_else(|| "https://onedrive.live.com/my".into()));
             }
-            Cmd::RecycleBin => open(&self.recycle_bin_url()),
-            Cmd::ManageStorage => open(if self.account.drive_type == "business" {
-                "https://www.microsoft365.com/"
-            } else {
-                "https://onedrive.live.com/?v=managestorage"
-            }),
+            Cmd::RecycleBin => {
+                self.hide_flyout();
+                open(&self.recycle_bin_url());
+            }
+            Cmd::ManageStorage => {
+                self.hide_flyout();
+                open(if self.account.drive_type == "business" {
+                    "https://www.microsoft365.com/"
+                } else {
+                    "https://onedrive.live.com/?v=managestorage"
+                });
+            }
             Cmd::Pause(h) => {
                 self.proxy()?.pause(h * 3600).await?;
                 self.refresh().await;
@@ -480,8 +620,12 @@ impl Backend {
                     let _ = slint::quit_event_loop();
                 });
             }
-            Cmd::OpenItem(path) => open(&path),
+            Cmd::OpenItem(path) | Cmd::OpenPath(path) => {
+                self.hide_flyout();
+                open(&path);
+            }
             Cmd::RevealItem(path) => {
+                self.hide_flyout();
                 let uri = url::Url::from_file_path(&path)
                     .map(|u| u.to_string())
                     .unwrap_or(path);
@@ -509,6 +653,7 @@ impl Backend {
                 });
             }
             Cmd::ItemOnline(path) => {
+                self.hide_flyout();
                 let url = self.proxy()?.web_url(path).await?;
                 open(&url);
             }

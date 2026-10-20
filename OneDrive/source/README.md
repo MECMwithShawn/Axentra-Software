@@ -20,7 +20,7 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `axentra-onedrive free`, or `setfattr -n user.axentra.onedrive.pinned -v 1` |
 | Share, View online, Version history (with Restore) | Right-click OneDrive submenu; history opens its own window |
 | Tray icon with synced / syncing / paused / problem states | StatusNotifierItem icon drawn in those states |
-| Activity panel: status, recent files, storage, Recycle bin | Same layout, in Fluent light and dark |
+| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. On X11 it opens just above the tray icon, stays out of the taskbar and closes when you click elsewhere |
 | Pause syncing for 2, 8 or 24 hours | Panel menu, tray menu, Settings or `axentra-onedrive pause` |
 | Conflicts keep both copies as `File-PCNAME.ext` | Same naming, with a notification |
 | Edited here but deleted online: your copy is kept | Same |
