@@ -171,6 +171,7 @@ pub fn worker(request: &Path) -> Result<()> {
             ("INSTALL-RAID.txt", include_str!("../raid/INSTALL-RAID.txt")),
             ("build-iso.sh", include_str!("../raid/build-iso.sh")),
             ("axentra_raid.py", include_str!("../raid/axentra_raid.py")),
+            ("assistant.py", include_str!("../raid/assistant.py")),
             ("axentra-imsm", include_str!("../raid/axentra-imsm")),
             ("zz-axentra-imsm", include_str!("../raid/zz-axentra-imsm")),
         ] {

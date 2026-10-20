@@ -60,11 +60,13 @@ rm "$root/etc/resolv.conf"
 cp -L /etc/resolv.conf "$root/etc/resolv.conf"
 echo "AXENTRA: Installing mdadm and mdmon inside the image" >&2
 chroot "$root" apt-get update
-chroot "$root" env DEBIAN_FRONTEND=noninteractive apt-get install -y mdadm initramfs-tools python3
+chroot "$root" env DEBIAN_FRONTEND=noninteractive apt-get install -y mdadm initramfs-tools python3 python3-tk xterm
 install -Dm755 "$here/zz-axentra-imsm" "$root/etc/initramfs-tools/hooks/zz-axentra-imsm"
 install -Dm755 "$here/axentra-imsm" "$root/etc/initramfs-tools/scripts/local-top/axentra-imsm"
 install -Dm755 "$here/axentra-imsm" "$root/etc/initramfs-tools/scripts/casper-premount/axentra-imsm"
 install -Dm755 "$here/axentra_raid.py" "$root/usr/local/sbin/axentra-raid-finalize"
+install -Dm755 "$here/assistant.py" "$root/usr/local/bin/axentra-install-assistant"
+chroot "$root" python3 -c 'import tkinter'
 printf 'DEVICE partitions containers\nAUTO +imsm -all\nHOMEHOST <ignore>\n' > "$root/etc/mdadm/mdadm.conf"
 
 # Keep the target-finalization instructions available offline on live media.
@@ -76,6 +78,16 @@ Type=Application
 Name=Axentra RAID installation instructions
 Comment=Read before installing or restarting on Intel IMSM RAID
 Exec=xdg-open /usr/share/doc/axentra/INSTALL-RAID.txt
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+DESKTOP
+cat > "$root/usr/share/applications/axentra-install-assistant.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Axentra Installation Assistant
+Comment=Review RAID partitions and finalize installed Zorin before reboot
+Exec=/usr/local/bin/axentra-install-assistant
 Icon=drive-harddisk
 Terminal=false
 Categories=System;

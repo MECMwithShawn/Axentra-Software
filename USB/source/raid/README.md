@@ -1,7 +1,7 @@
 # Zorin 18 IMSM/RST RAID 0 build stage (experimental)
 
 This is an explicit Linux developer build stage for Axentra USB, followed by a
-manual target finalization step **before the installer’s first reboot**. It is
+guarded target finalization step **before the installer’s first reboot**. It is
 not yet a hardware-qualified release. The Linux GUI can run the image-build
 stage through **Prepare for Intel RAID**, including dependency installation. The separate preparation worker runs package scripts only from a
 publisher-verified source; the USB writer does not execute image code. Windows can write the resulting ISO using
@@ -70,6 +70,41 @@ checks are intentionally not relaxed. Inspection and read-back do not prove
 firmware bootability or Secure Boot trust.
 
 ## Install without wiping Windows or IMSM metadata
+
+Open **Axentra Installation Assistant** from the live applications menu. The
+offline Tk interface reads block-device identities and sysfs member state,
+then generates manual-installer instructions for an explicitly selected
+existing ext4 root (at least 32 GiB) and FAT GPT ESP on the same complete IMSM
+RAID 0 volume. It refuses non-live/legacy sessions, ambiguous UUIDs, mounted
+targets, missing members and unsupported layouts. No partition is preselected.
+The guide identifies the current assembled volume, root and ESP by size/UUID;
+it never assumes a particular md device or partition number.
+
+After installation, choose **Continue Testing**, close the installer, unmount
+its target filesystems and refresh. Formatting changes the root UUID, so select
+the newly installed root explicitly. **Finalize installed system** launches
+an administrator terminal in a private mount namespace. It checks Zorin and
+fstab using a read-only, no-journal-replay root mount, then prepares the chroot
+mounts and invokes the existing finalizer. The ESP stays read-only. Both mount
+preparation and finalization require typed UUID confirmation. Cleanup unmounts
+in reverse order and never recursively deletes the target, including on error.
+
+This assistant does not create/resize partitions or identify disposable data.
+Its assisted finalization supports root plus ESP, without separate `/boot`,
+LVM or encryption. It cannot enforce partitioning choices in the external
+installer, install a missing EFI loader, alter NVRAM, prevent reboot, or certify
+firmware bootability. Existing files on a root selected for replacement need
+backup; choosing single-boot does not authorize erasing other partitions.
+The manual finalizer workflow below remains available for reviewed layouts.
+
+Run storage-fixture and GUI tests on Linux with `python3-tk`, `xvfb` and `xauth`:
+
+```sh
+xvfb-run -a python3 -m unittest discover -s USB/source/raid/tests -v
+```
+
+Tests mock all mounting and finalization commands. `assistant.py --inventory`
+provides read-only JSON inspection; it does not assemble or alter arrays.
 
 Back up Windows, recovery information and the existing ESP first. Boot the USB
 in UEFI mode with the existing RST configuration. Inspect `lsblk -f`,

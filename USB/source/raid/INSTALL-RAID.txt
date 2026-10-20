@@ -4,6 +4,10 @@ This image includes mdadm/mdmon and live/installed initramfs hooks.
 Their presence does not establish successful boot on your firmware.
 
 Before installing:
+- Open "Axentra Installation Assistant" from the applications menu.
+  It works offline, reads the current layout and generates a UUID-based plan.
+  Select the existing ext4 Linux root and existing EFI partition explicitly.
+  This version does not resize or create partitions. Unsupported layouts stop.
 - Back up your data and Windows recovery information.
 - Keep the existing Intel RST configuration. Boot in UEFI mode.
 - Verify all RAID members and the complete expected array are visible.
@@ -16,6 +20,15 @@ Before installing:
 Before the first reboot:
 Choose Continue Testing when the installer finishes. The installer is an
 external application; Axentra cannot prevent its erase or restart actions.
+Close the installer and unmount its target filesystems before refreshing
+the assistant. Select the new root UUID (formatting changes it) and original
+EFI UUID. "Finalize installed system" opens a terminal, authenticates, checks
+the layout again, and mounts the target in a private namespace. It first
+checks fstab read-only; EFI remains read-only throughout. Follow the typed
+UUID confirmations. On failure, do not reboot. This assisted path supports
+only root plus ESP; separate /boot requires the reviewed manual path below.
+
+Manual alternative:
 The installed root must be direct ext4 on an existing complete IMSM RAID 0
 volume, with a GPT FAT EFI partition and an installed Linux EFI loader.
 

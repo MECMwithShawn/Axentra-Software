@@ -79,3 +79,28 @@ IMSM/mdmon transition or installed-target finalization/reboot was performed.
 No existing RAID metadata, Windows files, EFI files or partition table was
 modified. Firmware/installer tests remain release blockers; keep PR #1 draft.
 A complete automatic installer/reboot integration is not implemented.
+
+## Offline installation assistant — 2026-10-20
+
+Added an offline Tk assistant, embedded in the desktop preparation worker and
+installed into the remastered live filesystem with a menu launcher. Planning
+reads the layout only; finalization uses explicit UUID selections, live/UEFI
+checks, a private mount namespace and the existing guarded finalizer. The ESP
+is mounted read-only. No automatic partitioning, resizing, NVRAM changes or
+reboot is provided. Existing direct ext4 root plus same-volume ESP is the
+supported assisted layout; separate /boot remains a manual workflow.
+
+Reproducible checks: `xvfb-run -a python3 -m unittest discover -s
+USB/source/raid/tests -v` passed 41 tests (including GUI review, refresh and
+cancel). All privileged operations in tests are mocked. Failure cases include
+missing/unhealthy/non-IMSM arrays, duplicate UUIDs, mounted or incorrect
+partitions, changed inventory after confirmation, fstab mismatches, symlink
+mountpoints, finalizer errors and failed unmounts. Cleanup never recursively
+deletes the target. Rust `cargo test --locked` passed all 47 tests; release
+build and shellcheck passed. The graphical layout was inspected under Xvfb.
+Read-only host inventory identified the IMSM array but correctly classified
+the installed host as non-live; no host finalization was attempted.
+
+These are software checks, not a physical install test. Hardware boot, actual
+installer partition selection, Windows preservation across installation and
+firmware boot order remain unvalidated. PR remains draft.
