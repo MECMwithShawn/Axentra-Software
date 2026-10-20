@@ -62,7 +62,7 @@ Axentra Command does not list Axentra OneDrive yet. Command's catalog describes 
 
 ## Validation
 
-- 29 Rust tests passed, including 16 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- 31 Rust tests passed, including 18 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
 - Signed in to a real personal OneDrive account, listed its files through the mount and downloaded files on demand with QuickXorHash verification.
 - Tray, panel, D-Bus control and the systemd service were exercised on a live Zorin OS GNOME desktop. The file-manager extension was tested against a live mount in a test harness.
 - The app is unsigned and has no binary release, so there is no antivirus scan. See [security status](security/README.md).

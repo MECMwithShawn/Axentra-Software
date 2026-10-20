@@ -219,7 +219,11 @@ impl TokenStore {
                     let _ = std::fs::remove_file(&self.path);
                     Err(GraphError::NotSignedIn)
                 }
-                _ => Err(GraphError::Other(format!("refreshing sign-in: {e:#}"))),
+                // No network yet (for example just after boot) is "offline", not a failure.
+                _ => match e.downcast::<reqwest::Error>() {
+                    Ok(net) => Err(GraphError::Network(net)),
+                    Err(e) => Err(GraphError::Other(format!("refreshing sign-in: {e:#}"))),
+                },
             },
         }
     }

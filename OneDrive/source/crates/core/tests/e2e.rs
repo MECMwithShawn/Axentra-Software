@@ -409,6 +409,54 @@ async fn expired_access_token_is_refreshed() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unreachable_sign_in_service_means_offline() {
+    // Starting before the network is up: the token refresh can't connect.
+    let env = Env::with(|c| c.authority = "http://127.0.0.1:9".into(), true).await;
+    env.mock.add_file("/", "a.txt", b"1");
+    env.engine.cycle().await;
+    let st = env.engine.status();
+    assert_eq!(st.state, "offline", "{st:?}");
+
+    // Back online: the next pass refreshes and syncs.
+    let mut cfg = env.engine.cfg();
+    cfg.authority = env.mock.origin.clone();
+    env.engine.set_config(cfg);
+    env.sync().await;
+    assert_eq!(list(env.mnt.clone()).await, vec!["a.txt"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn unmount_does_not_wait_for_open_folders() {
+    let mut env = Env::new().await;
+    env.mock.add_folder("/", "A");
+    env.mock.add_file("/A", "a.txt", b"1");
+    env.sync().await;
+    // Something (a folder window, a search) keeps a folder open.
+    let dir = env.p("A");
+    let held = fsop(move || std::fs::File::open(dir).unwrap()).await;
+
+    let session = env.session.take().unwrap();
+    let started = std::time::Instant::now();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        axentra_onedrive_core::daemon::unmount(
+            session,
+            &env.mnt,
+            std::time::Duration::from_millis(500),
+        ),
+    )
+    .await
+    .expect("unmount waited for the open folder");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let mounts = std::fs::read_to_string("/proc/self/mountinfo").unwrap();
+    assert!(
+        !mounts.contains(&format!(" {} ", env.mnt.display())),
+        "still mounted"
+    );
+    fsop(move || drop(held)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn names_onedrive_cannot_hold_stay_local() {
     let env = Env::new().await;
     env.sync().await;

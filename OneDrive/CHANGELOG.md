@@ -8,5 +8,7 @@
 - Fast, safe shutdown during long first scans; on-demand downloads log the program that requested them.
 - The first scan shows how many items it has listed and resumes after a restart instead of starting over.
 - Ice glass app icon from the Axentra Icon Kit, with periwinkle and azure in Settings > Appearance.
+- Starting before the network is up shows "You're offline" instead of a sync error.
+- Stopping no longer waits for programs that still have a folder in OneDrive open; it closes the folder after 5 seconds and logs which programs had it open.
 
 No binary release, installer or checksums are published for this version.
