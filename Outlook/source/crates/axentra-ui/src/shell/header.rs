@@ -1,12 +1,14 @@
 //! App header bar (docs/spec/shell.md §3): launcher, app name, search,
-//! My Day, Notifications, Settings, More, account.
+//! My Day, Notifications, Settings, More, account, and (when the header is
+//! the window's title bar, `window::WindowControls`) the caption buttons on
+//! the side the desktop puts them, with the empty space as a drag region.
 
 use std::rc::Rc;
 
 use dioxus::prelude::*;
 
 use super::keymap::GlobalCmd;
-use super::{Flyout, SidePane, account, launcher, notifications, run_command, search, use_shell};
+use super::{Flyout, SidePane, account, launcher, notifications, run_command, search, use_shell, window};
 use crate::kit::{Avatar, CounterBadge, Icon, Menu, MenuItem, filled_icon};
 use crate::state::{Module, store, sync, use_app};
 
@@ -24,9 +26,17 @@ pub fn Header() -> Element {
     let my_day_open = (app.my_day_open)() && module != Module::Tasks;
     let unseen = notifications::use_unseen_count();
     let settings_open = (app.settings_dialog)().is_some();
+    // Title bar mode: caption buttons on each side and drag regions on the
+    // empty space (the shell root publishes the button counts to the CSS).
+    // Both button groups come last in the DOM, so they follow the avatar in
+    // the tab order (§3.7) wherever they sit; CSS moves the start group to
+    // the left edge.
+    let controls = window::use_window_controls();
+    let (wc_start, wc_end) = controls.map(|c| (c.layout.start().count(), c.layout.end().count())).unwrap_or((0, 0));
+    let drag = controls.is_some().then_some("true");
     rsx! {
-        header { class: "ax-header", role: "banner",
-            div { class: "ax-header-start",
+        header { class: "ax-header", role: "banner", "data-ax-drag-region": drag,
+            div { class: "ax-header-start", "data-ax-drag-region": drag,
                 HeaderButton {
                     icon: "grid_dots",
                     title: "App launcher",
@@ -53,7 +63,7 @@ pub fn Header() -> Element {
                 }
             }
             search::SearchBox {}
-            div { class: "ax-header-end", role: "toolbar", "aria-label": "Header actions",
+            div { class: "ax-header-end", role: "toolbar", "aria-label": "Header actions", "data-ax-drag-region": drag,
                 HeaderButton {
                     icon: "calendar_checkmark",
                     title: if module == Module::Tasks { "My Day is already open in To Do" } else { "My Day" },
@@ -105,6 +115,8 @@ pub fn Header() -> Element {
                 }
                 if flyout == Some(Flyout::Account) { account::AccountFlyout {} }
             }
+            if wc_start > 0 { window::CaptionButtons { end: false } }
+            if wc_end > 0 { window::CaptionButtons { end: true } }
         }
     }
 }

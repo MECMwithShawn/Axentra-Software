@@ -6,6 +6,8 @@
   flex: none; height: var(--ax-header-h); display: flex; align-items: stretch;
   background: var(--ax-header-bg); color: var(--ax-header-fg);
   position: relative; z-index: 10;
+  /* Width taken by window controls (title-bar mode sets the counts on .ax-app). */
+  --ax-wc-room: calc(var(--ax-caption-w) * (var(--ax-wc-start-n, 0) + var(--ax-wc-end-n, 0)));
 }
 .ax-header-start { display: flex; align-items: stretch; position: relative; min-width: 0; }
 .ax-header-end { display: flex; align-items: stretch; margin-left: auto; position: relative; }
@@ -38,12 +40,18 @@
 }
 .ax-header-badge { position: absolute; top: 7px; left: 21px; box-shadow: 0 0 0 1px var(--ax-header-bg); pointer-events: none; }
 
-/* Search (§3.2): left edge lines up with the message list. */
+/* Search (§3.2): left edge lines up with the message list (shifted right by
+   window controls at the left), and it never runs under the end buttons
+   (208px) or window controls at the right. In title-bar mode it also leaves
+   --ax-titlebar-drag-min of empty header after it, so a narrow window can
+   still be moved by its title bar. */
 .ax-header-search {
-  position: absolute; left: var(--ax-search-left); top: 8px; width: var(--ax-search-w); z-index: 2;
+  position: absolute; top: 8px; z-index: 2;
+  left: calc(var(--ax-search-left) + var(--ax-caption-w) * var(--ax-wc-start-n, 0));
+  width: min(var(--ax-search-w), calc(100vw - var(--ax-search-left) - var(--ax-wc-room) - var(--ax-drag-gap, 0px) - 216px));
   transition: width var(--ax-duration-normal) var(--ax-ease-decelerate-mid);
 }
-.ax-header-search.ax-expanded { width: min(720px, calc(100vw - var(--ax-search-left) - 300px)); }
+.ax-header-search.ax-expanded { width: min(720px, calc(100vw - var(--ax-search-left) - var(--ax-wc-room) - var(--ax-drag-gap, 0px) - 300px)); }
 .ax-search {
   display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 10px; border-radius: var(--ax-radius-m);
   background: var(--ax-header-search-bg); color: var(--ax-header-search-fg);
@@ -73,6 +81,21 @@
 .ax-search-filters { width: 440px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .ax-search-filters .ax-input { width: 100%; }
 .ax-search-filters-actions { gap: 8px; padding-top: 4px; }
+
+/* Window controls (§3.1 #12): Fluent caption buttons in the header colours. */
+.ax-wc { display: flex; align-items: stretch; flex: none; position: relative; }
+/* Last in the DOM (tab order after the avatar, §3.7), first on screen. */
+.ax-wc-start { order: -1; }
+.ax-wc-btn {
+  position: relative; width: var(--ax-caption-w); height: var(--ax-header-h); padding: 0; border: none; border-radius: 0;
+  background: transparent; color: var(--ax-header-fg);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background var(--ax-duration-faster) var(--ax-ease), color var(--ax-duration-faster) var(--ax-ease);
+}
+.ax-wc-btn:hover { background: var(--ax-header-button-hover); color: var(--ax-header-icon-hover); }
+.ax-wc-btn:active { background: var(--ax-header-button-pressed); }
+.ax-wc-btn.ax-wc-close:hover { background: var(--ax-caption-close-hover); color: #ffffff; }
+.ax-wc-btn.ax-wc-close:active { background: var(--ax-caption-close-pressed); color: #ffffff; }
 
 /* ---------------------------------------------------------------- Body: rail + module */
 .ax-body { flex: 1; min-height: 0; display: flex; padding-right: var(--ax-content-gutter); }
@@ -436,12 +459,70 @@
 @media (max-width: 1279px) { .ax-app { --ax-search-w: 320px; } }
 @media (max-width: 1023px) {
   .ax-app { --ax-search-w: 240px; --ax-search-left: 220px; }
-  .ax-header-search.ax-expanded { width: 360px; }
+  .ax-header-search.ax-expanded { width: min(360px, calc(100vw - var(--ax-search-left) - var(--ax-wc-room) - var(--ax-drag-gap, 0px) - 216px)); }
 }
 @media (max-width: 859px) {
   .ax-header-appname { display: none; }
   .ax-app { --ax-search-left: 56px; --ax-side-pane-w: 280px; }
 }
+
+/* ---------------------------------------------------------------- Window frame (§12.4)
+   Client-side decorations only (`data-window` is set when the header is the
+   title bar). Restored: rounded corners, a 1px border and invisible resize
+   handles. Tiled by the compositor (e.g. half-screen snapping): square
+   corners; the tiled edges (`data-tiled`) have no border line and no
+   handles. Maximised: square and edge to edge. */
+.ax-app[data-window] {
+  --ax-drag-gap: var(--ax-titlebar-drag-min);
+  /* Everything but the caption buttons' corner(s) of the header band. */
+  --ax-wc-cutout: polygon(
+    calc(var(--ax-caption-w) * var(--ax-wc-start-n, 0)) 0,
+    calc(100% - var(--ax-caption-w) * var(--ax-wc-end-n, 0)) 0,
+    calc(100% - var(--ax-caption-w) * var(--ax-wc-end-n, 0)) var(--ax-header-h),
+    100% var(--ax-header-h), 100% 100%, 0 100%, 0 var(--ax-header-h),
+    calc(var(--ax-caption-w) * var(--ax-wc-start-n, 0)) var(--ax-header-h)
+  );
+}
+.ax-app[data-window="restored"] { border-radius: var(--ax-window-radius); }
+.ax-app:is([data-window="restored"], [data-window="tiled"])::after {
+  content: ""; position: fixed; inset: 0; z-index: 2200; pointer-events: none;
+  border: 1px solid var(--ax-window-border); border-radius: var(--ax-window-radius);
+}
+.ax-app[data-window="tiled"]::after { border-radius: 0; }
+.ax-app[data-tiled~="top"]::after { border-top-width: 0; }
+.ax-app[data-tiled~="right"]::after { border-right-width: 0; }
+.ax-app[data-tiled~="bottom"]::after { border-bottom-width: 0; }
+.ax-app[data-tiled~="left"]::after { border-left-width: 0; }
+/* Modal overlays leave the window controls uncovered (and undimmed), like
+   native caption buttons: the window can still be minimised or closed. Only
+   the dimming layer is cut out and takes the overlay's clicks; the dialog
+   stays whole and on top even where it reaches into the header band. The
+   dimmed header strip still moves the window (TITLEBAR_JS). */
+.ax-app[data-window] :is(.ax-dialog-overlay, .ax-acct-overlay) { background: transparent; pointer-events: none; }
+.ax-app[data-window] :is(.ax-dialog-overlay, .ax-acct-overlay) > * { pointer-events: auto; }
+.ax-app[data-window] :is(.ax-dialog-overlay, .ax-acct-overlay)::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: auto;
+  background: var(--ax-bg-overlay); clip-path: var(--ax-wc-cutout);
+}
+/* Full-window overlays are fixed, so the frame's rounding does not clip them. */
+.ax-app[data-window="restored"] :is(.ax-dialog-overlay, .ax-acct-overlay)::before { border-radius: var(--ax-window-radius); }
+/* Menu and flyout backdrops (transparent click catchers) leave them uncovered too. */
+.ax-app[data-window] :is(.ax-flyout-backdrop, .ax-menu-backdrop, .ax-ribbon-overlay-backdrop) { clip-path: var(--ax-wc-cutout); }
+/* Flat panes reach the window edge: keep their scrollbars clear of the handles. */
+.ax-app:is([data-window="restored"], [data-window="tiled"]):not([data-tiled~="right"])[data-chrome="flat"] .ax-body { padding-right: var(--ax-resize-edge); }
+.ax-app:is([data-window="restored"], [data-window="tiled"]):not([data-tiled~="bottom"])[data-chrome="flat"] .ax-body { padding-bottom: var(--ax-resize-edge); }
+.ax-resize { position: fixed; z-index: 1990; }
+.ax-resize-n, .ax-resize-s { left: var(--ax-resize-corner); right: var(--ax-resize-corner); height: var(--ax-resize-edge); cursor: ns-resize; }
+.ax-resize-e, .ax-resize-w { top: var(--ax-resize-corner); bottom: var(--ax-resize-corner); width: var(--ax-resize-edge); cursor: ew-resize; }
+.ax-resize-n { top: 0; }
+.ax-resize-s { bottom: 0; }
+.ax-resize-e { right: 0; }
+.ax-resize-w { left: 0; }
+.ax-resize-ne, .ax-resize-nw, .ax-resize-se, .ax-resize-sw { width: var(--ax-resize-corner); height: var(--ax-resize-corner); }
+.ax-resize-ne { top: 0; right: 0; cursor: nesw-resize; }
+.ax-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+.ax-resize-nw { top: 0; left: 0; cursor: nwse-resize; }
+.ax-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
 
 /* ---------------------------------------------------------------- Ribbon Customize dialog (§6.10) */
 .ax-customize .ax-dialog-body { display: flex; min-height: 0; }

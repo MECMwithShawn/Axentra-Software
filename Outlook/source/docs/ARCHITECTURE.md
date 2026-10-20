@@ -14,8 +14,8 @@ Microsoft's MIT-licensed Fluent System Icons (`crates/axentra-ui/icons/`).
 | `axentra-core` | Domain model (`model.rs`), SQLite store (`store/`), recurrence (`recurrence.rs`), HTML sanitising (`html.rs`), text helpers, demo data (`seed/`), encrypted account backups (`backup/`). No UI, no network. |
 | `axentra-sync` | Account connectivity (Microsoft Graph, IMAP/SMTP), runs on its own thread + Tokio runtime, writes into the store, exposes `SyncHandle`. |
 | `axentra-ui` | Dioxus 0.7 components. Renders identically in the desktop webview and in liveview. |
-| `axentra-desktop` | Binary `axentra-outlook`: opens `~/.local/share/axentra-outlook/axentra.db`, seeds demo data on first run (unless `AXENTRA_NO_DEMO`), starts sync, opens the window. |
-| `axentra-preview` | Dev-only liveview server with an in-memory seeded store, for previewing in a browser: `AXENTRA_PREVIEW_PORT=8090 cargo run -p axentra-preview`, then open `http://localhost:8090/app`. |
+| `axentra-desktop` | Binary `axentra-outlook`: opens `~/.local/share/axentra-outlook/axentra.db`, seeds demo data on first run (unless `AXENTRA_NO_DEMO`), starts sync, opens the window (undecorated: the header is the title bar, see below). |
+| `axentra-preview` | Dev-only liveview server with an in-memory seeded store, for previewing in a browser: `AXENTRA_PREVIEW_PORT=8090 cargo run -p axentra-preview`, then open `http://localhost:8090/app`. `AXENTRA_FAKE_WINDOW_CONTROLS=1` (or a GNOME button layout such as `close,minimize,maximize:`) draws the desktop title bar with no-op window controls; `AXENTRA_FAKE_WINDOW_TILED` (e.g. `top bottom left`) starts it tiled. |
 
 ## Store
 
@@ -61,6 +61,41 @@ destination (development and tests).
 * Compose: `app.compose(ComposeRequest::...)` (switches to Mail). While compose is open the Mail ribbon shows `mail::compose::ribbon_tabs()` and forwards picks with `app.compose_command(id)`; `ComposePane` consumes `app.compose_cmd`.
 * Search: the header box writes `app.search` (`query`, `active`, `serial`). Each module interprets it for itself (Mail: message search; Calendar: events; People: contacts; To Do: tasks).
 * Don't add fields to `AppState`; keep module-local state in the module (signals, or a module context provided at the module root).
+
+## Window frame (client-side decorations)
+
+The desktop window has no native decorations; the header is the title bar
+(`docs/spec/shell.md` §3.1, §12.4). `axentra-ui` never depends on
+`dioxus-desktop`: the host provides a `shell::window::WindowControls`
+context (Copy: `minimize`, `toggle_maximize`, `close`, `start_drag`,
+`start_resize(ResizeEdge)` callbacks, `is_maximized` and `tiled`
+(`TiledEdges`) signals, the `ButtonLayout` and the double/middle-click
+`TitlebarAction`s).
+
+* `axentra-desktop/src/titlebar.rs` reads the desktop's preferences once at
+  startup (GNOME `org.gnome.desktop.wm.preferences`, or GTK's
+  `gtk-decoration-layout` elsewhere; `AXENTRA_BUTTON_LAYOUT` overrides) and
+  wraps `axentra_ui::App` in `CsdRoot`, which provides the context from the
+  tao window and keeps `is_maximized` and `tiled` in sync with GDK's
+  window-state events (tao reports no tiling; resize events are a fallback
+  for maximise).
+* With the context, the shell draws caption buttons on the side the desktop
+  puts them, marks empty header space with `data-ax-drag-region`, adds
+  invisible resize handles (`window::ResizeHandles`) and sets
+  `data-window="restored|tiled|maximized"` on `.ax-app` (rounded frame;
+  square with no frame line or handles on the `data-tiled` edges; square
+  and edge to edge). The caption buttons come last in the DOM (tab order
+  after the avatar), CSS places the left-side group. Modal overlays dim
+  through a clipped `::before` and menu/flyout backdrops are clipped the
+  same way, so caption buttons stay clickable under them.
+  Mouse handling is a page script (`window::TITLEBAR_JS`): a drag starts after
+  4px of movement, so clicks and double-clicks stay with the page; only the
+  moving press's own mouse click is swallowed, and a press after a move
+  never counts as a double-click.
+* Without it (liveview, Settings › General › Appearance › "Use the system
+  title bar", `AXENTRA_SYSTEM_TITLEBAR=1`) the header is a plain app header.
+  Don't put interactive content on `data-ax-drag-region` elements themselves;
+  children that are buttons or inputs are never drag handles.
 
 ## Components (`kit/`, `shell/ribbon.rs`)
 

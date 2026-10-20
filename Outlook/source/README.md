@@ -31,6 +31,9 @@ cargo test --workspace
 
 The desktop app keeps its data in `~/.local/share/axentra-outlook/axentra.db`
 and creates a demo account on first launch (set `AXENTRA_NO_DEMO=1` to skip).
+Its header doubles as the window's title bar; Settings › General › Appearance ›
+"Use the system title bar" (or `AXENTRA_SYSTEM_TITLEBAR=1`) restores the
+desktop's own title bar.
 
 See `docs/ARCHITECTURE.md` for the design and `docs/spec/` for the behaviour
 specification.

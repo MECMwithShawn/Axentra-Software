@@ -225,6 +225,7 @@ pub const INDEX: &[(PageId, &str, &str)] = &[
     (PageId::Appearance, "Dark mode", "Use a light background for messages"),
     (PageId::Appearance, "Density", "Density"),
     (PageId::Appearance, "Layout style", "Classic look"),
+    (PageId::Appearance, "Title bar", "Use the system title bar"),
     (PageId::Appearance, "Accessibility", "High contrast"),
     (PageId::Notifications, "Notify me about", "Mail notifications"),
     (PageId::Notifications, "Notify me about", "Calendar reminders"),
@@ -342,6 +343,7 @@ mod tests {
         assert!(search("Signatures")[0].page == PageId::Signatures);
         assert!(search("onedrive").iter().any(|h| h.page == PageId::Backup));
         assert!(search("restore").iter().any(|h| h.page == PageId::Backup));
+        assert!(search("title bar").iter().any(|h| h.page == PageId::Appearance));
         assert!(search("   ").is_empty());
     }
 

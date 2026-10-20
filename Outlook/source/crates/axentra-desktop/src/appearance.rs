@@ -54,7 +54,7 @@ pub fn parse_gnome(out: &str) -> Option<SystemScheme> {
     }
 }
 
-fn run(cmd: &str, args: &[&str]) -> Option<String> {
+pub(crate) fn run(cmd: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(cmd).args(args).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }

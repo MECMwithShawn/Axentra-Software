@@ -16,3 +16,8 @@ tracing-subscriber.workspace = true
 axentra-core.workspace = true
 axentra-sync.workspace = true
 chrono.workspace = true
+
+# The tao window's GTK side, for the compositor's tiled states (titlebar.rs).
+# Same version as tao's own.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

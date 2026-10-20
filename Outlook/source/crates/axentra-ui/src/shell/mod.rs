@@ -18,6 +18,7 @@ pub mod search;
 pub mod shortcuts;
 pub mod theme;
 pub mod toasts;
+pub mod window;
 
 use axentra_core::*;
 use chrono::{DateTime, Local};
@@ -282,6 +283,16 @@ pub fn Shell() -> Element {
         stack.drain(..excess);
     });
 
+    // Client-side decorations (§12.4): only when the host provides window controls.
+    let controls = window::use_window_controls();
+    window::use_titlebar_events(controls);
+    let window_state = controls.map(|c| c.frame());
+    // Tiled edges (no frame line there): only while tiled, not maximised.
+    let tiled_edges = controls.filter(|c| c.frame() == "tiled").map(|c| (c.tiled)().names());
+    // Caption-button counts per side: the search box and modal overlays
+    // make room for them (shell.css).
+    let window_style = controls.map(|c| format!("--ax-wc-start-n:{};--ax-wc-end-n:{}", c.layout.start().count(), c.layout.end().count()));
+
     let module = (app.module)();
     let pane = (shell.pane)();
     rsx! {
@@ -295,6 +306,9 @@ pub fn Shell() -> Element {
             "data-motion": look.motion,
             "data-ribbon": look.ribbon,
             "data-light-messages": if saved.light_message_background { "true" },
+            "data-window": window_state,
+            "data-tiled": tiled_edges,
+            style: window_style,
             tabindex: "-1",
             onkeydown: move |e: KeyboardEvent| on_global_key(app, shell, &e),
             button {
@@ -340,6 +354,7 @@ pub fn Shell() -> Element {
             div { id: "ax-live-polite", class: "ax-visually-hidden", role: "status", "aria-live": "polite" }
             div { id: "ax-live-assertive", class: "ax-visually-hidden", role: "alert", "aria-live": "assertive" }
             div { id: "ax-overlay-root", class: "ax-overlay-root", "aria-hidden": "true" }
+            window::ResizeHandles {}
         }
     }
 }

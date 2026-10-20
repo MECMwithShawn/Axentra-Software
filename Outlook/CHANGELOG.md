@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.2 (pre-release, 2026-10-20)
+
+- **Merged title bar:** the blue header is now the window's title bar, like the new Outlook for Windows. Minimize,
+  maximize/restore and close follow your desktop's button layout; drag empty header space to move the window,
+  double-click to maximize, resize from the edges and corners. Rounded corners when floating, square when
+  maximized or tiled. **Settings › General › Appearance › Use the system title bar** brings the normal title bar
+  back.
+- Reviewed independently for window behaviour and layout; fixed before release: a click right after a drag
+  being ignored, re-grabbing just after a drag maximizing the window, menus and dialogs covering the window
+  buttons, and too little drag space at narrow widths.
+
+Source: [`source/`](source/) (snapshot of commit `0f6f30e`). See [release notes](releases/0.1.2.md).
+
 ## 0.1.1 (pre-release, 2026-10-19)
 
 - **Backup:** Settings › Accounts › Backup saves an encrypted backup (AES-256-GCM, Argon2id password key) of

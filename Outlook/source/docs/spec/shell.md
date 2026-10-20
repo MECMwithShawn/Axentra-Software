@@ -889,6 +889,7 @@ Page-detail ownership: this shell section specifies the pages in §7.3-§7.6. Ot
 | | Checkbox (shown when Dark is in effect) | **Use a light background for messages** (reading pane stays light in dark mode) [D: February 2025] [U label] |
 | **Density** | Radio group with previews | **Roomy**, **Cozy** (default [3P]), **Compact** [D names; the View tab is the documented control, this Settings copy is [3P]] |
 | **Layout style** | Switch | **Classic look** (flat panes, no floating cards), default off (Axentra; §1.15) [U] |
+| **Title bar** | Checkbox | **Use the system title bar**, default off: the desktop's own title bar instead of the header (§12.4). Applies at the next start (Axentra) [U] |
 | **Accessibility** | Radio | **High contrast**: Off (default) / On / Follow system (portal `contrast` key, §1.15) (Axentra) [U] |
 
 Theme and mode preview live as the user picks them and **revert on Discard** (estimate).

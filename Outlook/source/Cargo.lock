@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -338,20 +338,21 @@ dependencies = [
 
 [[package]]
 name = "axentra-desktop"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axentra-core",
  "axentra-sync",
  "axentra-ui",
  "chrono",
  "dioxus",
+ "gtk",
  "tracing",
  "tracing-subscriber",
 ]
 
 [[package]]
 name = "axentra-preview"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axentra-core",
  "axentra-sync",
@@ -366,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-sync"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-channel 2.5.0",
  "async-imap",
@@ -395,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-ui"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axentra-core",
  "axentra-sync",

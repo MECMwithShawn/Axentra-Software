@@ -1,5 +1,10 @@
 # Security scans
 
+## 0.1.2 (pre-release)
+
+- [axentra-outlook_0.1.2-1_amd64.deb](https://www.virustotal.com/gui/file/66e70ca93fd24763f57fe9d40bda942be35a009e50e0557e6057dff5c14f7842/detection):
+  scan pending; this is a hash lookup, not a recorded result.
+
 ## 0.1.1 (pre-release)
 
 - [axentra-outlook_0.1.1-1_amd64.deb](https://www.virustotal.com/gui/file/370cf536becfbb951234d9d335fdcb16786c507afc10e6fe69531006c19facaf/detection):

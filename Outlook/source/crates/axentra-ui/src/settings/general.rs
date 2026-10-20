@@ -191,6 +191,14 @@ pub fn AppearancePage() -> Element {
             }
             Note { text: "Shows panes edge to edge, separated by thin lines, instead of floating cards." }
         }
+        Section { title: "Title bar",
+            Checkbox {
+                label: "Use the system title bar",
+                description: "Shows your desktop's own title bar and window buttons above the app instead of in the header. Applies the next time you start Axentra Outlook.",
+                checked: s.system_title_bar,
+                onchange: move |v| ctx.edit(|s| s.system_title_bar = v),
+            }
+        }
         Section { title: "Accessibility",
             Row { label: "High contrast", description: "Black-and-white colours with strong outlines.",
                 Select {
@@ -532,5 +540,16 @@ mod tests {
         for v in [None, Some(true), Some(false)] {
             assert_eq!(tri_parse(&tri_value(v)), v);
         }
+    }
+
+    #[test]
+    fn system_title_bar_defaults_off_for_saved_settings() {
+        // Settings saved before the option existed keep the header title bar.
+        let s: Settings = serde_json::from_str(r#"{"theme":"Dark","classic_look":true}"#).unwrap();
+        assert!(!s.system_title_bar && s.classic_look);
+        assert!(!Settings::default().system_title_bar);
+        let on = Settings { system_title_bar: true, ..Settings::default() };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&on).unwrap()).unwrap();
+        assert!(back.system_title_bar);
     }
 }

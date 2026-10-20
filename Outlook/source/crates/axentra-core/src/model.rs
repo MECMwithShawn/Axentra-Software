@@ -911,6 +911,9 @@ pub struct Settings {
     pub backup_dir: Option<String>,
     /// How many backups to keep; older ones are deleted.
     pub backup_keep: u32,
+    // ---- Added for client-side decorations (docs/spec/shell.md §12.4). ----
+    /// Use the desktop's own title bar instead of the header (read at startup).
+    pub system_title_bar: bool,
 }
 
 impl Default for Settings {
@@ -987,6 +990,7 @@ impl Default for Settings {
             backup_auto: true,
             backup_dir: None,
             backup_keep: 12,
+            system_title_bar: false,
         }
     }
 }
