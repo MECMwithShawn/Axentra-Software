@@ -47,6 +47,31 @@ fn primary(label: &str) -> egui::Button<'_> {
         .corner_radius(7)
         .fill(GREEN)
 }
+fn create_usb_button(ui: &mut egui::Ui) -> egui::Response {
+    let icon_id = ui.make_persistent_id("create_usb_arrow");
+    let button = egui::Button::new((
+        RichText::new("Create USB").color(BG).strong(),
+        egui::Atom::custom(icon_id, Vec2::splat(16.)),
+    ))
+    .min_size(Vec2::new(0., 38.))
+    .corner_radius(7)
+    .fill(GREEN)
+    .atom_ui(ui);
+    if let Some(rect) = button.rect(icon_id) {
+        // Draw the arrow independently of the platform's font coverage.
+        let center = rect.center();
+        let stroke = Stroke::new(1.8, BG);
+        let tip = center + Vec2::new(5., 0.);
+        for (from, to) in [
+            (center - Vec2::new(5., 0.), tip),
+            (center + Vec2::new(1., -4.), tip),
+            (center + Vec2::new(1., 4.), tip),
+        ] {
+            ui.painter().line_segment([from, to], stroke);
+        }
+    }
+    button.response
+}
 fn caption(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).color(GREEN).size(11.).strong());
 }
@@ -962,7 +987,8 @@ impl eframe::App for App {
                             self.stop();
                         }
                         if ui
-                            .add_enabled(self.can_write(), primary("Create USB  →"))
+                            .add_enabled_ui(self.can_write(), create_usb_button)
+                            .inner
                             .clicked()
                         {
                             self.confirm_text.clear();
