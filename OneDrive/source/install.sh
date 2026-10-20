@@ -75,6 +75,11 @@ mkdir -p "$DATA/applications" "$CONFIG/autostart" "$CONFIG/systemd/user"
 fill extras/desktop/axentra-onedrive.desktop "$DATA/applications/axentra-onedrive.desktop"
 fill extras/desktop/axentra-onedrive-autostart.desktop "$CONFIG/autostart/axentra-onedrive.desktop"
 fill extras/systemd/axentra-onedrive.service "$CONFIG/systemd/user/axentra-onedrive.service"
+# List the app in Axentra Command, with its card in the icon colour.
+case "$colour" in periwinkle) accent="#8B97FF" ;; azure) accent="#48AAFF" ;; *) accent="#B8DEFF" ;; esac
+mkdir -p "$DATA/axentra/command/apps"
+sed -e "s|@APP@|$APP|g" -e "s|@DATA@|$DATA|g" -e "s|@ACCENT@|$accent|g" \
+  extras/command/onedrive.json > "$DATA/axentra/command/apps/onedrive.json"
 
 nautilus=""
 if python3 -c "import gi; gi.require_version('Nautilus', '4.0')" 2>/dev/null; then

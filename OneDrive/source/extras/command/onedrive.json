@@ -1,0 +1,28 @@
+{
+  "id": "onedrive",
+  "name": "Axentra OneDrive",
+  "tagline": "OneDrive with Files On-Demand, working the way it does on Windows",
+  "kind": "desktop",
+  "order": 80,
+  "accent": "@ACCENT@",
+  "icon": "@DATA@/icons/hicolor/256x256/apps/axentra-onedrive.png",
+  "install": {
+    "exe": "@APP@/AxentraOneDrive"
+  },
+  "launch": {
+    "exe": "@APP@/AxentraOneDrive",
+    "args": ["--panel"]
+  },
+  "process": ["AxentraOneDrive", "axentra-onedrive"],
+  "docs": "@APP@",
+  "links": [
+    {
+      "label": "OneDrive on the web",
+      "url": "https://onedrive.live.com/"
+    },
+    {
+      "label": "Source and documentation",
+      "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/OneDrive"
+    }
+  ]
+}

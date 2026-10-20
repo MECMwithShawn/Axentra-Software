@@ -58,7 +58,7 @@ Requirements: Linux x86-64 (tested on Zorin OS 18.1 / Ubuntu 24.04), FUSE 3, Rus
 
 The app icon is the ice cloud from the [Axentra Icon Kit](../Icon-Kit/ONEDRIVE.md) (Glass + Precision 1.6), sharing the suite's glass tile, rim and halo. **Settings > Appearance** switches it to periwinkle or azure; the choice applies to the app menu, the notification area, File Explorer and the app's own windows. The other colours come from the same glyph with only the accent changed, and the [source](source/extras/icons/) includes a script that regenerates all three from the kit.
 
-Axentra Command does not list Axentra OneDrive yet. Command's catalog describes Windows installs, and this is a Linux-only app. The Linux install includes a `VERSION` file in the standard app folder.
+The installer adds a Command manifest, `~/.local/share/axentra/command/apps/onedrive.json`, so Axentra Command lists Axentra OneDrive with its icon, version (from the `VERSION` file in the app folder) and running state, with the card in the chosen icon colour. **Open** shows the panel of the running app instead of starting a second one. The shared `catalog.json` describes Windows installs, so this Linux-only app isn't in it.
 
 ## Validation
 

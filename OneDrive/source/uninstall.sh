@@ -13,6 +13,7 @@ systemctl --user disable --now axentra-onedrive.service 2>/dev/null || true
 rm -f "$BIN/axentra-onedrive" \
   "$CONFIG/systemd/user/axentra-onedrive.service" "$CONFIG/autostart/axentra-onedrive.desktop" \
   "$DATA/applications/axentra-onedrive.desktop" "$DATA/nautilus-python/extensions/axentra_onedrive_nautilus.py" \
+  "$DATA/axentra/command/apps/onedrive.json" \
   "$DATA/icons/hicolor/scalable/apps/axentra-onedrive.svg" "$DATA"/icons/hicolor/*/apps/axentra-onedrive.png "$DATA"/icons/hicolor/scalable/emblems/axentra-onedrive-*.svg
 rm -rf "$APP"
 systemctl --user daemon-reload 2>/dev/null || true

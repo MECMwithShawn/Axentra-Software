@@ -57,9 +57,29 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
         .build()?;
     let _guard = rt.enter();
 
+    // One tray app per session: starting it again (from the app menu or
+    // Axentra Command) shows the running one's panel or Settings instead.
+    let (tx, rx) = unbounded_channel();
+    let _instance = match rt.block_on(claim_instance(tx.clone())) {
+        Ok(Some(conn)) => Some(conn),
+        Ok(None) => {
+            let what = if start_with_settings {
+                "settings"
+            } else if show_panel {
+                "panel"
+            } else {
+                ""
+            };
+            return rt.block_on(show_in_running(what));
+        }
+        Err(e) => {
+            tracing::warn!("couldn't check for a running Axentra OneDrive: {e:#}");
+            None
+        }
+    };
+
     let flyout = Flyout::new()?;
     let settings = SettingsWindow::new()?;
-    let (tx, rx) = unbounded_channel();
 
     macro_rules! wire {
         ($ui:ident . $on:ident => $cmd:expr) => {{
@@ -110,6 +130,63 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     );
     slint::run_event_loop_until_quit()?;
     rt.shutdown_timeout(Duration::from_secs(1));
+    Ok(())
+}
+
+const INSTANCE_NAME: &str = "io.github.mecmwithshawn.AxentraOneDrive.Tray";
+const INSTANCE_PATH: &str = "/io/github/mecmwithshawn/AxentraOneDrive/Tray";
+const INSTANCE_IFACE: &str = "io.github.mecmwithshawn.AxentraOneDrive.Tray1";
+
+/// What a second start of the tray app talks to.
+struct Instance {
+    tx: UnboundedSender<Cmd>,
+}
+
+#[zbus::interface(name = "io.github.mecmwithshawn.AxentraOneDrive.Tray1")]
+impl Instance {
+    /// Show "panel" or "settings"; anything else does nothing.
+    fn show(&self, what: &str) {
+        let cmd = match what {
+            "panel" => Cmd::ShowFlyout(None),
+            "settings" => Cmd::ShowSettings,
+            _ => return,
+        };
+        let _ = self.tx.send(cmd);
+    }
+}
+
+/// The session-bus connection that makes this the running tray app, or
+/// `None` when another one already is.
+async fn claim_instance(tx: UnboundedSender<Cmd>) -> Result<Option<zbus::Connection>> {
+    // zbus lets a newer requester take a name over by default; refuse that,
+    // so a second start finds this one instead of replacing it.
+    let built = zbus::connection::Builder::session()?
+        .allow_name_replacements(false)
+        .replace_existing_names(false)
+        .name(INSTANCE_NAME)?
+        .serve_at(INSTANCE_PATH, Instance { tx })?
+        .build()
+        .await;
+    match built {
+        Ok(conn) => Ok(Some(conn)),
+        Err(zbus::Error::NameTaken) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+async fn show_in_running(what: &str) -> Result<()> {
+    if what.is_empty() {
+        return Ok(());
+    }
+    let conn = zbus::Connection::session().await?;
+    conn.call_method(
+        Some(INSTANCE_NAME),
+        INSTANCE_PATH,
+        Some(INSTANCE_IFACE),
+        "Show",
+        &(what,),
+    )
+    .await?;
     Ok(())
 }
 

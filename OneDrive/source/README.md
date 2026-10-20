@@ -64,7 +64,7 @@ You need Rust, `fuse3`, and for the file-manager badges `python3-nautilus`. On G
    6. Copy the *Application (client) ID*.
 
    If Entra says personal accounts can't create registrations without a directory, join the free Microsoft 365 Developer Program or create a free Azure account and register the app there. The registration still accepts personal accounts.
-2. **Install:** `./install.sh`. Like the rest of the Axentra suite it installs for you only, with no sudo, into `~/.local/share/axentra/apps/onedrive`, and puts the `axentra-onedrive` command in `~/.local/bin`. It also upgrades an install made under the project's earlier working name, Cirrus, keeping its sign-in and sync state.
+2. **Install:** `./install.sh`. Like the rest of the Axentra suite it installs for you only, with no sudo, into `~/.local/share/axentra/apps/onedrive`, puts the `axentra-onedrive` command in `~/.local/bin`, and lists the app in Axentra Command. It also upgrades an install made under the project's earlier working name, Cirrus, keeping its sign-in and sync state.
 3. **Connect and sign in:** `axentra-onedrive setup` (paste the client ID), then `axentra-onedrive login`.
 4. **Start:** `systemctl --user start axentra-onedrive`, then open **Axentra OneDrive** from the app menu. Both start automatically from then on. Run `nautilus -q` once so Files loads the badges.
 
