@@ -642,6 +642,39 @@ impl Store {
         })
     }
 
+    /// Mail dropped on My Day's To Do tab (people-todo.md 4.4): one task per
+    /// message, titled with its subject, linked to the message and added to
+    /// My Day for `today`. A message that already has an open task gets that
+    /// task added to My Day instead of a duplicate. Returns the tasks.
+    pub fn tasks_from_messages(&self, ids: &[MessageId], today: NaiveDate) -> Result<Vec<TaskId>> {
+        let open_links: HashMap<MessageId, TaskId> = self
+            .query_docs::<Task>("WHERE is_completed = 0", [])?
+            .into_iter()
+            .filter_map(|t| t.linked_message_id.map(|m| (m, t.id)))
+            .collect();
+        let mut out = Vec::new();
+        for &id in ids {
+            if let Some(&existing) = open_links.get(&id) {
+                if !out.contains(&existing) {
+                    self.set_task_my_day(existing, Some(today))?;
+                    out.push(existing);
+                }
+                continue;
+            }
+            let Some(m) = self.message(id)? else { continue };
+            let subject = m.subject.trim();
+            let mut t = Task {
+                title: if subject.is_empty() { "(No subject)".into() } else { subject.to_string() },
+                linked_message_id: Some(id),
+                my_day: Some(today),
+                my_day_at: Some(Utc::now()),
+                ..Default::default()
+            };
+            out.push(self.insert_task(&mut t)?);
+        }
+        Ok(out)
+    }
+
     /// "Remove from My Day": also hides a task that My Day showed because it
     /// is due today, for the rest of the day.
     pub fn remove_task_from_my_day(&self, id: TaskId, today: NaiveDate) -> Result<()> {
@@ -816,6 +849,29 @@ mod tests {
 
     fn titles(tasks: &[Task]) -> Vec<&str> {
         tasks.iter().map(|t| t.title.as_str()).collect()
+    }
+
+    #[test]
+    fn dropped_mail_becomes_my_day_tasks_once() {
+        let (store, account) = store_with_account();
+        let inbox = store.folder_by_role(account, FolderRole::Inbox).unwrap().unwrap();
+        let mut a = Message { account_id: account, folder_id: inbox.id, subject: " Budget review ".into(), ..Default::default() };
+        let mut b = Message { account_id: account, folder_id: inbox.id, ..Default::default() };
+        let a_id = store.insert_message(&mut a, None).unwrap();
+        let b_id = store.insert_message(&mut b, None).unwrap();
+        let today = day(10, 19);
+        let made = store.tasks_from_messages(&[a_id, b_id, 999_999], today).unwrap();
+        assert_eq!(made.len(), 2, "unknown ids are skipped");
+        let first = store.task(made[0]).unwrap().unwrap();
+        assert_eq!((first.title.as_str(), first.linked_message_id, first.my_day), ("Budget review", Some(a_id), Some(today)));
+        assert_eq!(store.task(made[1]).unwrap().unwrap().title, "(No subject)");
+        // Dropping the same message again reuses its open task.
+        store.set_task_my_day(made[0], None).unwrap();
+        assert_eq!(store.tasks_from_messages(&[a_id, a_id], day(10, 20)).unwrap(), vec![made[0]]);
+        assert_eq!(store.task(made[0]).unwrap().unwrap().my_day, Some(day(10, 20)));
+        // Once completed, a new drop makes a new task.
+        store.set_task_completed(made[0], true).unwrap();
+        assert_ne!(store.tasks_from_messages(&[a_id], today).unwrap(), vec![made[0]]);
     }
 
     #[test]

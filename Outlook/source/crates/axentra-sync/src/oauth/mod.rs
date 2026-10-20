@@ -2,6 +2,7 @@
 //! authorization code + PKCE through a loopback redirect, the device code
 //! flow as a fallback, and refresh. Tokens never touch the store or logs.
 
+pub mod client_id;
 pub mod device;
 pub mod loopback;
 
@@ -67,14 +68,9 @@ impl OAuthClient {
     }
 }
 
-/// Microsoft client id from the account / dialog, else `AXENTRA_MS_CLIENT_ID`.
-pub fn ms_client_id(configured: Option<&str>) -> Option<String> {
-    configured
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .or_else(|| std::env::var("AXENTRA_MS_CLIENT_ID").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
-}
+/// Microsoft client id from the account / dialog, else
+/// `AXENTRA_MS_CLIENT_ID`, else the one the last successful sign-in used.
+pub use client_id::ms_client_id;
 
 /// Google desktop client (`AXENTRA_GOOGLE_CLIENT_ID` / `_SECRET`).
 pub fn google_client() -> Option<OAuthClient> {

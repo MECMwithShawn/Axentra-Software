@@ -84,6 +84,12 @@ impl MenuItem {
     }
 }
 
+/// Whether any item opens a submenu (the menu then must not clip, so it
+/// doesn't scroll either).
+fn has_submenus(items: &[MenuItem]) -> bool {
+    items.iter().any(|i| !i.children.is_empty())
+}
+
 /// A menu at viewport position (x, y). It shifts itself to stay on screen.
 /// Clicking outside or pressing Escape calls `on_close`; choosing an item
 /// calls `on_select(id)` and then `on_close`.
@@ -103,6 +109,7 @@ pub fn Menu(
     #[props(default = 200)] min_width: u32,
 ) -> Element {
     let id = dom::use_unique_id("ax-menu");
+    let nested = has_submenus(&items);
     let shift_x = if anchor_end { "-100%".to_string() } else { format!("min(0px, calc(100vw - {x}px - 100% - 8px))") };
     let style = format!(
         "left:{x}px;top:{y}px;min-width:{min_width}px;transform:translate({shift_x}, min(0px, calc(100vh - {y}px - 100% - 8px)))"
@@ -116,6 +123,8 @@ pub fn Menu(
         div {
             id: "{id}",
             class: "ax-menu",
+            // A scrolling menu would clip its submenus.
+            class: if nested { "ax-menu-nested" },
             role: "menu",
             "aria-label": label,
             tabindex: "-1",
@@ -253,10 +262,12 @@ fn Submenu(
     on_back: EventHandler<()>,
 ) -> Element {
     let id = dom::use_unique_id("ax-submenu");
+    let nested = has_submenus(&items);
     rsx! {
         div {
             id: "{id}",
             class: "ax-menu ax-submenu",
+            class: if nested { "ax-menu-nested" },
             role: "menu",
             "aria-label": "{label}",
             "data-ax-roving": "vertical",

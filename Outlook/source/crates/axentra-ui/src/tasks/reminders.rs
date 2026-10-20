@@ -102,7 +102,7 @@ fn ReminderCard(task: Task, on_close: EventHandler<TaskId>) -> Element {
                 ctx.go(View::List(list_id));
                 ctx.open(id);
             }
-            None => app.navigate(NavRequest::TaskList(list_id)),
+            None => app.navigate(NavRequest::Task(id)),
         }
     };
     rsx! {

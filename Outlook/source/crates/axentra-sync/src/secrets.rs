@@ -58,6 +58,9 @@ pub enum SecretKind {
     Password,
     /// SMTP password when SMTP signs in separately.
     SmtpPassword,
+    /// The password that encrypts account backups (one per user, see
+    /// [`backup_password_key`]); remembered so monthly backups run unattended.
+    BackupPassword,
 }
 
 impl SecretKind {
@@ -66,7 +69,22 @@ impl SecretKind {
             SecretKind::OauthRefreshToken => "oauth_refresh_token",
             SecretKind::Password => "password",
             SecretKind::SmtpPassword => "smtp_password",
+            SecretKind::BackupPassword => "backup_password",
         }
+    }
+}
+
+/// Keyring `account_id` attribute of the backup password: not an account,
+/// so removing an account never deletes it.
+pub const BACKUP_SECRET_ID: &str = "axentra-outlook-backup";
+
+/// Where the backup password is kept.
+pub fn backup_password_key() -> SecretKey {
+    SecretKey {
+        account_uuid: BACKUP_SECRET_ID.into(),
+        kind: SecretKind::BackupPassword,
+        provider: Provider::Imap,
+        username: "backup".into(),
     }
 }
 
@@ -86,7 +104,7 @@ impl SecretKey {
             ("xdg:schema", SCHEMA),
             ("account_id", self.account_uuid.as_str()),
             ("kind", self.kind.as_str()),
-            ("provider", self.provider.keyring_name()),
+            ("provider", if self.kind == SecretKind::BackupPassword { "backup" } else { self.provider.keyring_name() }),
             ("username", self.username.as_str()),
         ])
     }
@@ -98,6 +116,9 @@ impl SecretKey {
     }
 
     fn label(&self) -> String {
+        if self.kind == SecretKind::BackupPassword {
+            return "Axentra Outlook – backup password".into();
+        }
         format!("Axentra Outlook – {} ({})", self.username, self.provider.keyring_name())
     }
 }
@@ -153,6 +174,24 @@ impl Keyring {
                     .create_item(&key.label(), key.attributes(), value.expose().as_bytes(), true, CONTENT_TYPE)
                     .await
                     .map_err(map_err)?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Delete one secret (no error when it doesn't exist).
+    pub async fn delete(&self, key: &SecretKey) -> SyncResult<()> {
+        match self {
+            Keyring::Memory(m) => {
+                m.lock().unwrap_or_else(|p| p.into_inner()).remove(&(key.account_uuid.clone(), key.kind));
+                Ok(())
+            }
+            Keyring::SecretService => {
+                let ss = connect().await?;
+                let found = ss.search_items(key.lookup()).await.map_err(map_err)?;
+                for item in found.unlocked.iter().chain(found.locked.iter()) {
+                    item.delete().await.map_err(map_err)?;
+                }
                 Ok(())
             }
         }
@@ -251,5 +290,26 @@ mod tests {
         });
         assert_eq!(key(SecretKind::OauthRefreshToken).label(), "Axentra Outlook – ana@example.org (imap)");
         assert_eq!(key(SecretKind::Password).attributes()["xdg:schema"], SCHEMA);
+    }
+
+    #[test]
+    fn backup_password_is_its_own_item_and_survives_account_removal() {
+        let b = backup_password_key();
+        assert_eq!(b.attributes()["kind"], "backup_password");
+        assert_eq!(b.attributes()["provider"], "backup");
+        assert_eq!(b.attributes()["account_id"], BACKUP_SECRET_ID);
+        assert_eq!(b.label(), "Axentra Outlook – backup password");
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(async {
+            let k = Keyring::memory();
+            k.set(&b, &Secret::new("backup pass")).await.unwrap();
+            k.set(&key(SecretKind::Password), &Secret::new("imap pass")).await.unwrap();
+            k.delete_account("u1").await.unwrap();
+            assert_eq!(k.get(&b, false).await.unwrap().unwrap().expose(), "backup pass");
+            k.delete(&b).await.unwrap();
+            assert!(k.get(&b, false).await.unwrap().is_none());
+            // Deleting what isn't there is fine.
+            k.delete(&b).await.unwrap();
+        });
     }
 }

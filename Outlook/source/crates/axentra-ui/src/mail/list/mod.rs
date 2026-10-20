@@ -139,6 +139,9 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
     };
     let (pos, total_h) = layout(&m, &look);
     let selection = ctx.selection.read().clone();
+    // Dragging a selected row drags the whole selection (other modules read
+    // the ids from the drag data, see `keyboard::BOOT_JS`).
+    let selected_ids = ids_csv(&m.ids_for(&selection));
     let focus = ctx.focus.read().clone();
     let expanded = ctx.expanded.read().clone();
     let today = ctx.today.read().num_days_from_ce() as i64;
@@ -306,6 +309,7 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
                     "aria-label": "{label}",
                     "aria-multiselectable": "true",
                     "aria-activedescendant": active_id.unwrap_or_default(),
+                    "data-selected-message-ids": "{selected_ids}",
                     onmounted: move |e| scroller.set(Some(e.data())),
                     onscroll: move |e: ScrollEvent| {
                         let y = e.data().scroll_top();
@@ -406,4 +410,9 @@ fn dummy_row() -> super::model::Row {
         responded: None,
         open: super::ctx::Open { message: 0, conversation: None, mark: Vec::new() },
     }
+}
+
+/// Message ids as drag data: "12,13,14".
+pub(crate) fn ids_csv(ids: &[axentra_core::MessageId]) -> String {
+    ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",")
 }

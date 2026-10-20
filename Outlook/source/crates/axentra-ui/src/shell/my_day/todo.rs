@@ -46,6 +46,28 @@ fn add_task(app: AppState, title: &str, today: NaiveDate) -> bool {
     false
 }
 
+/// Drag data type of mail rows (set by Mail's drag script).
+pub const MESSAGE_IDS_MIME: &str = "application/x-axentra-message-ids";
+
+/// Message ids carried by a drag ("[1,2]"); `None` when it isn't mail.
+pub fn dragged_messages(e: &DragEvent) -> Option<Vec<MessageId>> {
+    let raw = e.data_transfer().get_data(MESSAGE_IDS_MIME)?;
+    Some(serde_json::from_str(&raw).unwrap_or_default())
+}
+
+/// Turn dropped mail into My Day tasks.
+fn drop_mail(app: AppState, ids: &[MessageId], today: NaiveDate) {
+    if ids.is_empty() {
+        return;
+    }
+    if let Some(made) = app.check(store().tasks_from_messages(ids, today)) {
+        app.bump_tasks();
+        let text = if made.len() == 1 { "Task added to My Day".to_string() } else { format!("{} tasks added to My Day", made.len()) };
+        dom::announce(&text, false);
+        app.toast(text);
+    }
+}
+
 #[component]
 pub fn TodoTab() -> Element {
     let app = use_app();
@@ -57,6 +79,7 @@ pub fn TodoTab() -> Element {
     let (done, open): (Vec<Task>, Vec<Task>) = tasks.into_iter().partition(|t| t.is_completed);
     let mut draft = use_signal(String::new);
     let mut show_done = use_signal(|| false);
+    let mut drop_hover = use_signal(|| false);
     rsx! {
         div { class: "ax-myday-add",
             Icon { name: "add", size: 20 }
@@ -87,7 +110,24 @@ pub fn TodoTab() -> Element {
                 }
             }
         }
-        div { class: "ax-sidepanel-body",
+        div {
+            class: "ax-sidepanel-body ax-myday-drop",
+            class: if drop_hover() { "ax-drop" },
+            // Mail dropped here becomes tasks (people-todo.md 4.4).
+            "data-ax-drop": "true",
+            ondragover: move |e: DragEvent| {
+                if !drop_hover() && dragged_messages(&e).is_some() {
+                    drop_hover.set(true);
+                }
+            },
+            ondragleave: move |_| drop_hover.set(false),
+            ondrop: move |e: DragEvent| {
+                e.prevent_default();
+                drop_hover.set(false);
+                if let Some(ids) = dragged_messages(&e) {
+                    drop_mail(app, &ids, today);
+                }
+            },
             if open.is_empty() && done.is_empty() {
                 EmptyState { icon: "weather_sunny", title: "No tasks for today", subtitle: "Add a task or drag an email here." }
             } else {
@@ -166,7 +206,7 @@ fn TaskRow(task: Task, list: String, today: NaiveDate) -> Element {
                 r#type: "button",
                 class: "ax-myday-task-text",
                 title: "Open in To Do",
-                onclick: move |_| app.navigate(NavRequest::SmartList(SmartList::MyDay)),
+                onclick: move |_| app.navigate(NavRequest::Task(id)),
                 span { class: "ax-ellipsis ax-myday-task-title", "{task.title}" }
                 if !sub.is_empty() {
                     span { class: "ax-ellipsis ax-caption", class: if overdue { "ax-overdue" } else { "ax-muted" }, "{sub}" }

@@ -257,7 +257,9 @@
   --ax-badge-bg: var(--colorStatusDangerBackground3);
   --ax-pin: var(--colorBrandForeground1);
   --ax-important: var(--colorStatusDangerForeground3);
-  --ax-now-line: var(--colorStatusDangerBackground3);   /* calendar current-time line */
+  /* --ax-now-line (calendar current-time line) and --ax-highlight-search /
+     --ax-highlight-search-fg (search-term marks) differ by mode: generated
+     from the table in src/shell/theme.rs. */
   --ax-cal-oof: #8764b8;                                /* calendar "out of office" (data colour) */
 
   /* elevation (§1.9): geometry fixed, colours follow the mode */

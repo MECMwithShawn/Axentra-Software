@@ -27,7 +27,8 @@ use chrono::{Duration, Local, Utc};
 use dioxus::prelude::*;
 
 use actions::Selection;
-use ctx::{LIST_W, MenuTarget, NAV_W, PeopleCtx, Prefs, SUGGESTED_DAYS};
+use axentra_core::EmailAddress;
+use ctx::{LIST_W, MenuTarget, NAV_W, PeopleCtx, PeopleDialog, Prefs, SUGGESTED_DAYS};
 use view::{BuildInput, Item, Node};
 
 use crate::kit::{Menu, keys};
@@ -113,14 +114,30 @@ pub fn PeopleModule() -> Element {
         model,
     });
 
-    // Open a contact asked for by another module (NavRequest::Contact).
-    use_effect(move || {
-        if let Some(NavRequest::Contact(id)) = (app.nav)() {
+    // Requests from other modules: open a contact (NavRequest::Contact) or
+    // a pre-filled New contact form ("Add to contacts", NavRequest::NewContact).
+    use_effect(move || match (app.nav)() {
+        Some(NavRequest::Contact(id)) => {
             let mut nav = app.nav;
             nav.set(None);
             ctx.editing.set(None);
             details::open_item(ctx, Item::Contact(id));
         }
+        Some(NavRequest::NewContact { name, email }) => {
+            let mut nav = app.nav;
+            nav.set(None);
+            ctx.editing.set(None);
+            let existing = (!email.trim().is_empty()).then(|| store().contact_by_email(email.trim()).ok().flatten()).flatten();
+            match existing {
+                // Already saved: show it instead of a duplicate form.
+                Some(c) => details::open_item(ctx, Item::Contact(c.id)),
+                None => {
+                    let prefill = actions::prefill_from_address(&EmailAddress::new(name, email.trim()));
+                    ctx.open_dialog(PeopleDialog::NewContact(Box::new(prefill)));
+                }
+            }
+        }
+        _ => {}
     });
 
     // Below 720 px the navigation pane is hidden (CSS) and the hamburger

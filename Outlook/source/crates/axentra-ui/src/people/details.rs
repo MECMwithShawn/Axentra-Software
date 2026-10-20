@@ -236,6 +236,8 @@ fn ContactCard(id: ContactId) -> Element {
         if c.emails.len() > 1 { c.emails.iter().map(|e| MenuItem::new(e.value.clone(), e.value.clone()).icon("mail")).collect() } else { Vec::new() };
     let first_email = c.primary_email().map(str::to_string);
     let display_for_mail = c.display_name.clone();
+    // "Schedule meeting" invites this contact.
+    let invitee: Vec<EmailAddress> = first_email.clone().map(|e| EmailAddress::new(c.display_name.clone(), e)).into_iter().collect();
     // Call: a menu with "Mobile" / "Work" / "Home" when there are several numbers.
     let has_tel = io::has_handler("tel");
     let call_menu: Vec<MenuItem> = if c.phones.len() > 1 {
@@ -398,7 +400,15 @@ fn ContactCard(id: ContactId) -> Element {
                     },
                 }
                 ActionButton { label: "Video", icon: "video", tooltip: "No video app available", disabled: true, on_select: move |_| {} }
-                ActionButton { label: "Meeting", icon: "calendar_add", tooltip: "Schedule a meeting", on_select: move |_| actions::schedule_meeting(app) }
+                ActionButton {
+                    label: "Meeting",
+                    icon: "calendar_add",
+                    tooltip: "Schedule a meeting",
+                    on_select: {
+                        let invitee = invitee.clone();
+                        move |_| actions::schedule_meeting(app, invitee.clone())
+                    },
+                }
             }
             if !info.is_empty() {
                 Section { title: "Contact information",

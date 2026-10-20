@@ -36,7 +36,8 @@ html[data-ax-kbd] .ax-app :focus:not(input):not(textarea):not(select):not([conte
   outline-offset: -2px;
   box-shadow: inset 0 0 0 3px var(--ax-stroke-focus-inner);
 }
-.ax-app input:focus-visible, .ax-app textarea:focus-visible, .ax-app select:focus-visible,
+.ax-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):focus-visible,
+.ax-app textarea:focus-visible, .ax-app select:focus-visible,
 .ax-app [contenteditable="true"]:focus-visible { outline: none; box-shadow: none; }
 .ax-app [role="dialog"]:focus-visible, .ax-app [role="alertdialog"]:focus-visible,
 .ax-app [role="menu"]:focus-visible, .ax-app .ax-pane:focus-visible { outline: none; box-shadow: none; }

@@ -220,6 +220,9 @@
 .ax-sidepanel-title { flex: 1; font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); }
 .ax-sidepanel-tabs { padding: 0 6px; flex: none; border-bottom: 1px solid var(--ax-stroke-3); }
 .ax-sidepanel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px 12px; display: flex; flex-direction: column; }
+/* Mail dragged onto My Day: the Calendar tab hands over to To Do, which takes the drop. */
+.ax-myday-calendar-drop { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ax-myday-drop.ax-drop { background: var(--ax-info-bg); box-shadow: inset 0 0 0 1px var(--ax-stroke-brand); border-radius: var(--ax-radius-m); }
 .ax-sidepanel-foot { flex: none; padding: 10px 16px; border-top: 1px solid var(--ax-stroke-2); }
 .ax-myday-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
@@ -396,6 +399,18 @@
   padding: 4px 8px; border-radius: var(--ax-radius-m);
 }
 .ax-toast-action:hover { color: var(--ax-fg-link-hover); text-decoration: underline; }
+/* Undo send: spinner and a 2px bar that drains over the delay. */
+.ax-toast.ax-toast-countdown { position: relative; overflow: hidden; }
+.ax-toast-spinner { flex: none; }
+.ax-toast-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ax-stroke-2); }
+.ax-toast-progress-fill {
+  display: block; height: 100%; background: var(--ax-bg-compound-brand); transform-origin: left center;
+  transform: scaleX(var(--ax-countdown-start, 1)); animation: ax-countdown linear forwards;
+}
+@keyframes ax-countdown { from { transform: scaleX(var(--ax-countdown-start, 1)); } to { transform: scaleX(0); } }
+/* Reduced motion makes animations instant, which would empty the bar at once. */
+.ax-app[data-motion="reduce"] .ax-toast-progress { display: none; }
+@media (prefers-reduced-motion: reduce) { .ax-app[data-motion="system"] .ax-toast-progress { display: none; } }
 
 /* ---------------------------------------------------------------- Keyboard shortcuts / What's new dialogs */
 .ax-shortcuts { max-height: 80vh; }

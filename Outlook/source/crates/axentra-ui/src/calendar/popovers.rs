@@ -344,7 +344,7 @@ fn PeekCard(occ: Occurrence, x: f64, y: f64) -> Element {
                                     variant: Variant::Primary,
                                     onclick: move |_| {
                                         note_for.set(None);
-                                        actions::respond_how(app, cal, &o_note, r, actions::RsvpSend::WithNote);
+                                        actions::respond_how(app, cal, &o_note, r, actions::RsvpSend::WithNote(note()));
                                     },
                                 }
                                 Button { label: "Cancel", onclick: move |_| note_for.set(None) }

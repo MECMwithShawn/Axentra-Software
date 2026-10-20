@@ -129,6 +129,8 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
         MenuItem::new("details", "View message details").icon("info").disabled(!single),
         MenuItem::new("save_as", "Save as").icon("save").disabled(!single),
     ];
+    // Groups follow the Classic layout (spec 6.4); priorities are the
+    // Simplified overflow order, 1 = last to overflow (spec 6.11).
     let home = RibbonTab::new(
         "home",
         "Home",
@@ -139,19 +141,30 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
                     MenuItem::new("new_mail", "Mail").icon("mail").shortcut("Ctrl+N"),
                     MenuItem::new("new_event", "Event").icon("calendar_add"),
                 ])
-                .tooltip("New mail (Ctrl+N)")],
+                .tooltip("New mail (Ctrl+N)")
+                .group("New")
+                .priority(1)],
             vec![
-                Command::new("delete", "Delete", "delete").split(delete_menu).disabled(none).tooltip(if none { no_sel } else { "Delete (Delete)" }),
+                Command::new("delete", "Delete", "delete").split(delete_menu).disabled(none).tooltip(if none { no_sel } else { "Delete (Delete)" }).group("Delete").priority(2),
                 Command::new("archive", "Archive", "archive")
                     .disabled(none || role == Some(FolderRole::Archive))
-                    .tooltip(if none { no_sel } else { "Archive (Backspace)" }),
-                report,
+                    .tooltip(if none { no_sel } else { "Archive (Backspace)" })
+                    .priority(3),
+                report.priority(10),
                 Command::new("sweep", "Sweep", "broom")
                     .disabled(!sweep_ok)
-                    .tooltip(if sweep_ok { "Sweep messages from this sender" } else { "Select one message (not in Junk Email, Drafts, Sent Items or Deleted Items)" }),
+                    .tooltip(if sweep_ok { "Sweep messages from this sender" } else { "Select one message (not in Junk Email, Drafts, Sent Items or Deleted Items)" })
+                    .priority(14),
             ],
             vec![
-                Command::new("move_to", "Move to", "folder_arrow_right").menu(move_menu).disabled(none).tooltip(if none { no_sel } else { "Move to (Ctrl+Shift+V)" }),
+                Command::new("move_to", "Move to", "folder_arrow_right")
+                    .menu(move_menu)
+                    .disabled(none)
+                    .tooltip(if none { no_sel } else { "Move to (Ctrl+Shift+V)" })
+                    .group("Move")
+                    .priority(7),
+            ],
+            vec![
                 Command::new("reply_all", "Reply all", "arrow_reply_all")
                     .split(vec![
                         MenuItem::new("reply", "Reply").icon("arrow_reply").shortcut("Ctrl+R").disabled(!respond_ok),
@@ -160,34 +173,53 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
                         MenuItem::new("forward_attachment", "Forward as attachment").icon("attach").disabled(none || drafts),
                     ])
                     .disabled(none || drafts)
-                    .tooltip(if respond_ok { "Reply all (Ctrl+Shift+R)" } else { "Select one message to reply" }),
+                    .tooltip(if respond_ok { "Reply all (Ctrl+Shift+R)" } else { "Select one message to reply" })
+                    .group("Respond")
+                    .priority(4),
+            ],
+            vec![
                 Command::new("quick_steps", "Quick steps", "flash")
                     .split(vec![MenuItem::new("quick_steps_manage", "Manage quick steps").disabled(true)])
                     .disabled(true)
-                    .tooltip("Quick steps aren't available in Axentra yet"),
+                    .tooltip("Quick steps aren't available in Axentra yet")
+                    .group("Quick steps")
+                    .priority(15),
             ],
             vec![
                 Command::new("toggle_read", "Read / Unread", if all_read { "mail_unread" } else { "mail_read" })
                     .disabled(none)
-                    .tooltip(if none { no_sel } else if all_read { "Mark as unread (Ctrl+U)" } else { "Mark as read (Ctrl+Q)" }),
-                Command::new("categorize", "Categorize", "tag").menu(menus::categorize_items(&t.messages)).disabled(none).tooltip(if none { no_sel } else { "Categorize" }),
+                    .tooltip(if none { no_sel } else if all_read { "Mark as unread (Ctrl+U)" } else { "Mark as read (Ctrl+Q)" })
+                    .group("Tags")
+                    .priority(8),
+                Command::new("categorize", "Categorize", "tag")
+                    .menu(menus::categorize_items(&t.messages))
+                    .disabled(none)
+                    .tooltip(if none { no_sel } else { "Categorize" })
+                    .priority(11),
                 Command::new("flag_toggle", "Flag / Unflag", if all_flagged { "flag_filled" } else { "flag" })
                     .split(menus::flag_items(&t.messages, settings.week_start, &settings.work_days))
                     .toggled(all_flagged)
                     .disabled(none)
-                    .tooltip(if none { no_sel } else if all_flagged { "Unflag (Insert)" } else { "Flag (Insert)" }),
+                    .tooltip(if none { no_sel } else if all_flagged { "Unflag (Insert)" } else { "Flag (Insert)" })
+                    .priority(9),
                 Command::new("toggle_pin", if all_pinned { "Unpin" } else { "Pin" }, if all_pinned { "pin_filled" } else { "pin" })
                     .toggled(all_pinned)
                     .disabled(none)
-                    .tooltip(if none { no_sel } else if all_pinned { "Unpin" } else { "Pin to the top of the list" }),
+                    .tooltip(if none { no_sel } else if all_pinned { "Unpin" } else { "Pin to the top of the list" })
+                    .priority(12),
                 Command::new("snooze", if snoozed_folder { "Unsnooze" } else { "Snooze" }, "snooze")
                     .menu(snooze_menu)
                     .disabled(none || drafts || role == Some(FolderRole::Sent))
-                    .tooltip(if none { no_sel } else { "Snooze" }),
+                    .tooltip(if none { no_sel } else { "Snooze" })
+                    .priority(13),
             ],
             vec![
-                Command::new("print", "Print", "print").disabled(!single).tooltip(if single { "Print (Ctrl+P)" } else { "Select one message to print" }),
-                Command::new("more", "More options", "more_horizontal").menu(more_menu).icon_only().tooltip("More options"),
+                Command::new("print", "Print", "print")
+                    .disabled(!single)
+                    .tooltip(if single { "Print (Ctrl+P)" } else { "Select one message to print" })
+                    .group("Actions")
+                    .priority(16),
+                Command::new("more", "More options", "more_horizontal").menu(more_menu).icon_only().tooltip("More options").priority(17),
             ],
         ],
     );
@@ -201,28 +233,28 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
         "view",
         "View",
         vec![
-            vec![Command::new("view_settings", "View settings", "settings").tooltip("Open Mail settings")],
+            vec![Command::new("view_settings", "View settings", "settings").tooltip("Open Mail settings").group("Settings").priority(1)],
             vec![
-                Command::new("v_folder", "Folder pane", "panel_left").menu(vec![
+                Command::new("v_folder", "Folder pane", "panel_left").group("Layout").priority(3).menu(vec![
                     MenuItem::new("v_folder_show", "Show").checked(!settings.folder_pane_collapsed),
                     MenuItem::new("v_folder_hide", "Hide").checked(settings.folder_pane_collapsed),
                     MenuItem::divider(),
                     MenuItem::new("v_fav_show", "Show favorites").checked(!prefs.favorites_hidden),
                     MenuItem::new("v_fav_pin", "Pin favorites").checked(prefs.favorites_pinned),
                 ]),
-                Command::new("v_reading", "Reading pane", if rp == ReadingPanePosition::Bottom { "panel_bottom" } else { "panel_right" }).menu(vec![
+                Command::new("v_reading", "Reading pane", if rp == ReadingPanePosition::Bottom { "panel_bottom" } else { "panel_right" }).priority(2).menu(vec![
                     MenuItem::new("v_rp_right", "Show on the right").icon("panel_right").checked(rp == ReadingPanePosition::Right),
                     MenuItem::new("v_rp_bottom", "Show on the bottom").icon("panel_bottom").checked(rp == ReadingPanePosition::Bottom),
                     MenuItem::new("v_rp_hidden", "Hide").icon("eye_off").checked(rp == ReadingPanePosition::Hidden),
                 ]),
-                Command::new("v_density", "Density", "text_density").menu(vec![
+                Command::new("v_density", "Density", "text_density").priority(4).menu(vec![
                     MenuItem::new("v_density_roomy", "Roomy").checked(density == Density::Roomy),
                     MenuItem::new("v_density_cozy", "Cozy").checked(density == Density::Cozy),
                     MenuItem::new("v_density_compact", "Compact").checked(density == Density::Compact),
                 ]),
             ],
             vec![
-                Command::new("v_conversations", "Conversations", "mail_list").menu(vec![
+                Command::new("v_conversations", "Conversations", "mail_list").group("Messages").priority(5).menu(vec![
                     MenuItem::new("v_conv_on", "Group messages by conversation").checked(settings.conversation_view),
                     MenuItem::new("v_conv_off", "Do not group messages").checked(!settings.conversation_view),
                     MenuItem::divider(),
@@ -230,13 +262,16 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
                     MenuItem::new("v_order_top", "Newest on top").checked(settings.conversation_order == ConversationOrder::NewestOnTop),
                     MenuItem::new("v_order_bottom", "Newest on bottom").checked(settings.conversation_order == ConversationOrder::NewestOnBottom),
                 ]),
-                Command::new("v_preview", "Message preview", "document_one_page").menu(vec![
+                Command::new("v_preview", "Message preview", "document_one_page").priority(6).menu(vec![
                     MenuItem::new("v_preview_show", "Show preview text").checked(settings.show_preview_text),
                     MenuItem::new("v_preview_hide", "Hide preview text").checked(!settings.show_preview_text),
                 ]),
-                Command::new("v_sender_image", "Sender image", "person_circle").toggled(settings.show_sender_images).tooltip("Show sender images in the message list"),
+                Command::new("v_sender_image", "Sender image", "person_circle")
+                    .toggled(settings.show_sender_images)
+                    .tooltip("Show sender images in the message list")
+                    .priority(7),
             ],
-            vec![Command::new("v_zoom", "Zoom", "zoom_in").menu(vec![
+            vec![Command::new("v_zoom", "Zoom", "zoom_in").group("Zoom").priority(8).menu(vec![
                 MenuItem::new("v_zoom_in", "Zoom in").icon("zoom_in").disabled(zoom >= 200),
                 MenuItem::new("v_zoom_out", "Zoom out").icon("zoom_out").disabled(zoom <= 50),
                 MenuItem::divider(),

@@ -164,7 +164,7 @@ pub fn collect(store: &axentra_core::Store, settings: &Settings, now: DateTime<L
                 important: t.is_important,
                 count: 1,
                 sender: None,
-                target: NavRequest::TaskList(list.id),
+                target: NavRequest::Task(t.id),
             });
         }
     }

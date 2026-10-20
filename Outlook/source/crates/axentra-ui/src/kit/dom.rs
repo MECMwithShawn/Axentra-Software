@@ -7,7 +7,9 @@
 //!   and `data-ax-item` on its items: arrow keys, Home/End (and
 //!   `data-ax-typeahead`, `data-ax-wrap`, `data-ax-cols`) move focus, and the
 //!   widget keeps a single tab stop.
-//! * `aria-modal="true"`: Tab is trapped in the topmost modal.
+//! * `aria-modal="true"`: Tab is trapped in the topmost modal; Enter presses
+//!   its `data-ax-default` button unless focus is on a control that handles
+//!   Enter itself (buttons, links, text areas, menus, lists...).
 //! * `title` / `data-ax-tip` (+ `data-ax-tip-pos="right"`): styled tooltip
 //!   after 500 ms; `aria-keyshortcuts` is appended as "(Ctrl+R)".
 //! * `data-ax-region`: an F6 stop inside a module (default: each
@@ -59,7 +61,19 @@ pub fn open_popup(id: &str) {
 /// Like [`open_popup`] for dialogs: focuses `[data-ax-autofocus]` or the
 /// first tabbable element of the body.
 pub fn open_dialog(id: &str) {
-    call("openDialog", &js_str(id));
+    open_dialog_with(id, None);
+}
+
+/// [`open_dialog`] with an explicit first focus: `initial` is a selector
+/// inside the dialog (falls back to the usual choice when nothing matches).
+pub fn open_dialog_with(id: &str, initial: Option<&str>) {
+    call("openDialog", &format!("{}, {}", js_str(id), initial.map(js_str).unwrap_or_else(|| "null".into())));
+}
+
+/// The dialog `id` closed: give focus back to the element that opened it
+/// when focus was lost with the dialog.
+pub fn close_dialog(id: &str) {
+    call("closeDialog", &js_str(id));
 }
 
 /// Remember the focused element so it gets focus back later.

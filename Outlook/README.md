@@ -1,6 +1,6 @@
 <img src="logo.png" alt="Axentra Outlook logo" width="96" align="right">
 
-**Linux pre-release (0.1.0, built 2026-10-19):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+**Linux pre-release (0.1.1, built 2026-10-19):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
 # Axentra Outlook
 
@@ -16,8 +16,8 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ![Axentra Outlook mail in the light theme](screenshots/linux-2026-10-19-mail-light.png)
 
-**Latest version: 0.1.0 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.0) ·
-[Release notes](releases/0.1.0.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
+**Latest version: 0.1.1 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.1) ·
+[Release notes](releases/0.1.1.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
 
 ## Features
 
@@ -32,6 +32,7 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 | **Look and feel** | Fluent 2 light and dark themes (or follow the system), colour themes, Roomy / Cozy / Compact density, Simplified or Classic ribbon with Customize, My Day pane, notifications pane, settings with search, high contrast and reduced motion |
 | **Keyboard** | The new Outlook's shortcut set (Ctrl+1/2/4/5 modules, Ctrl+N, Ctrl+R, Ctrl+Shift+R, Delete, Insert, Ctrl+Q/U, F6 region cycling, `?` for the full list) |
 | **Accounts** | Microsoft 365 / Outlook.com via Microsoft Graph (mail, calendar, contacts, To Do), IMAP + SMTP for Gmail (app password), iCloud, Yahoo and other providers; passwords and tokens stay in your desktop keyring (Secret Service) |
+| **Backup** | Settings › Accounts › Backup: password-encrypted backups of your account setups, settings and everything that exists only on this PC, saved to your OneDrive folder (synced by Axentra OneDrive) every month and on demand, with a restore preview that merges without duplicates. Passwords and sign-in tokens are never included |
 | **Axentra Command** | Installs its Command manifest, so it appears on the Command board with its icon, version and running state |
 
 ![Calendar work week](screenshots/linux-2026-10-19-calendar-light.png)
@@ -45,12 +46,12 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ## Installation
 
-Download `axentra-outlook_0.1.0-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.0),
-check its SHA-256 against the [release notes](releases/0.1.0.md), then:
+Download `axentra-outlook_0.1.1-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.1),
+check its SHA-256 against the [release notes](releases/0.1.1.md), then:
 
 ```bash
-sha256sum axentra-outlook_0.1.0-1_amd64.deb
-sudo apt install ./axentra-outlook_0.1.0-1_amd64.deb
+sha256sum axentra-outlook_0.1.1-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.1-1_amd64.deb
 ```
 
 Open **Axentra Outlook** from the application menu. The first start creates a demo account (Alex Morgan, all
@@ -59,13 +60,15 @@ fictional) so you can explore offline; remove it under **Settings › Accounts**
 **Connecting a Microsoft 365 or Outlook.com account** needs a free Microsoft Entra app registration (a public
 client with the redirect URI `http://localhost`); see [source/docs/ACCOUNTS.md](source/docs/ACCOUNTS.md).
 Paste its Application (client) ID under **Add account › Advanced**, or start the app with
-`AXENTRA_MS_CLIENT_ID=<id>`.
+`AXENTRA_MS_CLIENT_ID=<id>`. Axentra remembers the last ID you signed in with
+(`~/.config/axentra-outlook/microsoft-client-id`), so you only enter it once.
 
 | What | Where |
 |---|---|
 | Program | `/opt/axentra/outlook/axentra-outlook` (also `axentra-outlook` on the PATH) |
 | Mail, calendar, contacts and tasks | `~/.local/share/axentra-outlook/axentra.db` |
-| Passwords and tokens | Your desktop keyring (Secret Service) |
+| Passwords, tokens and the backup password | Your desktop keyring (Secret Service) |
+| Backups | `~/OneDrive/Axentra/Outlook Backups/` (or the folder you choose) |
 | Axentra Command manifest | `/usr/share/axentra/command/apps/outlook.json` |
 
 **Updating:** install the newer `.deb` the same way. **Uninstalling:** `sudo apt remove axentra-outlook`. Your

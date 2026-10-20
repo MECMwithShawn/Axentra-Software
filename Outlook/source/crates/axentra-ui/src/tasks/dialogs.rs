@@ -34,6 +34,7 @@ pub fn ConfirmHost() -> Element {
                         Button {
                             label: "Delete",
                             variant: Variant::Primary,
+                            default_action: true,
                             onclick: move |_| {
                                 ctx.confirm.set(None);
                                 actions::delete_now(app, ctx, &ids, false);
@@ -62,6 +63,7 @@ pub fn ConfirmHost() -> Element {
                         Button {
                             label: "Delete list",
                             variant: Variant::Primary,
+                            default_action: true,
                             onclick: move |_| {
                                 ctx.confirm.set(None);
                                 if app.check(store().delete_task_list(id)).is_some() {

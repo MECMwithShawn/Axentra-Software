@@ -73,7 +73,11 @@ pub fn AccountRow(
     let syncing = live.as_ref().is_some_and(|l| l.syncing);
     let avatar = if app.settings.read().density == Density::Compact { 32 } else { 40 };
     let mut items = vec![
-        MenuItem::new("sync", "Sync now").icon("arrow_sync").shortcut("F9").disabled(local || syncing),
+        MenuItem::new("sync", "Sync now")
+            .icon("arrow_sync")
+            .shortcut("F9")
+            .disabled(local || syncing)
+            .tooltip(if local { "This account is stored only on this device; there is nothing to sync" } else if syncing { "Syncing now" } else { "Sync this account now" }),
         MenuItem::new("primary", "Set as primary account").icon("star").disabled(primary),
         MenuItem::divider(),
         MenuItem::new("remove", "Remove").icon("delete").shortcut("Delete").danger(),

@@ -50,6 +50,8 @@ pub fn SidePaneFrame(
 pub fn MyDayPane() -> Element {
     let mut app = use_app();
     let mut tab = use_signal(|| store().kv_get(TAB_KEY).ok().flatten().unwrap_or_else(|| "calendar".into()));
+    let mut mail_hover = use_signal(|| false);
+    let mut last_over = use_signal(std::time::Instant::now);
     let close = move |_| {
         app.my_day_open.set(false);
         dom::focus(".ax-header-end [aria-label='My Day']");
@@ -69,7 +71,29 @@ pub fn MyDayPane() -> Element {
             if tab() == "todo" {
                 todo::TodoTab {}
             } else {
-                agenda::CalendarTab {}
+                // Mail dragged over the Calendar tab switches to To Do after
+                // 600 ms, so it can be dropped there (people-todo.md 4.3).
+                div {
+                    class: "ax-myday-calendar-drop",
+                    ondragover: move |e: DragEvent| {
+                        if todo::dragged_messages(&e).is_none() {
+                            return;
+                        }
+                        last_over.set(std::time::Instant::now());
+                        if !*mail_hover.peek() {
+                            mail_hover.set(true);
+                            spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                                mail_hover.set(false);
+                                // Still hovering (dragover repeats while the pointer is here).
+                                if last_over.peek().elapsed() < std::time::Duration::from_millis(300) {
+                                    tab.set("todo".into());
+                                }
+                            });
+                        }
+                    },
+                    agenda::CalendarTab {}
+                }
             }
         }
     }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 (pre-release, 2026-10-19)
+
+- **Backup:** Settings › Accounts › Backup saves an encrypted backup (AES-256-GCM, Argon2id password key) of
+  account setups, settings and device-only data to the OneDrive folder every month and on demand; restore
+  previews the backup and merges without duplicates. Passwords and sign-in tokens are never included.
+- The Microsoft client ID is remembered after the first sign-in, so it isn't needed again.
+- Cross-module actions: Add to contacts from a message, Schedule meeting from a contact with the attendee
+  filled in, open a task from My Day or reminders; toast actions and an Undo send countdown.
+- Account status in the folder pane, Add account from the folder pane and account manager, RSVP responses sent
+  to Microsoft 365, new Mail settings pages (attachment reminder, blocked and safe senders, sweep rules).
+- Fixed: the message read window now refreshes when you open another message in release builds.
+
+Source: [`source/`](source/) (snapshot of commit `da0c289`). See [release notes](releases/0.1.1.md).
+
 ## 0.1.0 (pre-release, 2026-10-19)
 
 First release. Linux only (Zorin OS 18 / Ubuntu 24.04, x86_64).

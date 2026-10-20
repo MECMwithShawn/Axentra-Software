@@ -79,12 +79,54 @@ pub enum UndoAction {
     RestoreMessages(Vec<Message>),
 }
 
+/// What a custom toast button does (besides Undo).
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToastAction {
+    /// Open a file or folder in the desktop's default app (`xdg-open`),
+    /// e.g. "Open folder" after an export.
+    OpenPath(std::path::PathBuf),
+    /// Go somewhere in the app.
+    Navigate(NavRequest),
+    /// Open the Settings dialog on a page.
+    OpenSettings(SettingsPage),
+}
+
+/// A countdown on a toast ("Sending…" while Undo send waits): the toast
+/// shows a spinner and a draining bar and closes when `until` passes,
+/// whether or not the pointer rests on it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Countdown {
+    pub until: chrono::DateTime<chrono::Utc>,
+    /// Full length in ms, for the bar's starting width.
+    pub total_ms: u64,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Toast {
     pub id: u64,
     pub text: String,
     pub undo: Option<UndoAction>,
     pub error: bool,
+    /// Custom button: (label, action).
+    pub action: Option<(String, ToastAction)>,
+    pub countdown: Option<Countdown>,
+}
+
+impl Toast {
+    fn new(text: String) -> Self {
+        Self { id: 0, text, undo: None, error: false, action: None, countdown: None }
+    }
+}
+
+/// Add a toast: Outlook shows one undo bar at a time, and at most three
+/// toasts stay (the oldest go first).
+fn push_bounded(toasts: &mut Vec<Toast>, toast: Toast) {
+    if toast.undo.is_some() {
+        toasts.retain(|t| t.undo.is_none());
+    }
+    toasts.push(toast);
+    let excess = toasts.len().saturating_sub(3);
+    toasts.drain(..excess);
 }
 
 /// A request to open the compose form (consumed by the Mail module).
@@ -128,6 +170,24 @@ pub enum NavRequest {
     Contact(ContactId),
     TaskList(TaskListId),
     SmartList(SmartList),
+    /// People's New contact form, pre-filled ("Add to contacts" from Mail).
+    NewContact { name: String, email: String },
+    /// Calendar's new-event form with attendees ("Schedule meeting" from People).
+    NewEventWith { start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>, attendees: Vec<EmailAddress> },
+    /// A task: To Do opens its list, selects it and shows the detail pane.
+    Task(TaskId),
+}
+
+impl NavRequest {
+    /// The module that consumes this request.
+    pub fn module(&self) -> Module {
+        match self {
+            NavRequest::Folder(_) | NavRequest::Message(_) => Module::Mail,
+            NavRequest::Event(_) | NavRequest::CalendarDate(_) | NavRequest::NewEvent { .. } | NavRequest::NewEventWith { .. } => Module::Calendar,
+            NavRequest::Contact(_) | NavRequest::NewContact { .. } => Module::People,
+            NavRequest::TaskList(_) | NavRequest::SmartList(_) | NavRequest::Task(_) => Module::Tasks,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -233,13 +293,7 @@ impl AppState {
     }
 
     pub fn navigate(mut self, req: NavRequest) {
-        let module = match &req {
-            NavRequest::Folder(_) | NavRequest::Message(_) => Module::Mail,
-            NavRequest::Event(_) | NavRequest::CalendarDate(_) | NavRequest::NewEvent { .. } => Module::Calendar,
-            NavRequest::Contact(_) => Module::People,
-            NavRequest::TaskList(_) | NavRequest::SmartList(_) => Module::Tasks,
-        };
-        self.module.set(module);
+        self.module.set(req.module());
         self.nav.set(Some(req));
     }
 
@@ -256,27 +310,55 @@ impl AppState {
     }
 
     pub fn toast(self, text: impl Into<String>) -> u64 {
-        self.push_toast(text.into(), None, false)
+        self.push_toast(Toast::new(text.into()))
     }
 
     pub fn toast_with_undo(self, text: impl Into<String>, undo: UndoAction) -> u64 {
-        self.push_toast(text.into(), Some(undo), false)
+        self.push_toast(Toast { undo: Some(undo), ..Toast::new(text.into()) })
+    }
+
+    /// A toast with its own button, e.g. "Exported 3 contacts" + "Open folder".
+    pub fn toast_with_action(self, text: impl Into<String>, label: impl Into<String>, action: ToastAction) -> u64 {
+        self.push_toast(Toast { action: Some((label.into(), action)), ..Toast::new(text.into()) })
+    }
+
+    /// The "Undo send" bar: Undo plus a countdown that ends at `until`
+    /// (the `settings.undo_send_secs` delay). Undo runs `undo`.
+    pub fn toast_undo_send(self, text: impl Into<String>, undo: UndoAction, until: chrono::DateTime<chrono::Utc>) -> u64 {
+        let total_ms = (until - chrono::Utc::now()).num_milliseconds().max(0) as u64;
+        self.push_toast(Toast { undo: Some(undo), countdown: Some(Countdown { until, total_ms }), ..Toast::new(text.into()) })
     }
 
     pub fn error(self, text: impl Into<String>) -> u64 {
-        self.push_toast(text.into(), None, true)
+        self.push_toast(Toast { error: true, ..Toast::new(text.into()) })
     }
 
-    fn push_toast(mut self, text: String, undo: Option<UndoAction>, error: bool) -> u64 {
+    fn push_toast(mut self, mut toast: Toast) -> u64 {
         let id = *self.next_toast.read();
         self.next_toast += 1;
+        toast.id = id;
         let mut toasts = self.toasts.write();
-        // Outlook shows one undo bar at a time; keep at most three toasts.
-        toasts.retain(|t| t.undo.is_none() || undo.is_none());
-        toasts.push(Toast { id, text, undo, error });
-        let excess = toasts.len().saturating_sub(3);
-        toasts.drain(..excess);
+        push_bounded(&mut toasts, toast);
         id
+    }
+
+    /// Run a toast's custom button.
+    pub fn run_toast_action(mut self, action: &ToastAction) {
+        match action {
+            ToastAction::OpenPath(path) => {
+                let spawned = std::process::Command::new("xdg-open")
+                    .arg(path)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+                if let Err(e) = spawned {
+                    self.error(format!("Couldn't open {}: {e}", path.display()));
+                }
+            }
+            ToastAction::Navigate(req) => self.navigate(req.clone()),
+            ToastAction::OpenSettings(page) => self.settings_dialog.set(Some(*page)),
+        }
     }
 
     pub fn dismiss_toast(mut self, id: u64) {
@@ -307,5 +389,40 @@ impl AppState {
                 None
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn toast(id: u64, undo: bool) -> Toast {
+        Toast { id, undo: undo.then(|| UndoAction::Moves(Vec::new())), ..Toast::new(format!("t{id}")) }
+    }
+
+    #[test]
+    fn new_requests_go_to_their_modules() {
+        let now = chrono::Utc::now();
+        assert_eq!(NavRequest::NewContact { name: "Ada".into(), email: "ada@example.com".into() }.module(), Module::People);
+        assert_eq!(NavRequest::NewEventWith { start: now, end: now, attendees: Vec::new() }.module(), Module::Calendar);
+        assert_eq!(NavRequest::Task(7).module(), Module::Tasks);
+        assert_eq!(NavRequest::Message(1).module(), Module::Mail);
+        assert_eq!(NavRequest::SmartList(SmartList::MyDay).module(), Module::Tasks);
+    }
+
+    #[test]
+    fn one_undo_bar_and_three_toasts_at_most() {
+        let mut list = Vec::new();
+        push_bounded(&mut list, toast(1, true));
+        push_bounded(&mut list, toast(2, false));
+        push_bounded(&mut list, toast(3, true));
+        assert_eq!(list.iter().map(|t| t.id).collect::<Vec<_>>(), [2, 3], "a new undo bar replaces the old one");
+        push_bounded(&mut list, toast(4, false));
+        push_bounded(&mut list, toast(5, false));
+        assert_eq!(list.iter().map(|t| t.id).collect::<Vec<_>>(), [3, 4, 5]);
+        let with_action = Toast { action: Some(("Open folder".into(), ToastAction::OpenPath("/tmp".into()))), ..Toast::new("Exported".into()) };
+        push_bounded(&mut list, with_action);
+        assert_eq!(list.len(), 3);
+        assert!(list.last().is_some_and(|t| t.action.as_ref().is_some_and(|(l, _)| l == "Open folder")));
     }
 }

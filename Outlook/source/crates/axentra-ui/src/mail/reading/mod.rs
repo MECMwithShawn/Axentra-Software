@@ -16,7 +16,7 @@ use super::actions;
 use super::ctx::{MailCtx, Open, use_mail, use_model};
 use super::menus::{self, Target};
 use super::model::bare_subject;
-use crate::kit::{Avatar, Icon, IconButton, MenuButton};
+use crate::kit::{Avatar, Icon, IconButton, Menu, MenuButton, MenuItem};
 use crate::state::{AppState, NavRequest, store, use_app};
 use attachments::AttachmentWell;
 use body::BodyTheme;
@@ -155,8 +155,10 @@ fn hidden_in_conversation(role: FolderRole, open_role: FolderRole) -> bool {
 pub fn ReadWindow(open: Open) -> Element {
     let k = format!("{}-{}", open.message, open.conversation.clone().unwrap_or_default());
     rsx! {
-        div { class: "ax-mail-read-window", role: "dialog", "aria-label": "Message window",
-            ConversationView { key: "{k}", open, full: false, window: true }
+        // Keyed on the outer element: a key on a nested child is dropped in
+        // release builds, and the window must remount when the message changes.
+        div { key: "{k}", class: "ax-mail-read-window", role: "dialog", "aria-label": "Message window",
+            ConversationView { open, full: false, window: true }
         }
     }
 }
@@ -496,13 +498,34 @@ fn MessageCard(
     let due_text = msg.flag_due.map(|d| d.format("%a %-m/%-d/%Y").to_string()).unwrap_or_default();
     // The avatar and name open the sender's contact card when there is one.
     let contact = if from_me { None } else { s.contact_by_email(&msg.from.address).ok().flatten().map(|c| c.id) };
+    // Senders with no saved contact get a small profile menu instead:
+    // "Add to contacts" opens People's New contact form pre-filled.
+    let mut profile_menu = use_signal(|| None::<(f64, f64)>);
     let open_contact = move |e: MouseEvent| {
+        e.stop_propagation();
         if let Some(c) = contact {
-            e.stop_propagation();
             ctx.popout.set(None);
             app.navigate(NavRequest::Contact(c));
+        } else if !from_me {
+            let p = e.client_coordinates();
+            profile_menu.set(Some((p.x, p.y + 4.0)));
         }
     };
+    let profile_items = vec![
+        MenuItem::header(if msg.from.name.is_empty() { msg.from.address.clone() } else { format!("{} <{}>", msg.from.name, msg.from.address) }),
+        MenuItem::new("profile_add_contact", "Add to contacts").icon("person_add"),
+        MenuItem::new("profile_email", "Send email").icon("mail_add"),
+    ];
+    let profile_from = msg.from.clone();
+    let on_profile = move |cmd: String| match cmd.as_str() {
+        "profile_add_contact" => {
+            ctx.popout.set(None);
+            app.navigate(NavRequest::NewContact { name: profile_from.name.clone(), email: profile_from.address.clone() });
+        }
+        "profile_email" => app.compose(crate::state::ComposeRequest::to(vec![profile_from.clone()])),
+        _ => {}
+    };
+    let sender_tip = if contact.is_some() { "Open contact card" } else if from_me { "" } else { "Add to contacts or send email" };
     let reply = move |kind: ComposeKind| move |_: MouseEvent| actions::respond(app, ctx, kind, id, window);
     let card_id = card_dom_id(window, id);
 
@@ -528,16 +551,26 @@ fn MessageCard(
                     }
                 },
                 span {
-                    class: if contact.is_some() { "ax-mail-card-avatar ax-link" } else { "ax-mail-card-avatar" },
-                    title: if contact.is_some() { "Open contact card" } else { "" },
+                    class: if contact.is_some() || !from_me { "ax-mail-card-avatar ax-link" } else { "ax-mail-card-avatar" },
+                    title: sender_tip,
                     onclick: open_contact,
                     Avatar { name: msg.from.name.clone(), email: msg.from.address.clone(), size: 40 }
+                }
+                if let Some((x, y)) = profile_menu() {
+                    Menu {
+                        items: profile_items,
+                        x,
+                        y,
+                        label: "Sender",
+                        on_select: on_profile,
+                        on_close: move |_| profile_menu.set(None),
+                    }
                 }
                 div { class: "ax-mail-card-who",
                     div { class: "ax-mail-sender-line ax-selectable",
                         span {
-                            class: if contact.is_some() { "ax-mail-sender-name ax-link" } else { "ax-mail-sender-name" },
-                            title: if contact.is_some() { "Open contact card" } else { "" },
+                            class: if contact.is_some() || !from_me { "ax-mail-sender-name ax-link" } else { "ax-mail-sender-name" },
+                            title: sender_tip,
                             onclick: open_contact,
                             "{sender_name}"
                         }

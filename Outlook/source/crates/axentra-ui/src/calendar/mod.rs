@@ -146,6 +146,12 @@ fn handle_nav(mut app: AppState, mut cal: Cal, req: NavRequest) {
             cal.go_to(&s, local_date(start));
             cal.new_event(app, start, end, all_day);
         }
+        NavRequest::NewEventWith { start, end, attendees } => {
+            cal.go_to(&s, local_date(start));
+            let mut event = new_event_draft(app, (cal.active_calendar)(), start, end, false);
+            add_attendees(&mut event, &attendees);
+            cal.open_editor(event, EditMode::New);
+        }
         NavRequest::Event(id) => match store().event(id).ok().flatten() {
             None => {
                 app.error("This event no longer exists.");

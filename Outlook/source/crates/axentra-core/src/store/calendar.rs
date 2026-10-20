@@ -470,8 +470,17 @@ impl Store {
 
     /// Set my response to a meeting.
     pub fn respond_to_event(&self, id: EventId, response: ResponseStatus) -> Result<()> {
+        self.respond_to_event_with(id, response, true, "")
+    }
+
+    /// [`Store::respond_to_event`] with the send options of spec §11.2:
+    /// `send = false` is "Respond without email"; `note` goes to the
+    /// organizer with the response. Sync reads both when it pushes the RSVP.
+    pub fn respond_to_event_with(&self, id: EventId, response: ResponseStatus, send: bool, note: &str) -> Result<()> {
         let mut e: Event = self.get_doc(id)?.ok_or_else(|| not_found(id))?;
         e.my_response = response;
+        e.response_silent = !send;
+        e.response_note = if send { note.trim().to_string() } else { String::new() };
         e.show_as = match response {
             ResponseStatus::Tentative => ShowAs::Tentative,
             ResponseStatus::Declined => ShowAs::Free,
@@ -710,6 +719,25 @@ mod tests {
         assert_eq!((e.my_response, e.show_as), (ResponseStatus::Tentative, ShowAs::Tentative));
         store.respond_to_event(id, ResponseStatus::Accepted).unwrap();
         assert_eq!(store.event(id).unwrap().unwrap().show_as, ShowAs::Busy);
+    }
+
+    #[test]
+    fn response_send_options_are_kept_for_sync() {
+        let (store, _) = store_with_account();
+        let cal = store.default_calendar(None).unwrap().unwrap();
+        let now = Utc::now();
+        let mut e = Event { calendar_id: cal.id, start: now, end: now + Duration::hours(1), ..Default::default() };
+        let id = store.insert_event(&mut e).unwrap();
+        store.respond_to_event_with(id, ResponseStatus::Declined, true, "  On holiday that week. ").unwrap();
+        let e = store.event(id).unwrap().unwrap();
+        assert_eq!((e.my_response, e.response_silent, e.response_note.as_str()), (ResponseStatus::Declined, false, "On holiday that week."));
+        // Without email: no note travels.
+        store.respond_to_event_with(id, ResponseStatus::Accepted, false, "ignored").unwrap();
+        let e = store.event(id).unwrap().unwrap();
+        assert_eq!((e.response_silent, e.response_note.as_str()), (true, ""));
+        // The plain call sends a response again.
+        store.respond_to_event(id, ResponseStatus::Tentative).unwrap();
+        assert!(!store.event(id).unwrap().unwrap().response_silent);
     }
 
     #[test]

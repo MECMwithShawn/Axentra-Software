@@ -308,7 +308,8 @@ pub fn export_selection(ctx: &PeopleCtx, app: AppState) {
     let text = Store::contacts_to_vcard(&sel.contacts, &sel.lists, true);
     match io::save_download(if stem.trim().is_empty() { "contact" } else { &stem }, "vcf", &text) {
         Ok(path) => {
-            app.toast(format!("Exported to {}", io::display_path(&path)));
+            let folder = path.parent().map(|p| p.to_path_buf()).unwrap_or_else(io::download_dir);
+            app.toast_with_action(format!("Exported to {}", io::display_path(&path)), "Open folder", crate::state::ToastAction::OpenPath(folder));
         }
         Err(e) => {
             app.error(format!("Couldn't export: {e}"));
@@ -467,10 +468,15 @@ pub fn next_half_hour() -> (chrono::DateTime<Utc>, chrono::DateTime<Utc>) {
     (start, start + Duration::minutes(30))
 }
 
-/// Open the calendar's new-event form at the next half hour.
-pub fn schedule_meeting(app: AppState) {
+/// Open the calendar's new-event form at the next half hour, inviting
+/// `attendees` (the contact the button was on).
+pub fn schedule_meeting(app: AppState, attendees: Vec<EmailAddress>) {
     let (start, end) = next_half_hour();
-    app.navigate(NavRequest::NewEvent { start, end, all_day: false });
+    if attendees.is_empty() {
+        app.navigate(NavRequest::NewEvent { start, end, all_day: false });
+    } else {
+        app.navigate(NavRequest::NewEventWith { start, end, attendees });
+    }
 }
 
 #[cfg(test)]

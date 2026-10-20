@@ -165,6 +165,11 @@ const ALIASES: &[(&str, &str, &str)] = &[
     ("colorStatusWarningBorder2", "#bc4b09", "#f98845"),
     ("colorStatusWarningBorderActive", "#f7630c", "#faa06b"),
     // Axentra app-semantic colours that differ by mode (§1.6, §3.1, §3.2)
+    // Calendar current-time line: colorStatusDangerBackground3 / dark colorPaletteRedBorder2.
+    ("--ax-now-line", "#c50f1f", "#e37d80"),
+    // Search-term highlight (mail.md §1.1, marigold); text keeps its colour.
+    ("--ax-highlight-search", "#f9e2ae", "#835b00"),
+    ("--ax-highlight-search-fg", "currentcolor", "currentcolor"),
     ("--ax-header-bg", "b80", "g12"),
     ("--ax-header-fg", "#ffffff", "#ffffff"),
     ("--ax-header-icon", "#ffffff", "g84"),
@@ -381,6 +386,12 @@ fn hc_role(name: &str) -> &'static str {
     }
     if has("Link") {
         return "LinkText";
+    }
+    if name == "--ax-now-line" || name == "--ax-highlight-search" {
+        return "Highlight";
+    }
+    if name == "--ax-highlight-search-fg" {
+        return "HighlightText";
     }
     if name == "colorStrokeFocus2" || name == "--ax-header-focus-ring" {
         return "Highlight";

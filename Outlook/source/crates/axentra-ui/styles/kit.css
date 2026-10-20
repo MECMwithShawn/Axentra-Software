@@ -81,7 +81,11 @@
   display: flex; flex-direction: column; gap: 2px;
   animation: ax-pop var(--ax-duration-normal) var(--ax-ease-decelerate-mid);
 }
-.ax-submenu { position: absolute; }
+/* Submenus open beside their item, first row level with it (the menu's
+   4px padding and 1px border); dom.js flips them left at the screen edge. */
+.ax-submenu { position: absolute; left: calc(100% + 4px); top: -5px; }
+/* Menus with submenus don't scroll: overflow would clip the submenu. */
+.ax-menu.ax-menu-nested { overflow: visible; }
 @keyframes ax-pop { from { opacity: 0; transform: translateY(-4px); } }
 .ax-menu-item-wrap { position: relative; }
 .ax-menu-item {

@@ -1,10 +1,11 @@
 //! Outbox (§5.9, §9.3): `Store::send_draft` queues real accounts' mail in
 //! the Outbox folder; the engine builds the MIME from the saved draft and
-//! hands it to SMTP or Graph once the undo-send delay (and any scheduled
-//! time) has passed. Sent messages move to Sent Items locally.
+//! hands it to SMTP or Graph. Messages held for "Undo send" (still drafts in
+//! Outbox) and drafts scheduled for later wait. Sent messages move to Sent
+//! Items locally.
 
 use axentra_core::{Account, EmailAddress, FolderRole, Message, MessageId, Store};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 
 use crate::config::domain_of;
 use crate::error::{SyncError, SyncResult};
@@ -19,18 +20,20 @@ pub struct Ready {
     pub message_id: String,
 }
 
-/// Outbox messages whose undo-send window and scheduled time have passed.
+/// Outbox messages ready to go: not held for "Undo send" and past any
+/// scheduled time. A hold is an Outbox message still marked as a draft
+/// (`Store::queue_send`); the app releases it (`Store::release_queued_send`,
+/// which clears `is_draft`) when the delay ends, so the delay is never
+/// counted twice here.
 pub fn due(store: &Store, account: &Account) -> SyncResult<Vec<Message>> {
     let Some(outbox) = store.folder_by_role(account.id, FolderRole::Outbox)? else { return Ok(Vec::new()) };
     if outbox.total_count == 0 {
         return Ok(Vec::new());
     }
-    let delay = Duration::seconds(store.settings().undo_send_secs as i64);
     let now = Utc::now();
     let mut out = Vec::new();
     for m in store.folder_messages(outbox.id)? {
-        let queued_at = m.sent_at.unwrap_or(m.received_at);
-        if queued_at + delay > now {
+        if m.is_draft {
             continue;
         }
         if let Some(d) = store.draft(m.id)?
@@ -148,6 +151,7 @@ pub fn return_to_drafts(store: &Store, account: &Account, id: MessageId) -> Sync
 mod tests {
     use super::*;
     use axentra_core::{AccountKind, ComposeKind, DraftAttachment};
+    use chrono::Duration;
 
     #[test]
     fn queued_message_becomes_mime_and_moves_to_sent() {
@@ -187,14 +191,29 @@ mod tests {
     }
 
     #[test]
-    fn undo_send_delay_holds_messages_back() {
+    fn undo_send_holds_wait_and_released_mail_goes_at_once() {
         let store = Store::open_in_memory().unwrap();
         let mut acct = Account { kind: AccountKind::Imap, email: "ana@example.org".into(), ..Default::default() };
         let id = store.add_account(&mut acct).unwrap();
         let mut draft = store.new_draft(ComposeKind::New, Some(id), None).unwrap();
         draft.to = vec![EmailAddress::new("Bob", "bob@example.org")];
-        store.send_draft(&mut draft).unwrap();
-        // Default undo-send delay is a few seconds: not yet due.
-        assert!(due(&store, &store.account(id).unwrap().unwrap()).unwrap().is_empty());
+        let hold = store.queue_send(&mut draft, Utc::now() + Duration::seconds(10)).unwrap();
+        let acct = store.account(id).unwrap().unwrap();
+        // Held in Outbox for "Undo send": not sent yet.
+        let m = store.message(hold.message_id).unwrap().unwrap();
+        assert!(m.is_draft && Some(m.folder_id) == store.folder_by_role(id, FolderRole::Outbox).unwrap().map(|f| f.id));
+        assert!(due(&store, &acct).unwrap().is_empty());
+        // Released by the app: due straight away, the delay isn't applied again
+        // (the default undo-send setting is 5 s).
+        assert!(store.release_queued_send(hold.message_id).unwrap());
+        assert_eq!(due(&store, &acct).unwrap().iter().map(|m| m.id).collect::<Vec<_>>(), vec![hold.message_id]);
+        // Scheduled for later: waits.
+        let mut later = store.new_draft(ComposeKind::New, Some(id), None).unwrap();
+        later.to = vec![EmailAddress::new("Bob", "bob@example.org")];
+        let later_id = store.send_draft(&mut later).unwrap();
+        let mut d = store.draft(later_id).unwrap().unwrap();
+        d.scheduled_send_at = Some(Utc::now() + Duration::hours(2));
+        store.save_draft(&mut d).unwrap();
+        assert!(!due(&store, &acct).unwrap().iter().any(|m| m.id == later_id));
     }
 }

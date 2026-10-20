@@ -354,6 +354,11 @@ pub struct Draft {
     /// Compose in plain text instead of HTML.
     #[serde(default)]
     pub plain_text: bool,
+    /// When the draft was first saved; set by `Store::save_draft` and kept
+    /// across edits (the message's `received_at` is the last save). Backups
+    /// use it to recognise a draft that was edited since.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -526,6 +531,13 @@ pub struct Event {
     /// For an exception: the start of the occurrence it replaces.
     #[serde(default)]
     pub original_start: Option<DateTime<Utc>>,
+    /// How the last RSVP goes to the organizer: `true` = "Respond without
+    /// email" (the server records it but sends nothing).
+    #[serde(default)]
+    pub response_silent: bool,
+    /// Note sent with the last RSVP ("Respond with note"); empty = none.
+    #[serde(default)]
+    pub response_note: String,
 }
 
 /// One concrete occurrence of an event inside a queried range.
@@ -887,6 +899,18 @@ pub struct Settings {
     pub unpinned_apps: Vec<String>,
     /// Order of the movable app-rail modules (Mail and Calendar stay first).
     pub rail_order: Vec<String>,
+    /// Mail > Attachments: warn before sending a message whose text mentions
+    /// an attachment but has none.
+    pub attachment_reminder: bool,
+    // ---- Added for Settings > Accounts > Backup. ----
+    /// Back up automatically every month (runs only once a backup password
+    /// is remembered in the keyring).
+    pub backup_auto: bool,
+    /// Folder chosen for backups; `None` = the OneDrive folder (or
+    /// Documents). Backups go into `Axentra/Outlook Backups` inside it.
+    pub backup_dir: Option<String>,
+    /// How many backups to keep; older ones are deleted.
+    pub backup_keep: u32,
 }
 
 impl Default for Settings {
@@ -959,6 +983,10 @@ impl Default for Settings {
             contacts_last_first: false,
             unpinned_apps: Vec::new(),
             rail_order: Vec::new(),
+            attachment_reminder: true,
+            backup_auto: true,
+            backup_dir: None,
+            backup_keep: 12,
         }
     }
 }

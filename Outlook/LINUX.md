@@ -1,11 +1,11 @@
 # Axentra Outlook on Linux
 
-Built and tested 2026-10-19 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.0**; **pre-release**, not a stable release.
+Built and tested 2026-10-19 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.1**; **pre-release**, not a stable release.
 
 ## Install and run
 
 ```bash
-sudo apt install ./axentra-outlook_0.1.0-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.1-1_amd64.deb
 ```
 
 Open **Axentra Outlook** from the application menu, or run `axentra-outlook`. The package installs to
@@ -18,12 +18,15 @@ applications.
 Native WebKitGTK window (Dioxus 0.7 desktop), local SQLite store under `~/.local/share/axentra-outlook`, demo
 mailbox for offline use, Microsoft Graph sign-in through the system browser (authorization code + PKCE on a
 `http://localhost` loopback) or a device code, IMAP/SMTP accounts, Secret Service storage for passwords and
-tokens, and the full mail, calendar, people and to-do interface described in the [README](README.md).
+tokens, encrypted monthly backups to the OneDrive folder, and the full mail, calendar, people and to-do
+interface described in the [README](README.md).
 
 ## Verification
 
-- 348 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
-  (MIME, Graph JSON), OAuth PKCE, loopback callback, UI logic.
+- 398 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
+  (MIME, Graph JSON), OAuth PKCE, loopback callback, backup format/encryption/restore/retention, UI logic.
+- The backup feature was reviewed by three independent reviewers (encryption and secrets, restore integrity,
+  schedule and UX); all 13 confirmed findings were fixed with regression tests before release.
 - The release binary was packaged with `packaging/linux/package.py`; `desktop-file-validate` passed and the
   `.deb` contents and control data were inspected.
 - An earlier test build of the same code ran as a desktop window on this Zorin machine (Wayland). A real
@@ -39,7 +42,8 @@ tokens, and the full mail, calendar, people and to-do interface described in the
 - **Not tested against real servers:** IMAP/SMTP providers, sending through Microsoft Graph, and large
   attachments (Graph sends over about 3.5 MB need upload sessions, which are not implemented).
 - No desktop (OS) notifications yet; reminders and new-mail alerts appear inside the app.
-- Not yet built: client-side window title bar, app zoom, Groups and Files modules, rules / junk / quick-steps
+- The window still uses the system title bar; a merged Outlook-style title bar is in progress for 0.1.2.
+- Not yet built: app zoom, Groups and Files modules, rules / junk / quick-steps
   editors, Scheduling Assistant, rich-text task notes, task attachments.
 - The `.deb` install itself was not exercised by the build process (it needs `sudo`); report anything that
   looks wrong after installing.

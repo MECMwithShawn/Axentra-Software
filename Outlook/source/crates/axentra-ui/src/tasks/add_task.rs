@@ -258,7 +258,7 @@ fn PasteDialog(lines: Vec<String>, on_many: EventHandler<()>, on_one: EventHandl
             width: 400,
             on_close: move |_| on_cancel.call(()),
             actions: rsx! {
-                Button { label: "Add {n} tasks", variant: Variant::Primary, onclick: move |_| on_many.call(()) }
+                Button { label: "Add {n} tasks", variant: Variant::Primary, default_action: true, onclick: move |_| on_many.call(()) }
                 Button { label: "Add as one task", onclick: move |_| on_one.call(()) }
             },
             p { class: "ax-todo-dialog-text", "Each line you pasted can become its own task:" }

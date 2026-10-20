@@ -561,6 +561,39 @@ pub fn event_to_graph(e: &Event, create: bool) -> Value {
     v
 }
 
+/// PATCH body for an event someone else organises: only the attendee's own
+/// copy can change (show as, categories, reminder); subject, times and the
+/// attendee list belong to the organizer.
+pub fn event_to_graph_attendee(e: &Event) -> Value {
+    let mut v = json!({
+        "showAs": show_as_name(e.show_as),
+        "isReminderOn": e.reminder_minutes.is_some(),
+        "categories": e.categories,
+    });
+    if let Some(m) = e.reminder_minutes {
+        v["reminderMinutesBeforeStart"] = json!(m);
+    }
+    v
+}
+
+/// Body of an accept / tentativelyAccept / decline call: whether the
+/// organizer gets an email, and the note sent with it.
+pub fn response_body(e: &Event) -> Value {
+    let mut v = json!({"sendResponse": !e.response_silent});
+    if !e.response_silent && !e.response_note.trim().is_empty() {
+        v["comment"] = json!(e.response_note.trim());
+    }
+    v
+}
+
+/// Whether the account's user organises the event (else it's an invitation).
+pub fn i_organize(e: &Event, my_email: &str) -> bool {
+    match (&e.organizer, e.my_response) {
+        (_, ResponseStatus::Organizer) | (None, _) => true,
+        (Some(o), _) => o.address.eq_ignore_ascii_case(my_email.trim()),
+    }
+}
+
 // ---------------------------------------------------------------- calendars
 
 pub fn calendar_from_graph(v: &Value, account_id: AccountId, index: usize) -> Calendar {
@@ -774,6 +807,27 @@ pub fn task_to_graph(t: &Task) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rsvp_bodies_follow_the_send_options() {
+        let mut e = Event { organizer: Some(EmailAddress::new("Bo", "bo@example.org")), my_response: ResponseStatus::Accepted, ..Default::default() };
+        assert_eq!(response_body(&e), json!({"sendResponse": true}));
+        e.response_note = " See you there ".into();
+        assert_eq!(response_body(&e), json!({"sendResponse": true, "comment": "See you there"}));
+        e.response_silent = true;
+        assert_eq!(response_body(&e), json!({"sendResponse": false}));
+
+        assert!(!i_organize(&e, "me@example.org"));
+        assert!(i_organize(&e, "BO@example.org"));
+        assert!(i_organize(&Event { my_response: ResponseStatus::Organizer, ..e.clone() }, "me@example.org"));
+        e.show_as = ShowAs::Tentative;
+        e.reminder_minutes = Some(15);
+        e.categories = vec!["Red category".into()];
+        let body = event_to_graph_attendee(&e);
+        assert_eq!(body["showAs"], "tentative");
+        assert_eq!(body["reminderMinutesBeforeStart"], 15);
+        assert!(body.get("subject").is_none() && body.get("attendees").is_none() && body.get("start").is_none());
+    }
 
     #[test]
     fn message_fixture() {

@@ -6,8 +6,8 @@ use dioxus::prelude::*;
 
 use super::controls::{LinkButton, Note, Row, Section, Unavailable, use_settings};
 use super::pages::PageId;
-use crate::kit::{Checkbox, RadioGroup, RadioOption, Select, Slider, Switch, TextField};
-use crate::state::store;
+use crate::kit::{Button, Checkbox, Icon, IconButton, RadioGroup, RadioOption, Select, Slider, Switch, TextField, dom};
+use crate::state::{store, use_app};
 
 /// Undo-send stops: Off, 5 … 30 seconds (January 2026 maximum).
 pub const UNDO_SEND_STOPS: [u32; 7] = [0, 5, 10, 15, 20, 25, 30];
@@ -229,6 +229,13 @@ pub fn AttachmentsPage() -> Element {
         Section { title: "Attachment previews", description: "Thumbnails of attached files in the message list.",
             Checkbox { label: "Show attachment previews", checked: s.show_attachment_previews, onchange: move |v| ctx.edit(|s| s.show_attachment_previews = v) }
         }
+        Section { title: "Attachment reminder",
+            Checkbox {
+                label: "Warn me when I send a message that may be missing an attachment",
+                checked: s.attachment_reminder,
+                onchange: move |v| ctx.edit(|s| s.attachment_reminder = v),
+            }
+        }
         Section { title: "Opening attachments",
             Note { text: "Attachments open in the app your desktop uses for that file type." }
         }
@@ -286,13 +293,210 @@ pub fn MessageHandlingPage() -> Element {
     }
 }
 
+/// Whether `s` can go on a sender list: an address (`name@example.com`) or
+/// a bare domain (`example.com`).
+pub fn valid_sender(s: &str) -> bool {
+    let s = s.trim();
+    if s.is_empty() || s.chars().any(char::is_whitespace) {
+        return false;
+    }
+    let domain = match s.split_once('@') {
+        Some((local, domain)) => {
+            if local.is_empty() || domain.contains('@') {
+                return false;
+            }
+            domain
+        }
+        None => s,
+    };
+    domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')
+}
+
+/// One saved Sweep rule in words.
+pub fn sweep_rule_text(mode: &str, sender: &str, folder: &str, target: &str) -> String {
+    match mode {
+        "keep_latest" => format!("Keep only the latest message from {sender} in {folder}; move the rest to {target}"),
+        "older_than_10_days" => format!("Move messages from {sender} in {folder} older than 10 days to {target}"),
+        _ => format!("Move all messages from {sender} in {folder}, now and in the future, to {target}"),
+    }
+}
+
+/// Settings > Mail > Junk email: blocked and safe senders. Changes apply
+/// right away.
+#[component]
+pub fn JunkPage() -> Element {
+    let app = use_app();
+    let _ = app.mail_rev();
+    let s = store();
+    let blocked: Vec<(String, String)> = s
+        .blocked_senders()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| {
+            let label = if a.name.trim().is_empty() || a.name.eq_ignore_ascii_case(&a.address) { a.address.clone() } else { format!("{} <{}>", a.name, a.address) };
+            (a.address, label)
+        })
+        .collect();
+    let safe: Vec<(String, String)> = s.safe_senders().unwrap_or_default().into_iter().map(|a| (a.clone(), a)).collect();
+    rsx! {
+        SenderList {
+            title: "Blocked senders and domains",
+            description: "Mail from these senders and domains goes straight to Junk Email.",
+            empty: "You haven't blocked anyone. Block a sender from a message (Home > More options > Block).",
+            add_label: "Block a sender or domain",
+            items: blocked,
+            on_add: move |addr: String| {
+                if app.check(store().block_sender(&EmailAddress::new("", addr.as_str()))).is_some() {
+                    app.bump_mail();
+                    dom::announce(&format!("Blocked {addr}"), false);
+                }
+            },
+            on_remove: move |addr: String| {
+                if app.check(store().unblock_sender(&addr)).is_some() {
+                    app.bump_mail();
+                    app.toast(format!("{addr} is no longer blocked"));
+                }
+            },
+        }
+        SenderList {
+            title: "Safe senders and domains",
+            description: "Mail from these senders and domains is never moved to Junk Email, and pictures in it load automatically.",
+            empty: "No safe senders yet. Choose \"Always show content from…\" on a message to add one.",
+            add_label: "Add a safe sender or domain",
+            items: safe,
+            on_add: move |addr: String| {
+                if app.check(store().add_safe_sender(&addr)).is_some() {
+                    app.bump_mail();
+                    dom::announce(&format!("{addr} added to safe senders"), false);
+                }
+            },
+            on_remove: move |addr: String| {
+                if app.check(store().remove_safe_sender(&addr)).is_some() {
+                    app.bump_mail();
+                    app.toast(format!("{addr} removed from safe senders"));
+                }
+            },
+        }
+    }
+}
+
+/// A sender list with an add field and a remove button per row.
+#[component]
+fn SenderList(
+    #[props(into)] title: String,
+    #[props(into)] description: String,
+    #[props(into)] empty: String,
+    #[props(into)] add_label: String,
+    /// (address, shown text)
+    items: Vec<(String, String)>,
+    on_add: EventHandler<String>,
+    on_remove: EventHandler<String>,
+) -> Element {
+    let mut draft = use_signal(String::new);
+    let text = draft().trim().to_lowercase();
+    let ok = valid_sender(&text);
+    let dup = items.iter().any(|(a, _)| a.eq_ignore_ascii_case(&text));
+    let hint = if text.is_empty() || (ok && !dup) {
+        ""
+    } else if dup {
+        "That's already on the list."
+    } else {
+        "Enter an email address, like name@example.com, or a domain, like example.com."
+    };
+    let mut add = move || {
+        let text = draft().trim().to_lowercase();
+        if valid_sender(&text) && !dup {
+            on_add.call(text);
+            draft.set(String::new());
+        }
+    };
+    rsx! {
+        Section { title: title.clone(), description,
+            div { class: "ax-row ax-sender-add", style: "gap:8px;align-items:flex-end",
+                TextField {
+                    label: add_label.clone(),
+                    placeholder: "name@example.com or example.com",
+                    value: draft(),
+                    hint,
+                    oninput: move |v| draft.set(v),
+                    onkeydown: move |e: KeyboardEvent| {
+                        if e.key() == Key::Enter {
+                            add();
+                        }
+                    },
+                }
+                Button {
+                    label: "Add",
+                    icon: "add",
+                    disabled: !ok || dup,
+                    title: if ok && !dup { "Add to the list" } else { "Type an address or domain first" },
+                    onclick: move |_| add(),
+                }
+            }
+            if items.is_empty() {
+                Note { text: empty }
+            } else {
+                div { class: "ax-cat-list", role: "list", "aria-label": "{title}",
+                    for (addr, label) in items.iter().cloned() {
+                        div { key: "{addr}", class: "ax-cat-row", role: "listitem",
+                            span { class: "ax-grow ax-ellipsis ax-selectable", title: "{label}", "{label}" }
+                            IconButton {
+                                icon: "delete",
+                                title: "Remove {addr}",
+                                small: true,
+                                onclick: move |_| on_remove.call(addr.clone()),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Settings > Mail > Sweep: the standing Sweep rules (they run once a day).
+#[component]
+pub fn SweepPage() -> Element {
+    let app = use_app();
+    let _ = app.mail_rev();
+    let s = store();
+    let name_of = |id: FolderId| s.folder(id).ok().flatten().map(|f| f.name).unwrap_or_else(|| "a deleted folder".into());
+    let rules: Vec<(i64, String)> =
+        s.sweep_rules().unwrap_or_default().into_iter().map(|(id, folder, sender, mode, target)| (id, sweep_rule_text(&mode, &sender, &name_of(folder), &name_of(target)))).collect();
+    rsx! {
+        Section { title: "Sweep rules", description: "Rules you set up from the Sweep button. Standing Sweep rules run once a day.",
+            if rules.is_empty() {
+                Unavailable { icon: "broom", title: "No Sweep rules", text: "Choose Sweep on a message to set one up." }
+            } else {
+                div { class: "ax-cat-list ax-sweep-list", role: "list", "aria-label": "Sweep rules",
+                    for (id, text) in rules.into_iter() {
+                        div { key: "{id}", class: "ax-cat-row", role: "listitem",
+                            Icon { name: "broom", size: 16 }
+                            span { class: "ax-grow", "{text}" }
+                            IconButton {
+                                icon: "delete",
+                                title: "Delete this rule",
+                                small: true,
+                                onclick: move |_| {
+                                    if app.check(store().delete_sweep_rule(id)).is_some() {
+                                        app.bump_mail();
+                                        app.toast("Sweep rule deleted");
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Pages whose features live in the mail module.
 #[component]
 pub fn ModulePage(page: PageId) -> Element {
     let (icon, title, text) = match page {
         PageId::Rules => ("arrow_sort", "No rules yet", "Rules you create from a message (Home > Rules > Create rule) appear here."),
-        PageId::Sweep => ("broom", "No Sweep rules", "Sweep rules you set up from the Sweep button appear here. Standing Sweep rules run once a day."),
-        PageId::Junk => ("mail_prohibited", "No blocked or safe senders", "Senders you block or mark as safe from a message appear here."),
         PageId::QuickSteps => ("sparkle", "No quick steps yet", "Quick steps you create from Home > Quick steps appear here."),
         PageId::CustomizeActions => ("options", "Message actions", "Message actions shown in the reading pane and on hover follow the ribbon commands."),
         PageId::Forwarding => ("arrow_forward", "Forwarding is off", "Forwarding is set on the server for Microsoft 365 and Outlook.com accounts."),
@@ -309,6 +513,26 @@ pub fn ModulePage(page: PageId) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sender_entries_are_addresses_or_domains() {
+        for ok in ["ana@example.com", "example.com", "news.example.co.uk", " Bob@Example.org "] {
+            assert!(valid_sender(ok), "{ok}");
+        }
+        for bad in ["", "ana", "@example.com", "ana@", "a b@example.com", "ana@@example.com", ".com", "example."] {
+            assert!(!valid_sender(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn sweep_rules_read_as_sentences() {
+        assert_eq!(
+            sweep_rule_text("keep_latest", "news@shop.example", "Inbox", "Deleted Items"),
+            "Keep only the latest message from news@shop.example in Inbox; move the rest to Deleted Items"
+        );
+        assert!(sweep_rule_text("older_than_10_days", "a@b.c", "Inbox", "Archive").contains("older than 10 days"));
+        assert!(sweep_rule_text("move_all_future", "a@b.c", "Inbox", "Archive").contains("in the future"));
+    }
 
     #[test]
     fn undo_send_stops_cover_off_to_thirty() {

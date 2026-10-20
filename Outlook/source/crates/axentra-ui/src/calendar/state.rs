@@ -575,9 +575,38 @@ pub fn new_event_draft(app: AppState, calendar: Option<CalendarId>, start: DateT
     }
 }
 
+/// Invite `people` to a new event (NavRequest::NewEventWith): required
+/// attendees, each address once, never the organizer.
+pub fn add_attendees(event: &mut Event, people: &[EmailAddress]) {
+    for p in people {
+        let addr = p.address.trim();
+        let is_organizer = event.organizer.as_ref().is_some_and(|o| o.address.eq_ignore_ascii_case(addr));
+        if addr.is_empty() || is_organizer || event.attendees.iter().any(|a| a.email.address.eq_ignore_ascii_case(addr)) {
+            continue;
+        }
+        event.attendees.push(Attendee { email: EmailAddress::new(p.name.clone(), addr), ..Default::default() });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invited_people_become_required_attendees_once() {
+        let mut e = Event { organizer: Some(EmailAddress::new("Me", "me@example.com")), ..Default::default() };
+        add_attendees(
+            &mut e,
+            &[
+                EmailAddress::new("Ada", "ada@example.com"),
+                EmailAddress::new("", "ADA@example.com"),
+                EmailAddress::new("Me", "Me@Example.com"),
+                EmailAddress::new("", " "),
+            ],
+        );
+        assert_eq!(e.attendees.len(), 1);
+        assert_eq!((e.attendees[0].email.name.as_str(), e.attendees[0].kind), ("Ada", AttendeeKind::Required));
+    }
 
     #[test]
     fn filter_matching() {

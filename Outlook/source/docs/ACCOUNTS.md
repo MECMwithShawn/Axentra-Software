@@ -56,6 +56,12 @@ Give the ID to Axentra in either way:
   Advanced › Application (client) ID**. It is saved with the account (it is
   not a secret).
 
+After a successful Microsoft sign-in Axentra remembers the ID in
+`~/.config/axentra-outlook/microsoft-client-id` (shared by every profile of
+your user, including other `AXENTRA_DB` databases) and prefills it next time.
+The order is: the ID typed in the dialog, then `AXENTRA_MS_CLIENT_ID`, then
+the remembered one. Delete the file to forget it.
+
 ### Signing in
 
 * **Open browser** opens your default browser (`xdg-open`) on Microsoft's

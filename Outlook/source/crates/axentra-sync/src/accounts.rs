@@ -323,6 +323,9 @@ pub async fn finish(inner: &Arc<Inner>, flow: u64) -> SyncResult<AccountId> {
             a.sync_error = None;
             c.store_into(a);
         })?;
+        if p.client.microsoft {
+            oauth::client_id::remember(&inner.store, &p.client.client_id);
+        }
         let resource = if cfg.auth == AuthMethod::OauthGraph { Resource::Graph } else { Resource::Imap };
         inner.cache_token(id, resource, p.tokens.access_token.clone(), p.tokens.expires_at);
         inner.notifier.bump();
@@ -359,6 +362,10 @@ pub async fn finish(inner: &Arc<Inner>, flow: u64) -> SyncResult<AccountId> {
     inner.save_refresh_token(&account, &cfg, &refresh, &p.scopes).await?;
     account.sort_order = inner.store.next_account_sort_order()?;
     let id = inner.store.add_account(&mut account)?;
+    if p.client.microsoft {
+        // Next time (and in other profiles) the dialog starts with this ID.
+        oauth::client_id::remember(&inner.store, &p.client.client_id);
+    }
     let resource = if kind == AccountKind::Microsoft { Resource::Graph } else { Resource::Imap };
     inner.cache_token(id, resource, p.tokens.access_token.clone(), p.tokens.expires_at);
     inner.notifier.bump();

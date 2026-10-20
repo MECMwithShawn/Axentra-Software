@@ -77,6 +77,8 @@ pub struct ShellCtx {
     pub online: Signal<bool>,
     /// Bumped when a ribbon customisation is saved.
     pub ribbon_rev: Signal<u64>,
+    /// The Add account dialog is open (Account Manager, folder pane footer).
+    pub add_account: Signal<bool>,
 }
 
 pub fn use_shell() -> ShellCtx {
@@ -104,6 +106,7 @@ fn provide_shell() -> ShellCtx {
         notices: Signal::new(notifications::NoticeState::load(store())),
         online: Signal::new(true),
         ribbon_rev: Signal::new(0),
+        add_account: Signal::new(false),
     })
 }
 
@@ -113,6 +116,13 @@ impl ShellCtx {
         self.settings_page.set(Some(page));
         self.flyout.set(None);
         app.settings_dialog.set(Some(page.category().settings_page()));
+    }
+
+    /// Open the Add account dialog (protocols.md §2: the same dialog as
+    /// Settings > Accounts > Add account).
+    pub fn open_add_account(mut self) {
+        self.flyout.set(None);
+        self.add_account.set(true);
     }
 
     /// Open (or close) a side pane; My Day closes when another pane opens.
@@ -248,17 +258,26 @@ pub fn Shell() -> Element {
         }
     });
 
-    // Every undoable toast also goes on the Ctrl+Z stack.
+    // Every undoable toast also goes on the Ctrl+Z stack. An Undo send bar
+    // only counts while it shows: once the message has gone out, Ctrl+Z
+    // must not pull it back.
+    let countdowns = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashSet::<u64>::new())));
     use_effect(move || {
         let toasts = app.toasts.read();
         let mut stack = shell.undo.write();
+        let mut countdowns = countdowns.borrow_mut();
         for t in toasts.iter() {
+            if t.countdown.is_some() {
+                countdowns.insert(t.id);
+            }
             if let Some(u) = &t.undo
                 && !stack.iter().any(|(id, _)| *id == t.id)
             {
                 stack.push((t.id, u.clone()));
             }
         }
+        stack.retain(|(id, _)| !countdowns.contains(id) || toasts.iter().any(|t| t.id == *id));
+        countdowns.retain(|id| toasts.iter().any(|t| t.id == *id));
         let excess = stack.len().saturating_sub(20);
         stack.drain(..excess);
     });
@@ -305,14 +324,18 @@ pub fn Shell() -> Element {
             }
             toasts::Toasts {}
             // App-wide background work owned by other areas: event and task
-            // reminders, scheduled sends and undo-send holds.
+            // reminders, scheduled sends and undo-send holds; the monthly backup.
             crate::calendar::ReminderHost {}
             crate::tasks::TaskReminders {}
             crate::mail::compose::ComposeBackground {}
+            crate::settings::backup::BackupHost {}
             if (shell.shortcuts_open)() { shortcuts::ShortcutsDialog {} }
             if (shell.whats_new_open)() { help::WhatsNewDialog {} }
             if let Some(page) = (app.settings_dialog)() {
                 crate::settings::SettingsDialog { page }
+            }
+            if (shell.add_account)() {
+                crate::settings::accounts::AddAccountDialog { on_close: move |_| shell.add_account.set(false) }
             }
             div { id: "ax-live-polite", class: "ax-visually-hidden", role: "status", "aria-live": "polite" }
             div { id: "ax-live-assertive", class: "ax-visually-hidden", role: "alert", "aria-live": "assertive" }

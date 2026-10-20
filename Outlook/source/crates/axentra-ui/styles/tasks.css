@@ -405,10 +405,8 @@ button.ax-todo-detail-row:active { background: var(--ax-bg-subtle-pressed); }
   color: var(--ax-fg-1); font-family: inherit; font-size: var(--ax-text-200);
 }
 
-/* Menus opened in To Do: let an open submenu escape the scrolling menu box,
-   and open submenus of right-edge menus (list options) to the left. */
-.ax-todo .ax-menu:has(.ax-submenu) { overflow: visible; }
-.ax-todo-head-tools .ax-submenu { left: auto !important; right: calc(100% + 2px); }
+/* Submenus of right-edge menus (list options) open to the left. */
+.ax-todo-head-tools .ax-submenu { left: auto !important; right: calc(100% + 4px); }
 
 /* ---------------------------------------------------------------- reminders */
 .ax-todo-reminders {

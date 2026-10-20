@@ -18,10 +18,6 @@
 .ax-people-muted { color: var(--ax-fg-3); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
 .ax-people-error { color: var(--ax-danger-fg); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
 
-/* Kit menus scroll (overflow-y: auto), which clips their submenus; People
-   menus are short, so let submenus show (requested upstream). */
-.ax-people .ax-menu:has(.ax-submenu) { overflow: visible; }
-
 /* ------------------------------------------------------------ splitters */
 .ax-people-splitter { flex: none; width: var(--ax-pane-gap); position: relative; cursor: col-resize; outline: none; }
 .ax-people-splitter::after {

@@ -197,7 +197,8 @@ pub async fn send(app: AppState, mut form: Form) {
         form.dialog.set(Some(ComposeDialog::NoSubject));
         return;
     }
-    if d.attachments.is_empty() && !opts.skip_attachment && mentions_attachment(&form.body.peek().text) {
+    let remind = app.settings.peek().attachment_reminder;
+    if remind && d.attachments.is_empty() && !opts.skip_attachment && mentions_attachment(&form.body.peek().text) {
         form.dialog.set(Some(ComposeDialog::AttachReminder));
         return;
     }

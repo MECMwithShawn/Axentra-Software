@@ -266,6 +266,8 @@ pub fn MailModule() -> Element {
     let mut main_height = use_signal(|| 600.0f64);
     let model_now = memo.read().clone();
     let tabs = ribbon::tabs(app, ctx, &model_now);
+    // Ribbon customisation is per account: the selected folder's account.
+    let ribbon_account = model_now.folder.as_ref().map(|f| f.account_id);
     let collapsed = settings.folder_pane_collapsed;
     let live = resize();
     let fw = match live {
@@ -325,6 +327,7 @@ pub fn MailModule() -> Element {
                     },
                     on_toggle_nav: move |_| app.update_settings(|s| s.folder_pane_collapsed = !s.folder_pane_collapsed),
                     nav_open: !collapsed,
+                    account: ribbon_account,
                 }
             }
             div { class: "ax-mail-panes",

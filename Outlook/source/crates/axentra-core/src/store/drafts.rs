@@ -344,6 +344,24 @@ impl Store {
             Some(id) => self.message(id)?.unwrap_or_default(),
             None => Message::default(),
         };
+        if draft.created_at.is_none() {
+            // Keep the first-save time of a draft that already exists (a
+            // stale in-memory copy may lack it); a draft saved before the
+            // field existed gets its previous save time.
+            let stored = match draft.id {
+                Some(id) => self
+                    .conn()
+                    .query_row("SELECT json_extract(json, '$.created_at') FROM drafts WHERE message_id = ?1", [id], |r| {
+                        r.get::<_, Option<String>>(0)
+                    })
+                    .optional()?
+                    .flatten()
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                    .map(|t| t.with_timezone(&Utc)),
+                None => None,
+            };
+            draft.created_at = Some(stored.unwrap_or(if msg.id != 0 { msg.received_at } else { now }));
+        }
         let account_changed = msg.id != 0 && msg.account_id != draft.account_id;
         msg.account_id = draft.account_id;
         if msg.folder_id == 0 || account_changed {

@@ -374,10 +374,6 @@
 }
 .ax-cal-plain-input:focus { border-bottom: 2px solid var(--ax-stroke-brand); }
 .ax-cal-plain-input::placeholder, .ax-cal-quick-title::placeholder, .ax-cal-editor-title::placeholder, .ax-cal-people-input::placeholder { color: var(--ax-fg-4); }
-/* Text fields show focus with their brand bottom border (Fluent Input), not the ring. */
-.ax-app .ax-cal-root input:not([type="checkbox"]):not([type="radio"]):focus-visible, .ax-app .ax-cal-root textarea:focus-visible {
-  outline: none; box-shadow: none;
-}
 .ax-app .ax-cal-plain-select { height: 32px; padding: 0 4px; border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-1); font-weight: var(--ax-weight-semibold); }
 .ax-cal-plain-select:hover { background: var(--ax-bg-subtle-hover); }
 

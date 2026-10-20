@@ -2,6 +2,7 @@
 //!
 //! See `docs/ARCHITECTURE.md` for how the crates fit together.
 
+pub mod backup;
 pub mod error;
 pub mod html;
 pub mod model;

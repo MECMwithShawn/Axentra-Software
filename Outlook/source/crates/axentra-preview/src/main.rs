@@ -13,6 +13,9 @@ async fn main() {
     let store = Arc::new(Store::open_in_memory().expect("in-memory store"));
     axentra_core::seed::seed_demo(&store, chrono::Local::now()).expect("seed demo data");
     axentra_ui::init(store, None);
+    // Backups: the password stays in memory, and AXENTRA_BACKUP_DIR (else a
+    // temp folder) stands in for the OneDrive folder; the real one is never used.
+    axentra_ui::settings::backup::preview_mode();
     let port: u16 = std::env::var("AXENTRA_PREVIEW_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8090);
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     // The liveview catch-all route ("/{*route}") does not match "/" itself.

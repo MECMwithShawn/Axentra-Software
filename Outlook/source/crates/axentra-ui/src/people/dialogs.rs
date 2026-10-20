@@ -418,7 +418,12 @@ fn ExportDialog() -> Element {
                 if !lists.is_empty() {
                     what.push_str(&format!(" and {}", plural(lists.len(), "contact list", "contact lists")));
                 }
-                app.toast(format!("Exported {what} to {}", io::display_path(&path)));
+                let folder = path.parent().map(|p| p.to_path_buf()).unwrap_or_else(io::download_dir);
+                app.toast_with_action(
+                    format!("Exported {what} to {}", io::display_path(&path)),
+                    "Open folder",
+                    crate::state::ToastAction::OpenPath(folder),
+                );
                 ctx.close_dialog();
             }
             Err(e) => {

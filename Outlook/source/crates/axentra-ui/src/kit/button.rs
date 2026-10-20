@@ -73,6 +73,10 @@ pub fn Button(
     #[props(into)]
     keyshortcuts: Option<String>,
     #[props(into)] id: Option<String>,
+    /// The surrounding dialog's default button: Enter presses it while focus
+    /// is in a text field or elsewhere outside buttons, menus and lists.
+    #[props(default)]
+    default_action: bool,
 ) -> Element {
     let v = variant.class();
     let s = if small { "ax-small" } else { "" };
@@ -86,6 +90,7 @@ pub fn Button(
             "aria-pressed": pressed.map(|p| if p { "true" } else { "false" }),
             "aria-keyshortcuts": keyshortcuts,
             "data-ax-autofocus": if autofocus { "true" },
+            "data-ax-default": if default_action { "true" },
             title: title.clone().unwrap_or_default(),
             onclick: move |e| {
                 if disabled {

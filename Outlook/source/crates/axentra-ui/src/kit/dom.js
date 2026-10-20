@@ -209,13 +209,59 @@
       tabbables(el)[0];
     ax.focus(first || el);
   };
-  ax.openDialog = (id) => {
+  // Who opened each dialog, so closing it gives focus back (closeDialog).
+  const openers = new Map();
+  ax.openDialog = (id, initial) => {
+    const opener = doc.activeElement;
     ax.push();
     const el = doc.getElementById(id);
     if (!el) return;
+    if (opener && opener !== doc.body && !el.contains(opener)) openers.set(id, opener);
     const body = el.querySelector(".ax-dialog-body") || el;
-    const pick = el.querySelector("[data-ax-autofocus]") || tabbables(body)[0] || tabbables(el)[0];
+    // A confirmation with nothing to fill in starts on its default button,
+    // not on the title bar's Close.
+    const pick =
+      (initial && el.querySelector(initial)) ||
+      el.querySelector("[data-ax-autofocus]") ||
+      tabbables(body)[0] ||
+      el.querySelector('[data-ax-default]:not([hidden]):not([aria-disabled="true"])') ||
+      tabbables(el)[0];
     ax.focus(pick || el);
+  };
+  // After the dialog left the page: back to its opener unless focus already
+  // went somewhere meaningful (another dialog, a field the module chose).
+  ax.closeDialog = (id) => {
+    const opener = openers.get(id);
+    openers.delete(id);
+    setTimeout(() => {
+      const a = doc.activeElement;
+      const lost = !a || a === doc.body || !a.isConnected;
+      const modal = topModal();
+      if (!lost || !opener || !opener.isConnected || !focusable(opener)) return;
+      if (modal && !modal.contains(opener)) return;
+      ax.focus(opener);
+    }, 0);
+  };
+  // Enter in a dialog with a default button ([data-ax-default]) presses it,
+  // unless focus is on something that handles Enter itself.
+  const ownsEnter = (t) =>
+    !t ||
+    !t.closest ||
+    t.closest(
+      'button, a[href], textarea, select, [contenteditable="true"], .ax-menu, ' +
+        '[role="button"], [role="menuitem"], [role="option"], [role="tab"], [role="checkbox"], [role="radio"], ' +
+        '[role="switch"], [role="combobox"], [role="listbox"], [role="grid"], [role="tree"], ' +
+        'input[type="button"], input[type="submit"], input[type="checkbox"], input[type="radio"], input[type="file"]'
+    );
+  const defaultButton = (e) => {
+    const m = topModal();
+    if (!m || e.isComposing || ownsEnter(e.target) || !m.contains(e.target)) return false;
+    const btn = m.querySelector('[data-ax-default]:not([aria-disabled="true"])');
+    if (!btn) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.click();
+    return true;
   };
   const restore = () => {
     const a = doc.activeElement;
@@ -483,7 +529,7 @@
     if (el.classList.contains("ax-submenu")) {
       if (r.right > innerWidth - 4) {
         el.style.left = "auto";
-        el.style.right = "calc(100% + 2px)";
+        el.style.right = "calc(100% + 4px)";
       }
       if (r.bottom > innerHeight - 4) el.style.top = innerHeight - 4 - r.bottom + "px";
     }
@@ -533,6 +579,7 @@
       }
       if (ax.always.has(ch) || (!editable && ax.outside.has(ch))) e.preventDefault();
       if (ch === "Escape") hideTip();
+      if (ch === "Enter" && defaultButton(e)) return;
       if (ch === "Tab" || ch === "Shift+Tab") trapTab(e);
       else if (!roving(e, ch, editable)) forwardFromBody(e);
     },

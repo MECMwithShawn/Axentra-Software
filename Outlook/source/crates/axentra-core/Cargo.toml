@@ -14,3 +14,17 @@ thiserror.workspace = true
 ammonia.workspace = true
 mail-parser.workspace = true
 tracing.workspace = true
+
+# Encrypted account backups (backup/): Argon2id key derivation, AES-256-GCM,
+# deflate compression, OS randomness for salt and nonce, base64 for
+# attachment bytes inside the JSON payload, and wiping key material.
+argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
+aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
+# Named only to turn on its "zeroize" feature, which aes-gcm's own "zeroize"
+# doesn't: without it the AES key schedule (which starts with the raw key)
+# stays in memory after the cipher is dropped.
+aes = { version = "=0.8.4", default-features = false, features = ["zeroize"] }
+flate2 = "=1.1.10"
+getrandom = "=0.3.4"
+base64 = "=0.22.1"
+zeroize = "=1.9.0"

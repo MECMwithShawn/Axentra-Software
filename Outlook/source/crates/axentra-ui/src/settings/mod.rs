@@ -4,6 +4,7 @@
 
 pub mod accounts;
 mod account_pages;
+pub mod backup;
 mod calendar;
 pub mod controls;
 mod general;
@@ -300,6 +301,7 @@ fn PageBody(page: PageId) -> Element {
         AutomaticReplies => rsx! { account_pages::AutomaticRepliesPage {} },
         SharedWithMe => rsx! { account_pages::SharedWithMePage {} },
         Storage => rsx! { account_pages::StoragePage {} },
+        Backup => rsx! { backup::BackupPage {} },
         LanguageTime => rsx! { general::LanguageTimePage {} },
         Appearance => rsx! { general::AppearancePage {} },
         Notifications => rsx! { general::NotificationsPage {} },
@@ -315,7 +317,9 @@ fn PageBody(page: PageId) -> Element {
         ComposeReply => rsx! { mail::ComposeReplyPage {} },
         Attachments => rsx! { mail::AttachmentsPage {} },
         MessageHandling => rsx! { mail::MessageHandlingPage {} },
-        Rules | Sweep | Junk | QuickSteps | CustomizeActions | Forwarding | ConditionalFormatting | SearchFolders | Smime | RetentionPolicies | Groups => {
+        Junk => rsx! { mail::JunkPage {} },
+        Sweep => rsx! { mail::SweepPage {} },
+        Rules | QuickSteps | CustomizeActions | Forwarding | ConditionalFormatting | SearchFolders | Smime | RetentionPolicies | Groups => {
             rsx! { mail::ModulePage { page } }
         }
         CalendarView => rsx! { calendar::CalendarViewPage {} },

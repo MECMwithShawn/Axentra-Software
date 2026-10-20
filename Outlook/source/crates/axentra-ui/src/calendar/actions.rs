@@ -183,10 +183,10 @@ pub fn delete_scoped(app: AppState, cal: Cal, occ: &Occurrence, scope: Scope) {
 
 /// How an RSVP goes out (spec §11.2): straight away, with a note to the
 /// organizer, or without telling the organizer at all.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RsvpSend {
     Now,
-    WithNote,
+    WithNote(String),
     Silent,
 }
 
@@ -196,7 +196,12 @@ pub fn respond(app: AppState, cal: Cal, occ: &Occurrence, response: ResponseStat
 }
 
 pub fn respond_how(app: AppState, cal: Cal, occ: &Occurrence, response: ResponseStatus, how: RsvpSend) {
-    if app.check(store().respond_to_event(occ.event.id, response)).is_some() {
+    let (send, note) = match &how {
+        RsvpSend::Now => (true, ""),
+        RsvpSend::WithNote(n) => (true, n.as_str()),
+        RsvpSend::Silent => (false, ""),
+    };
+    if app.check(store().respond_to_event_with(occ.event.id, response, send, note)).is_some() {
         app.bump_calendar();
         if response == ResponseStatus::Declined {
             cal.close_popover();
@@ -211,7 +216,7 @@ pub fn respond_how(app: AppState, cal: Cal, occ: &Occurrence, response: Response
         };
         app.toast(match (how, response) {
             (RsvpSend::Silent, _) => format!("{verb}. The organizer won't be notified."),
-            (RsvpSend::WithNote, _) => format!("{verb} with your note."),
+            (RsvpSend::WithNote(_), _) => format!("{verb} with your note."),
             (RsvpSend::Now, ResponseStatus::Declined) => "Declined. The event was removed from your calendar.".to_string(),
             (RsvpSend::Now, _) => verb.to_string(),
         });

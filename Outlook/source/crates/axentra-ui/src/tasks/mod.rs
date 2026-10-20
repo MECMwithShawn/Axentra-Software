@@ -139,10 +139,26 @@ pub fn TasksModule() -> Element {
     let mut ctx = ctx::provide_todo();
     let _ = app.tasks_rev();
 
-    // Cross-module navigation: open the requested list and clear the request.
+    // Cross-module navigation: open the requested list (or the task in its
+    // list, with the detail pane) and clear the request.
     use_effect(move || {
         let req = app.nav.read().clone();
         let view = match req {
+            Some(NavRequest::Task(id)) => {
+                let mut nav = app.nav;
+                nav.set(None);
+                match store().task(id).ok().flatten() {
+                    Some(t) => {
+                        ctx.go(View::List(t.list_id));
+                        ctx.open(id);
+                        actions::focus_later("#ax-todo-detail-title", 60);
+                    }
+                    None => {
+                        app.error("This task no longer exists.");
+                    }
+                }
+                return;
+            }
             Some(NavRequest::TaskList(id)) => View::List(id),
             Some(NavRequest::SmartList(SmartList::Tasks)) => match store().default_task_list(None).ok().flatten() {
                 Some(l) => View::List(l.id),

@@ -30,7 +30,7 @@ pub fn AccountFlyout() -> Element {
                         label: "Add account",
                         icon: "person_add",
                         variant: Variant::Primary,
-                        onclick: move |_| shell.open_settings(app, PageId::EmailAccounts),
+                        onclick: move |_| shell.open_add_account(),
                     }
                 }
             }
@@ -48,6 +48,7 @@ pub fn AccountFlyout() -> Element {
                 div { class: "ax-account-me-text",
                     div { class: "ax-account-name ax-ellipsis", "{me.display_name}" }
                     div { class: "ax-account-email ax-ellipsis", "{me.email}" }
+                    if !me.nickname.trim().is_empty() { div { class: "ax-account-kind ax-ellipsis", "{me.nickname}" } }
                     div { class: "ax-account-kind", "{kind}" }
                 }
             }
@@ -72,7 +73,7 @@ pub fn AccountFlyout() -> Element {
                             },
                             Avatar { name: a.display_name.clone(), email: a.email.clone(), size: 32 }
                             div { class: "ax-account-me-text",
-                                div { class: "ax-ellipsis", "{a.display_name}" }
+                                div { class: "ax-ellipsis", if a.nickname.trim().is_empty() { "{a.display_name}" } else { "{a.nickname}" } }
                                 div { class: "ax-account-email ax-ellipsis", "{a.email}" }
                             }
                             if inbox_unread(a.id) > 0 {
@@ -87,7 +88,7 @@ pub fn AccountFlyout() -> Element {
                     label: "Add account",
                     icon: "person_add",
                     variant: Variant::Subtle,
-                    onclick: move |_| shell.open_settings(app, PageId::EmailAccounts),
+                    onclick: move |_| shell.open_add_account(),
                 }
                 Button {
                     label: "Manage accounts",

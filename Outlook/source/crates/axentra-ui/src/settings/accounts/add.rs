@@ -90,7 +90,10 @@ pub fn AddAccountDialog(on_close: EventHandler<()>, #[props(default)] reauth: Op
     let mut email = use_signal(|| first_email.clone());
     let mut email_error = use_signal(|| None::<String>);
     let mut tenant = use_signal(|| "common".to_string());
+    // Prefilled from AXENTRA_MS_CLIENT_ID or the last successful sign-in, so
+    // Advanced can stay closed; it opens when sign-in finds no ID.
     let mut client_id = use_signal(|| axentra_sync::oauth::ms_client_id(None).unwrap_or_default());
+    let remembered_id = use_hook(axentra_sync::oauth::client_id::remembered);
     let mut ms_advanced = use_signal(|| false);
     let mut banner_sig = use_signal(|| None::<Banner>);
     let mut form = use_signal(ImapForm::default);
@@ -492,7 +495,11 @@ pub fn AddAccountDialog(on_close: EventHandler<()>, #[props(default)] reauth: Op
                                     label: "Application (client) ID",
                                     value: client_id(),
                                     placeholder: "00000000-0000-0000-0000-000000000000",
-                                    hint: "From your Microsoft Entra app registration. See docs/ACCOUNTS.md.",
+                                    hint: if remembered_id.as_deref().is_some_and(|r| r == client_id().trim()) {
+                                        "Used for your last Microsoft sign-in. From your Microsoft Entra app registration (docs/ACCOUNTS.md)."
+                                    } else {
+                                        "From your Microsoft Entra app registration. See docs/ACCOUNTS.md."
+                                    },
                                     oninput: move |v: String| client_id.set(v),
                                     onenter: move |_| start_browser(false),
                                 }

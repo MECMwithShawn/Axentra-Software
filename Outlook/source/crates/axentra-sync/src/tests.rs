@@ -525,9 +525,11 @@ async fn graph_calendar_round_trip_against_fake_server() {
     let mut invite = store.calendar_events(cid).unwrap().into_iter().find(|e| e.title == "Design review").expect("pulled");
     assert_eq!(invite.my_response, ResponseStatus::NotResponded);
 
-    // Here: accept the invite and retitle it; create a new event.
-    invite.my_response = ResponseStatus::Accepted;
-    invite.title = "Design review (room 2)".into();
+    // Here: accept the invite "without email" and change my reminder (an
+    // attendee can only change their own copy); create a new event.
+    store.respond_to_event_with(invite.id, ResponseStatus::Accepted, false, "").unwrap();
+    invite = store.event(invite.id).unwrap().unwrap();
+    invite.reminder_minutes = Some(30);
     store.update_event(&invite).unwrap();
     let start = chrono::Utc::now() + chrono::Duration::days(2);
     let mut lunch = Event { calendar_id: cid, title: "Lunch".into(), start, end: start + chrono::Duration::hours(1), ..Default::default() };
@@ -536,8 +538,9 @@ async fn graph_calendar_round_trip_against_fake_server() {
     let requests = log.lock().unwrap().clone();
     let create = requests.iter().find(|r| r.starts_with("POST /me/calendars/CAL1/events")).expect("create");
     assert!(create.contains(r#""subject":"Lunch""#) && create.contains("transactionId"), "{create}");
-    assert!(requests.iter().any(|r| r.starts_with("PATCH /me/events/E1") && r.contains("room 2")), "{requests:?}");
-    assert!(requests.iter().any(|r| r.starts_with("POST /me/events/E1/accept") && r.contains(r#""sendResponse":true"#)), "{requests:?}");
+    let patch = requests.iter().find(|r| r.starts_with("PATCH /me/events/E1")).expect("patch");
+    assert!(patch.contains(r#""reminderMinutesBeforeStart":30"#) && !patch.contains("subject") && !patch.contains("attendees"), "{patch}");
+    assert!(requests.iter().any(|r| r.starts_with("POST /me/events/E1/accept") && r.contains(r#""sendResponse":false"#)), "{requests:?}");
 
     // Settled: nothing more to push (the update and the response both stuck).
     assert_eq!(cal.push_only().await.unwrap(), 0);

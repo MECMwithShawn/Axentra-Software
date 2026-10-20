@@ -97,6 +97,7 @@ impl SyncHandle {
 
     /// Start with a specific keyring (tests use [`Keyring::memory`]).
     pub fn start_with_keyring(store: Arc<Store>, keyring: Keyring) -> SyncHandle {
+        oauth::client_id::seed_from_store(&store);
         let (tx, mut rx) = mpsc::unbounded_channel::<Command>();
         let changes = Arc::new(AtomicU64::new(0));
         let status = Arc::new(Mutex::new(SyncStatus::default()));
@@ -227,6 +228,25 @@ impl SyncHandle {
     pub fn remove_account(&self, id: AccountId) -> impl Future<Output = SyncResult<()>> + use<> {
         let inner = self.inner.clone();
         self.run(async move { accounts::remove(&inner, id).await })
+    }
+
+    /// The remembered backup password. With `allow_prompt` a locked keyring
+    /// asks to be unlocked; without, it reports `Locked`.
+    pub fn backup_password(&self, allow_prompt: bool) -> impl Future<Output = SyncResult<Option<Secret>>> + use<> {
+        let inner = self.inner.clone();
+        self.run(async move { inner.keyring.get(&secrets::backup_password_key(), allow_prompt).await })
+    }
+
+    /// Remember the backup password in the keyring (replacing an old one).
+    pub fn set_backup_password(&self, password: Secret) -> impl Future<Output = SyncResult<()>> + use<> {
+        let inner = self.inner.clone();
+        self.run(async move { inner.keyring.set(&secrets::backup_password_key(), &password).await })
+    }
+
+    /// Forget the backup password ("Forget password").
+    pub fn forget_backup_password(&self) -> impl Future<Output = SyncResult<()>> + use<> {
+        let inner = self.inner.clone();
+        self.run(async move { inner.keyring.delete(&secrets::backup_password_key()).await })
     }
 
     /// Unlock the keyring for an account (prompts) and sync it.

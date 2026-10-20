@@ -1,5 +1,6 @@
 //! Modal dialogs (Fluent DialogSurface): scrim, focus trap, initial focus,
-//! Escape to close and focus return to the invoker.
+//! Escape to close, Enter for the default button and focus return to the
+//! invoker.
 
 use dioxus::prelude::*;
 
@@ -8,10 +9,12 @@ use super::dom;
 
 /// Modal dialog. Escape and clicking the overlay call `on_close`.
 ///
-/// Initial focus goes to an element marked `data-ax-autofocus` (the
-/// `autofocus` prop of kit buttons and fields), else the first focusable
-/// element of the body. Tab is trapped inside; when the dialog closes,
-/// focus returns to the element that was focused before it opened.
+/// Initial focus goes to `initial_focus`, else an element marked
+/// `data-ax-autofocus` (the `autofocus` prop of kit buttons and fields), else
+/// the first focusable element of the body, else the default button. Tab is
+/// trapped inside; Enter outside buttons and lists presses the default
+/// button (`on_default`, or a `Button { default_action: true }`); when the
+/// dialog closes, focus returns to the element that opened it.
 #[component]
 pub fn Dialog(
     #[props(into)] title: String,
@@ -32,8 +35,21 @@ pub fn Dialog(
     /// Clicking the scrim does not close the dialog.
     #[props(default)]
     modal_scrim: bool,
+    /// Enter (with focus outside buttons, links, text areas, menus and
+    /// lists) runs this, as the dialog's default button would. A kit
+    /// `Button { default_action: true }` in `actions` does the same.
+    on_default: Option<EventHandler<()>>,
+    /// Selector of the element to focus first (default: the element marked
+    /// `autofocus`, else the first focusable element of the body).
+    #[props(into)]
+    initial_focus: Option<String>,
 ) -> Element {
     let id = dom::use_unique_id("ax-dialog");
+    // Focus goes back to whatever opened the dialog.
+    use_drop({
+        let id = id.clone();
+        move || dom::close_dialog(&id)
+    });
     let title_id = format!("{id}-title");
     let body_id = format!("{id}-body");
     let h = height.map(|h| format!(";height:min({h}px, calc(100vh - 48px))")).unwrap_or_default();
@@ -55,7 +71,8 @@ pub fn Dialog(
                 onclick: move |e| e.stop_propagation(),
                 onmounted: {
                     let id = id.clone();
-                    move |_| dom::open_dialog(&id)
+                    let initial = initial_focus.clone();
+                    move |_| dom::open_dialog_with(&id, initial.as_deref())
                 },
                 // Keys inside a modal never reach module or global shortcuts
                 // (keyboard spec §2.1 scope 1).
@@ -74,6 +91,18 @@ pub fn Dialog(
                     }
                     div { id: "{body_id}", class: "ax-dialog-body", {children} }
                     if let Some(a) = actions { div { class: "ax-dialog-actions", {a} } }
+                }
+                if let Some(h) = on_default {
+                    // Pressed by the Enter handling in dom.js.
+                    button {
+                        r#type: "button",
+                        class: "ax-dialog-default",
+                        hidden: true,
+                        tabindex: "-1",
+                        "aria-hidden": "true",
+                        "data-ax-default": "true",
+                        onclick: move |_| h.call(()),
+                    }
                 }
             }
         }
@@ -106,6 +135,7 @@ pub fn ConfirmDialog(
                     label: confirm_label,
                     variant: if danger { Variant::Danger } else { Variant::Primary },
                     autofocus: focus_confirm,
+                    default_action: true,
                     onclick: move |_| on_confirm.call(()),
                 }
                 Button { label: cancel_label, autofocus: !focus_confirm, onclick: move |_| on_cancel.call(()) }

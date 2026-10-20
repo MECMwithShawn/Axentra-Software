@@ -637,11 +637,22 @@ mod tests {
     fn settings_round_trip_and_default() {
         let store = Store::open_in_memory().unwrap();
         assert_eq!(store.settings(), Settings::default());
-        let mut s = Settings::default();
-        s.theme = ThemeMode::Dark;
-        s.density = Density::Compact;
+        let s = Settings { theme: ThemeMode::Dark, density: Density::Compact, ..Default::default() };
         store.save_settings(&s).unwrap();
         assert_eq!(store.settings(), s);
+    }
+
+    #[test]
+    fn settings_saved_before_a_field_existed_get_its_default() {
+        let store = Store::open_in_memory().unwrap();
+        // 0.1.0 had no attachment_reminder.
+        store.conn().execute("INSERT INTO settings (id, json) VALUES (1, ?1)", [r#"{"theme":"Dark","undo_send_secs":10}"#]).unwrap();
+        let s = store.settings();
+        assert_eq!((s.theme, s.undo_send_secs, s.attachment_reminder), (ThemeMode::Dark, 10, true));
+        let mut off = s.clone();
+        off.attachment_reminder = false;
+        store.save_settings(&off).unwrap();
+        assert!(!store.settings().attachment_reminder);
     }
 
     #[test]

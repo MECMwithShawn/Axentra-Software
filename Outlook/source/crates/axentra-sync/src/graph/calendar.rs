@@ -288,7 +288,8 @@ impl GraphCalendar<'_> {
             }
             EventOp::Update => {
                 let (e, sh) = (local.expect("update"), shadow.expect("update").clone());
-                let updated = self.graph.patch(&format!("/me/events/{}", seg(&sh.remote_id)), event_to_graph(e, false)).await?;
+                let body = if super::map::i_organize(e, &self.account.email) { event_to_graph(e, false) } else { super::map::event_to_graph_attendee(e) };
+                let updated = self.graph.patch(&format!("/me/events/{}", seg(&sh.remote_id)), body).await?;
                 let sh = Shadow { etag: updated["changeKey"].as_str().map(str::to_string).or(sh.etag.clone()), ..sh };
                 let response = shadow_extra(&sh).response;
                 Ok(Some(settled(e, sh, response)))
@@ -300,7 +301,8 @@ impl GraphCalendar<'_> {
                     ResponseStatus::Tentative => "tentativelyAccept",
                     _ => "decline",
                 };
-                self.graph.post(&format!("/me/events/{}/{verb}", seg(&sh.remote_id)), json!({"sendResponse": true})).await?;
+                let body = local.map(super::map::response_body).unwrap_or_else(|| json!({"sendResponse": true}));
+                self.graph.post(&format!("/me/events/{}/{verb}", seg(&sh.remote_id)), body).await?;
                 let mut extra = shadow_extra(&sh);
                 extra.response = r;
                 Ok(Some(Shadow { extra: serde_json::to_value(&extra).unwrap_or_default(), ..sh }))

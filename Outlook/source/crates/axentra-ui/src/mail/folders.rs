@@ -350,6 +350,43 @@ pub fn run_folder_command(mut app: AppState, mut ctx: MailCtx, cmd: &str, target
     }
 }
 
+/// An account node's name: its nickname when set, else the address.
+pub fn account_label(a: &Account) -> String {
+    if a.nickname.trim().is_empty() { a.email.clone() } else { a.nickname.trim().to_string() }
+}
+
+/// Trailing status glyph of an account node (protocols.md §2.6).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccountGlyph {
+    /// `None` = spinner (first sync running).
+    pub icon: Option<&'static str>,
+    pub tip: String,
+    pub class: &'static str,
+}
+
+/// The glyph for an account: a spinner during its first sync, else the
+/// health icon (offline, needs sign-in, error...); `None` when healthy.
+pub fn account_glyph(a: &Account) -> Option<AccountGlyph> {
+    if a.kind == AccountKind::Local {
+        return None;
+    }
+    let first_sync = crate::state::sync().and_then(|s| s.account_status(a.id)).filter(|l| l.syncing && l.first_sync);
+    if let Some(l) = first_sync {
+        return Some(AccountGlyph { icon: None, tip: l.progress.unwrap_or_else(|| "Syncing your mailbox…".into()), class: "ax-syncing" });
+    }
+    glyph_for(&axentra_sync::AccountHealth::of(a))
+}
+
+fn glyph_for(h: &axentra_sync::AccountHealth) -> Option<AccountGlyph> {
+    let icon = h.icon?;
+    let class = match icon {
+        "cloud_off" => "ax-muted",
+        "warning" | "lock_closed" => "ax-warning",
+        _ => "ax-danger",
+    };
+    Some(AccountGlyph { icon: Some(icon), tip: h.message.clone().unwrap_or_default(), class })
+}
+
 /// Validate a folder name per §2.9; returns the error text.
 pub fn validate_name(name: &str, account: AccountId, parent: Option<FolderId>, except: Option<FolderId>) -> Option<String> {
     let s = store();
@@ -496,6 +533,23 @@ pub fn FolderPane(width: u32) -> Element {
                     div { class: "ax-mail-tree-scroll", {render(rest_nodes)} }
                 } else {
                     div { class: "ax-mail-tree-scroll", {render(&nodes)} }
+                }
+            }
+            // "Add account" at the bottom of the folder list (protocols.md §2).
+            div { class: "ax-mail-folders-foot",
+                button {
+                    r#type: "button",
+                    class: "ax-mail-add-account",
+                    title: "Add an email account",
+                    onclick: move |_| match crate::shell::try_shell() {
+                        Some(shell) => shell.open_add_account(),
+                        None => {
+                            let mut dialog = app.settings_dialog;
+                            dialog.set(Some(SettingsPage::Accounts));
+                        }
+                    },
+                    Icon { name: "person_add", size: 20 }
+                    span { "Add account" }
                 }
             }
         }
@@ -683,9 +737,10 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
     match node.kind.clone() {
         NodeKind::FavoritesHeader | NodeKind::Account(_) => {
             let (label, class) = match &node.kind {
-                NodeKind::Account(a) => (a.email.clone(), "ax-mail-node-account"),
+                NodeKind::Account(a) => (account_label(a), "ax-mail-node-account"),
                 _ => ("Favorites".to_string(), "ax-mail-node-favorites"),
             };
+            let glyph = if let NodeKind::Account(a) = &node.kind { account_glyph(a) } else { None };
             let n2 = node.clone();
             let n3 = node.clone();
             let n4 = node.clone();
@@ -750,6 +805,14 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                         Icon { name: if node.expanded { "chevron_down" } else { "chevron_right" }, size: 16 }
                     }
                     span { class: "ax-mail-node-name ax-ellipsis", title: "{label}", "{label}" }
+                    if let Some(g) = glyph {
+                        span { class: "ax-mail-node-status {g.class}", role: "img", title: "{g.tip}", "aria-label": "{g.tip}",
+                            match g.icon {
+                                Some(icon) => rsx! { Icon { name: icon, size: 16 } },
+                                None => rsx! { span { class: "ax-spinner", "aria-hidden": "true", style: "width:14px;height:14px;border-width:2px" } },
+                            }
+                        }
+                    }
                     button {
                         r#type: "button",
                         class: "ax-mail-node-more",
@@ -1074,6 +1137,22 @@ mod tests {
 
     fn folder(id: FolderId, role: FolderRole, name: &str, unread: i64, total: i64) -> Folder {
         Folder { id, account_id: 1, role, name: name.into(), unread_count: unread, total_count: total, is_expanded: true, ..Default::default() }
+    }
+
+    #[test]
+    fn account_nodes_use_nicknames_and_health_glyphs() {
+        let mut a = Account { email: "ana@example.org".into(), ..Default::default() };
+        assert_eq!(account_label(&a), "ana@example.org");
+        a.nickname = " Work ".into();
+        assert_eq!(account_label(&a), "Work");
+        let healthy = axentra_sync::AccountHealth { state: axentra_sync::AccountState::Ok, icon: None, message: None, intent: "info", action: None };
+        assert_eq!(glyph_for(&healthy), None);
+        let offline = axentra_sync::AccountHealth { icon: Some("cloud_off"), message: Some("You're offline.".into()), ..healthy.clone() };
+        assert_eq!(glyph_for(&offline), Some(AccountGlyph { icon: Some("cloud_off"), tip: "You're offline.".into(), class: "ax-muted" }));
+        let locked = axentra_sync::AccountHealth { icon: Some("lock_closed"), ..healthy.clone() };
+        assert_eq!(glyph_for(&locked).map(|g| g.class), Some("ax-warning"));
+        let failed = axentra_sync::AccountHealth { icon: Some("error_circle"), ..healthy };
+        assert_eq!(glyph_for(&failed).map(|g| g.class), Some("ax-danger"));
     }
 
     #[test]

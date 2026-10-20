@@ -7,8 +7,6 @@
   --ax-mail-row-selected: var(--ax-brand-150);        /* ESTIMATE: brand[150] / brand[40] */
   --ax-mail-row-selected-hover: var(--ax-brand-140);  /* ESTIMATE: brand[140] / brand[50] */
   --ax-mail-row-bg: var(--ax-bg-1);
-  /* ESTIMATE: spec --highlight-search (marigold); derived from the warning token until a shared highlight token exists */
-  --ax-mail-highlight: color-mix(in srgb, var(--ax-warning-fg) 26%, transparent);
   flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--ax-pane-gap);
 }
 .ax-app.ax-theme-dark .ax-mail { --ax-mail-row-selected: var(--ax-brand-40); --ax-mail-row-selected-hover: var(--ax-brand-50); }
@@ -78,6 +76,20 @@
 .ax-mail-node-header .ax-mail-node-chevron { margin-right: 4px; }
 .ax-mail-node-favorites { height: 28px; font-size: var(--ax-text-200); color: var(--ax-fg-2); margin-top: 2px; }
 .ax-mail-node-account { margin-top: 8px; }
+/* Account status glyph (protocols.md §2.6) */
+.ax-mail-node-status { width: 16px; height: 16px; flex: none; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.ax-mail-node-status.ax-muted { color: var(--ax-fg-3); }
+.ax-mail-node-status.ax-warning { color: var(--ax-warning-fg); }
+.ax-mail-node-status.ax-danger { color: var(--ax-danger-fg); }
+/* Folder pane footer: Add account */
+.ax-mail-folders-foot { flex: none; padding: 4px 18px 8px 8px; border-top: 1px solid var(--ax-stroke-2); margin-top: 4px; }
+.ax-mail-add-account {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 8px; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-2); font-size: var(--ax-text-300); text-align: left;
+}
+.ax-mail-add-account:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-mail-add-account:hover .ax-icon { color: var(--ax-fg-2-brand-hover); }
+.ax-density-compact .ax-mail-add-account { height: 32px; }
 .ax-mail-node-create { color: var(--ax-fg-brand); gap: 8px; }
 .ax-mail-node-create:hover { color: var(--ax-fg-brand-hover); }
 .ax-mail-node-editing { height: auto; min-height: 36px; padding-top: 2px; padding-bottom: 2px; background: transparent !important; }
@@ -149,7 +161,7 @@
 .ax-mail-sticky .ax-mail-group { background: var(--ax-bg-1); box-shadow: 0 1px 0 var(--ax-stroke-3); }
 
 /* search term highlight */
-.ax-mail-hl { background: var(--ax-mail-highlight); color: inherit; border-radius: 2px; }
+.ax-mail-hl { background: var(--ax-highlight-search); color: var(--ax-highlight-search-fg); border-radius: 2px; }
 
 /* "New messages in Other" */
 .ax-mail-other-bar {

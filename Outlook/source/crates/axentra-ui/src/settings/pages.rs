@@ -37,7 +37,7 @@ impl Category {
     pub fn pages(self) -> &'static [PageId] {
         use PageId::*;
         match self {
-            Category::Accounts => &[EmailAccounts, Signatures, Categories, AutomaticReplies, SharedWithMe, Storage],
+            Category::Accounts => &[EmailAccounts, Signatures, Categories, AutomaticReplies, SharedWithMe, Storage, Backup],
             Category::General => &[LanguageTime, Appearance, Notifications, Accessibility, Search, Offline, Privacy, DistributionGroups, About],
             Category::Mail => &[
                 MessageList, ReadingPane, FolderPane, ComposeReply, Attachments, Rules, Sweep, Junk, QuickSteps, CustomizeActions,
@@ -78,6 +78,7 @@ pub enum PageId {
     AutomaticReplies,
     SharedWithMe,
     Storage,
+    Backup,
     // General
     LanguageTime,
     Appearance,
@@ -131,6 +132,7 @@ impl PageId {
             AutomaticReplies => "Automatic replies",
             SharedWithMe => "Shared with me",
             Storage => "Storage",
+            Backup => "Backup",
             LanguageTime => "Language and time",
             Appearance => "Appearance",
             Notifications => "Notifications",
@@ -209,6 +211,12 @@ pub const INDEX: &[(PageId, &str, &str)] = &[
     (PageId::Signatures, "Select default signatures", "Include my signature on replies and forwards"),
     (PageId::Categories, "Categories", "Create category"),
     (PageId::Storage, "Storage", "Storage used on this device"),
+    (PageId::Backup, "Back up your accounts", "Back up now"),
+    (PageId::Backup, "Your backups", "Restore from a backup"),
+    (PageId::Backup, "Where backups are saved", "OneDrive backup folder"),
+    (PageId::Backup, "Backup password", "Backup password"),
+    (PageId::Backup, "Schedule", "Back up automatically every month"),
+    (PageId::Backup, "Schedule", "Keep the last"),
     (PageId::LanguageTime, "Time format", "Time format"),
     (PageId::LanguageTime, "Language", "Language"),
     (PageId::LanguageTime, "Current time zone", "Time zone"),
@@ -259,6 +267,10 @@ pub const INDEX: &[(PageId, &str, &str)] = &[
     (PageId::ComposeReply, "Message format", "Default font"),
     (PageId::ComposeReply, "Undo send", "Undo send"),
     (PageId::Attachments, "Attachment previews", "Show attachment previews"),
+    (PageId::Attachments, "Attachment reminder", "Warn me when I send a message that may be missing an attachment"),
+    (PageId::Junk, "Blocked senders and domains", "Blocked senders and domains"),
+    (PageId::Junk, "Safe senders and domains", "Safe senders and domains"),
+    (PageId::Sweep, "Sweep rules", "Sweep rules"),
     (PageId::MessageHandling, "Mark as read", "Mark as read"),
     (PageId::MessageHandling, "Mark as read", "Mark as read after"),
     (PageId::MessageHandling, "Message options", "Empty Deleted Items when Axentra Outlook closes"),
@@ -328,6 +340,8 @@ mod tests {
         let layout: Vec<PageId> = search("layout").iter().map(|h| h.page).collect();
         assert!(layout.contains(&PageId::MessageList) && layout.contains(&PageId::ReadingPane));
         assert!(search("Signatures")[0].page == PageId::Signatures);
+        assert!(search("onedrive").iter().any(|h| h.page == PageId::Backup));
+        assert!(search("restore").iter().any(|h| h.page == PageId::Backup));
         assert!(search("   ").is_empty());
     }
 

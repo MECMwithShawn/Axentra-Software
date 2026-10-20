@@ -422,6 +422,8 @@ fn context_items(e: &Entry, groups: &[String]) -> Vec<MenuItem> {
         }
         return vec![
             MenuItem::new("rename", "Rename list").icon("rename").shortcut("F2"),
+            // Sharing is out of scope for now (people-todo.md 3.4): shown disabled, with the reason.
+            MenuItem::new("share", "Share list").icon("share").disabled(true).tooltip("Sharing lists isn't available in Axentra yet"),
             MenuItem::new("move", "Move list to...").icon("folder_arrow_right").submenu(move_items),
             MenuItem::new("duplicate", "Duplicate list").icon("copy"),
             MenuItem::new("print", "Print list").icon("print"),

@@ -224,6 +224,12 @@ if (!window.__axMailHelpers) {
     const n = parseInt(row.getAttribute('data-drag-count') || '1', 10);
     e.dataTransfer.effectAllowed = 'copyMove';
     try { e.dataTransfer.setData('text/plain', row.getAttribute('aria-label') || ''); } catch (_) {}
+    // Message ids for drops outside Mail (My Day's To Do tab makes tasks).
+    const list = row.closest('[data-selected-message-ids]');
+    const ids = row.getAttribute('aria-selected') === 'true' && list && list.dataset.selectedMessageIds
+      ? list.dataset.selectedMessageIds
+      : row.dataset.messageIds || '';
+    if (ids) try { e.dataTransfer.setData('application/x-axentra-message-ids', '[' + ids + ']'); } catch (_) {}
     const ghost = document.createElement('div');
     ghost.className = 'ax-mail-drag-ghost';
     ghost.innerHTML = '<span class="ax-icon" style="width:16px;height:16px">' + (window.__axMailIcon || '') + '</span><span></span>';

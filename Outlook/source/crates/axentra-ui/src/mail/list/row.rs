@@ -360,6 +360,7 @@ pub fn MessageItem(props: ItemProps) -> Element {
     let is_conv = matches!(key, RowKey::Conv(_)) && row.count > 1;
     let subject = if row.latest.subject.trim().is_empty() { "(No subject)".to_string() } else { row.latest.subject.clone() };
     let drag_count = sel_count.max(1);
+    let drag_ids = super::ids_csv(&row.ids);
     let density = match look.density {
         Density::Roomy => "ax-roomy",
         Density::Cozy => "ax-cozy",
@@ -426,6 +427,7 @@ pub fn MessageItem(props: ItemProps) -> Element {
                 "aria-posinset": "{posinset}",
                 "aria-setsize": "{setsize}",
                 "data-drag-count": "{drag_count}",
+                "data-message-ids": "{drag_ids}",
                 draggable: "true",
                 style: "top:{top}px;height:{height}px",
                 onclick,
@@ -476,6 +478,7 @@ pub fn MessageItem(props: ItemProps) -> Element {
             "aria-posinset": "{posinset}",
             "aria-setsize": "{setsize}",
             "data-drag-count": "{drag_count}",
+            "data-message-ids": "{drag_ids}",
             draggable: "true",
             style: "top:{top}px;height:{height}px",
             onclick,
@@ -594,6 +597,7 @@ pub fn ChildItem(props: ChildProps) -> Element {
             "aria-selected": if selected { "true" } else { "false" },
             "aria-label": "{who}, {time}, {preview}",
             "data-drag-count": "1",
+            "data-message-ids": "{id}",
             draggable: "true",
             style: "top:{top}px;height:{height}px",
             onclick: move |e: MouseEvent| {
