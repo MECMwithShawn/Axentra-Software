@@ -2,8 +2,9 @@
 
 This is an explicit Linux developer build stage for Axentra USB, followed by a
 manual target finalization step **before the installer’s first reboot**. It is
-not yet a hardware-qualified release or a one-click GUI feature. The desktop
-writer never runs code from an ISO. Windows can write the resulting ISO using
+not yet a hardware-qualified release. The Linux GUI can run the image-build
+stage through **Prepare for Intel RAID**, including dependency installation. The separate preparation worker runs package scripts only from a
+publisher-verified source; the USB writer does not execute image code. Windows can write the resulting ISO using
 **Original image** mode; remastering requires a Linux host and root privileges.
 
 ## Architecture and scope

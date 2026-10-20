@@ -1,0 +1,43 @@
+Axentra Intel IMSM/RST RAID 0 installation — experimental
+
+This image includes mdadm/mdmon and live/installed initramfs hooks.
+Their presence does not establish successful boot on your firmware.
+
+Before installing:
+- Back up your data and Windows recovery information.
+- Keep the existing Intel RST configuration. Boot in UEFI mode.
+- Verify all RAID members and the complete expected array are visible.
+  Stop on missing members, wrong size or degraded/platform errors.
+- Use manual partitioning. Never format the physical RAID member disks.
+- For dual boot, use prepared Linux free space and preserve Windows, MSR,
+  recovery partitions and the existing EFI partition WITHOUT formatting it.
+- Do not use erase-disk, forced assembly or RAID/AHCI mode switching.
+
+Before the first reboot:
+Choose Continue Testing when the installer finishes. The installer is an
+external application; Axentra cannot prevent its erase or restart actions.
+The installed root must be direct ext4 on an existing complete IMSM RAID 0
+volume, with a GPT FAT EFI partition and an installed Linux EFI loader.
+
+Mount the VERIFIED installed root by filesystem UUID under /mnt/installed.
+Mount its existing ESP at /mnt/installed/boot/efi, without formatting. If
+there is a separate /boot, mount that by UUID before mounting the ESP.
+Prepare chroot API mounts dev, proc, sys and run using rbind and make-rslave.
+Check the target fstab uses the matching filesystem UUIDs.
+Do not guess device numbers or run these steps against the running host root.
+
+Run one of:
+  sudo axentra-raid-finalize --target /mnt/installed --mode dual
+  sudo axentra-raid-finalize --target /mnt/installed --mode single
+
+The finalizer validates root/RAID/ESP identities, displays configuration,
+and asks for FINALIZE followed by the verified root UUID. It saves persistent
+mdadm UUID configuration, rebuilds/checks all installed initramfs images,
+updates GRUB, and checks EFI files remain unchanged. Dual mode also requires
+the existing Windows EFI loader and adds a UUID-based chainloader.
+It does not partition, format, install EFI binaries, alter NVRAM, or reboot.
+
+If finalization fails, DO NOT REBOOT. Review and fix the target first.
+After success, unmount chroot API mounts in reverse order, sync, and reboot
+manually. Validate Linux and Windows boot, mdmon lifecycle and a kernel update
+on disposable test storage before treating this workflow as production-ready.

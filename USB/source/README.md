@@ -2,7 +2,7 @@
 
 A native Rust desktop app for Windows and Linux, with a Rufus/Etcher-style workflow and explicit boot-chain diagnostics. Version 0.1.1 is a **preview**: physical USB writes and actual firmware booting have not been validated on hardware.
 
-The application, image reader, initramfs inspector, copy engine, raw writer, verification and privilege worker are Rust. The interface uses egui/eframe. There is **no Python, Electron, web server or browser runtime**. Windows storage management uses Microsoft's built-in PowerShell storage cmdlets; Linux formatting uses the system's standard storage utilities.
+The application, image reader, initramfs inspector, copy engine, raw writer, verification and privilege worker are Rust. The interface uses egui/eframe. The desktop UI has no Electron, web server or browser runtime. Optional Linux RAID image preparation uses bundled Python/shell helpers and system build utilities. Windows storage management uses Microsoft's built-in PowerShell storage cmdlets; Linux formatting uses the system's standard storage utilities.
 
 ## Downloads and installation
 
@@ -55,7 +55,7 @@ No runtime telemetry or automatic downloads are used. Explicit ISO downloads con
 
 ## Build and development
 
-Rust 1.95 or newer is required; `Cargo.lock` pins dependencies. On Windows, `./build.ps1` runs tests, builds the app, creates the Inno Setup 6 installer, and packages portable/source ZIPs with SHA-256 checksums in `dist/`. Inno Setup 6 and Python 3.11+ are development prerequisites for packaging; neither is required to run the app. The editable logo and regeneration instructions are in `assets/`.
+Rust 1.95 or newer is required; `Cargo.lock` pins dependencies. On Windows, `./build.ps1` runs tests, builds the app, creates the Inno Setup 6 installer, and packages portable/source ZIPs with SHA-256 checksums in `dist/`. Inno Setup 6 and Python 3.11+ are development prerequisites for packaging; neither is required for the Windows app. The editable logo and regeneration instructions are in `assets/`.
 
 ```sh
 cargo test --locked
@@ -74,7 +74,7 @@ axentra-usb --hash-entry /path/to/image.iso casper/filesystem.squashfs entry-sha
 
 Supply an output filename on Windows because the desktop executable does not attach a terminal. The worker accepts only typed verify/raw/compatible requests. Image data is never executed. All unsafe Rust is isolated to platform calls for device control, privilege launching and locking.
 
-`packaging/package.py` assembles `.deb`, portable archives and checksums from already-built native binaries. Python is a development packaging tool only and is not part of the app or its runtime dependencies.
+`packaging/package.py` assembles `.deb`, portable archives and checksums from already-built native binaries. Python is used for development packaging and the optional Linux RAID preparation worker; ordinary ISO downloads and USB writes use the Rust engine.
 
 Axentra USB is independently implemented and is not affiliated with Rufus, balenaEtcher or Zorin. No installation ISO, OS bootloader or Zorin proprietary content is redistributed.
 
@@ -83,7 +83,7 @@ Axentra USB is independently implemented and is not affiliated with Rufus, balen
 The [Linux RAID build stage](raid/README.md) can prepare a trusted Zorin 18 ISO
 with mdadm/mdmon in the live and installed filesystem. Write its output using
 **Original image**, then run the guarded installed-target finalizer before the
-first reboot. This is a separate developer workflow, not automatic RAID
+first reboot. The Linux app can now run this preparation stage; it is not automatic RAID
 support for arbitrary ISOs or a hardware-qualified release. Manual partitioning
 must preserve Windows and the existing ESP in dual-boot installations.
 
@@ -126,3 +126,43 @@ Ctrl+C cancels this command. It prints progress to stderr and a JSON receipt
 its inspection report, without the download URL or its query parameters.
 See [download validation](DOWNLOAD-VALIDATION.md) for automated and real-Zorin
 test evidence.
+
+
+## Prepare RAID images in the Linux app (experimental)
+
+After downloading or selecting a trusted Zorin 18 ISO, enter its publisher
+SHA-256 and enable **Prepare for Intel RAID**. Choose **Prepare RAID image…**
+and a new output filename. Authenticate in the system administrator dialog.
+The app installs missing image-build dependencies (including xorriso) through
+apt, then prepares a separate ISO and checks its EFI/IMSM startup contents.
+It selects the result in **Original image** mode. Select a USB afterward;
+the existing device-specific erase confirmation is still required.
+
+Preparation requires Linux with Python 3 and pkexec, internet access, 80 GiB
+free in /var/tmp plus output space, and a source ISO owned by the current
+user. The .deb includes Python 3 as a dependency; portable Linux users must
+install Python 3 and pkexec first. Windows can write an already prepared ISO
+but cannot run the Linux preparation stage. Embedded scripts ship inside the
+native binary; no repository checkout is needed. Package scripts from the
+trusted ISO execute as root inside the build chroot: use only publisher-verified
+images. A disposable Linux build VM remains recommended.
+
+Stop requests cleanup; apt/dpkg setup must finish before cancellation takes
+effect. The root-owned build tree and temporary output are removed on normal
+failure/cancellation. Abrupt termination or power loss may leave temporary
+files. Completed files are published without overwriting an existing output.
+The source checksum is rechecked from a root-owned snapshot before building.
+Host mdadm/bootloader packages are not installed by this step.
+
+The prepared live image includes **Axentra RAID installation instructions**
+in its applications menu. Manual partitioning and explicit target finalization
+before reboot are still required; this preview does not intercept Ubiquity's
+erase/restart actions. Both Windows-preserving and single-boot layouts use the
+same prepared ISO and the appropriate finalizer mode. Do not treat successful
+image preparation as successful Alienware/RST or Secure Boot validation.
+
+Equivalent image-only CLI (no USB write):
+
+```sh
+axentra-usb --prepare-raid SOURCE.iso PUBLISHER_SHA256 NEW_OUTPUT.iso
+```

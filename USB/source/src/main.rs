@@ -11,6 +11,32 @@ fn main() {
 }
 fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).is_some_and(|a| a == "--raid-worker") {
+        return axentra_usb::raid::worker(&PathBuf::from(
+            args.get(2).context("Missing RAID request")?,
+        ));
+    }
+    if args.get(1).is_some_and(|a| a == "--prepare-raid") {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        ctrlc::set_handler(move || flag.store(true, Ordering::Relaxed))?;
+        let prepared = axentra_usb::raid::prepare(
+            &PathBuf::from(
+                args.get(2)
+                    .context("Usage: --prepare-raid SOURCE.iso PUBLISHER_SHA256 NEW_OUTPUT.iso")?,
+            ),
+            args.get(3).context("Missing publisher SHA-256")?,
+            &PathBuf::from(args.get(4).context("Missing new output filename")?),
+            &mut |phase, _, _| eprintln!("{phase}"),
+            &|| cancel.load(Ordering::Relaxed),
+        )?;
+        println!("{}", serde_json::to_string(&prepared)?);
+        return Ok(());
+    }
     if args.get(1).is_some_and(|a| a == "--download") {
         use std::sync::{
             Arc,

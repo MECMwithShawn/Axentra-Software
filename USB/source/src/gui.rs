@@ -3,6 +3,7 @@ use axentra_usb::{
     download,
     image::{self, Inspection},
     operation::{Action, Request},
+    raid,
 };
 use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke, Vec2};
 use serde_json::{Value, json};
@@ -59,6 +60,7 @@ enum Event {
     Progress(String, u64, u64),
     Worker(Result<(), String>),
     Downloaded(Result<download::Download, String>),
+    Prepared(Result<raid::Prepared, String>),
 }
 struct App {
     logo: egui::TextureHandle,
@@ -73,6 +75,10 @@ struct App {
     download_url: String,
     show_download: bool,
     downloading: bool,
+    raid_requested: bool,
+    raid_report: Option<raid::Prepared>,
+    preparing: bool,
+    prepare_thread: Option<std::thread::JoinHandle<()>>,
     download_thread: Option<std::thread::JoinHandle<()>>,
     download_report: Option<download::Download>,
     busy: bool,
@@ -95,6 +101,9 @@ struct App {
 impl Drop for App {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.prepare_thread.take() {
+            let _ = thread.join();
+        }
         if let Some(thread) = self.download_thread.take() {
             let _ = thread.join();
         }
@@ -151,6 +160,10 @@ impl App {
             download_url: String::new(),
             show_download: false,
             downloading: false,
+            raid_requested: false,
+            raid_report: None,
+            preparing: false,
+            prepare_thread: None,
             download_thread: None,
             download_report: None,
             busy: false,
@@ -230,6 +243,7 @@ impl App {
         }
         self.busy = true;
         self.downloading = true;
+        self.raid_report = None;
         self.image = None;
         self.report = None;
         self.download_report = None;
@@ -272,6 +286,76 @@ impl App {
             ctx.request_repaint();
         }));
     }
+    fn start_prepare(&mut self, path: PathBuf, ctx: egui::Context) {
+        if self.busy || !self.hash_ok() || !download::valid_checksum(&self.expected_hash) {
+            return;
+        }
+        let Some(info) = &self.image else {
+            return;
+        };
+        let source = info.path.clone();
+        let checksum = self.expected_hash.clone();
+        self.busy = true;
+        self.preparing = true;
+        self.raid_report = None;
+        self.raid_requested = true;
+        self.selected = None;
+        self.mode = Action::Raw;
+        self.error = false;
+        self.job = None;
+        self.write_verified = false;
+        self.report = None;
+        self.progress = 0.;
+        self.cancel = Arc::new(AtomicBool::new(false));
+        let cancel = self.cancel.clone();
+        let tx = self.tx.clone();
+        self.prepare_thread = Some(std::thread::spawn(move || {
+            let mut last = std::time::Instant::now();
+            let result = raid::prepare(
+                &source,
+                &checksum,
+                &path,
+                &mut |s, n, t| {
+                    if t == 0 || n == t || last.elapsed().as_millis() > 150 {
+                        last = std::time::Instant::now();
+                        let _ = tx.send(Event::Progress(s.into(), n, t));
+                        ctx.request_repaint();
+                    }
+                },
+                &|| cancel.load(Ordering::Relaxed),
+            );
+            let _ = tx.send(Event::Prepared(result.map_err(|e| format!("{e:#}"))));
+            ctx.request_repaint();
+        }));
+    }
+    fn raid_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        card().show(ui, |ui| {
+            caption(ui, "INTEL RST / IMSM RAID 0");
+            ui.add_enabled_ui(!self.busy, |ui| {
+                if ui.checkbox(&mut self.raid_requested, "Prepare for Intel RAID (experimental)").changed() && self.raid_requested {
+                    self.mode = Action::Raw;
+                }
+            });
+            if !self.raid_requested { return; }
+            muted(ui, "Creates a separate ISO with live and installed RAID startup support. Requires Linux, internet access, administrator authentication and 80 GiB free in /var/tmp, plus space for the output ISO.");
+            muted(ui, "Missing image-build tools are installed automatically. Your source ISO and existing disks are kept. USB erasure is a separate step.");
+            if self.image.as_ref().is_some_and(raid::startup_prepared) {
+                ui.colored_label(GREEN, "RAID startup files inspected. Original image mode selected.");
+            } else {
+                let enabled = cfg!(target_os = "linux") && !self.busy && self.hash_ok()
+                    && download::valid_checksum(&self.expected_hash)
+                    && self.image.as_ref().is_some_and(|i| i.title.to_lowercase().contains("zorin"));
+                if ui.add_enabled(enabled, btn("Prepare RAID image…")).clicked()
+                    && let Some(path) = rfd::FileDialog::new().set_file_name("Zorin-IMSM.iso")
+                        .add_filter("ISO image", &["iso"]).save_file()
+                {
+                    self.start_prepare(path, ctx.clone());
+                }
+                muted(ui, "Select a trusted Zorin ISO and enter its publisher checksum first. USB creation stays blocked until RAID preparation passes.");
+            }
+            ui.colored_label(AMBER, "Installer: use manual partitioning; preserve Windows and the existing EFI partition. Run the included target finalizer before reboot. Hardware validation is still pending.");
+        });
+    }
     fn selected_device(&self) -> Option<&Device> {
         self.selected.and_then(|i| self.devices.get(i))
     }
@@ -286,6 +370,9 @@ impl App {
         !self.busy
             && self.hash_ok()
             && self.image.is_some()
+            && (!self.raid_requested
+                || (self.mode == Action::Raw
+                    && self.image.as_ref().is_some_and(raid::startup_prepared)))
             && self.selected_device().is_some_and(|d| {
                 d.blocked().is_none() && self.image.as_ref().unwrap().size <= d.size
             })
@@ -358,7 +445,10 @@ impl App {
         if let Some(job) = &self.job {
             let _ = std::fs::write(job.path().join("cancel"), b"stop");
         }
-        self.phase = if self.downloading {
+        self.phase = if self.preparing {
+            "Cancelling RAID preparation; waiting for safe cleanup (package setup must finish)…"
+                .into()
+        } else if self.downloading {
             "Cancelling download and removing the partial file…".into()
         } else {
             "Stopping at the next safe boundary. Interrupted media must be recreated.".into()
@@ -433,6 +523,24 @@ impl App {
                         }
                     }
                 }
+                Event::Prepared(result) => {
+                    if let Some(thread) = self.prepare_thread.take() {
+                        let _ = thread.join();
+                    }
+                    self.preparing = false;
+                    self.busy = false;
+                    match result {
+                        Ok(prepared) => {
+                            self.expected_hash = prepared.sha256.clone();
+                            let path = prepared.path.clone();
+                            self.raid_report = Some(prepared);
+                            self.mode = Action::Raw;
+                            self.download_report = None;
+                            self.analyze(path, ctx.clone());
+                        }
+                        Err(error) => self.fail(error),
+                    }
+                }
                 Event::Downloaded(result) => {
                     if let Some(thread) = self.download_thread.take() {
                         let _ = thread.join();
@@ -452,6 +560,10 @@ impl App {
                     self.busy = false;
                     match *result {
                         Ok(i) => {
+                            if raid::startup_prepared(&i) {
+                                self.raid_requested = true;
+                                self.mode = Action::Raw;
+                            }
                             self.image = Some(i);
                             self.phase = if self.download_report.is_some() {
                                 "Download verified and image inspected. Select a USB when ready."
@@ -486,7 +598,7 @@ impl App {
             .add_filter("JSON report", &["json"])
             .save_file()
         {
-            let data=self.report.clone().unwrap_or_else(||json!({"implementation":"Rust","download":self.download_report,"image":self.image,"device":self.selected_device(),"write":"Not performed","firmware_boot":"Not performed"}));
+            let data=self.report.clone().unwrap_or_else(||json!({"implementation":"Rust","download":self.download_report,"raid_preparation":self.raid_report,"image":self.image,"device":self.selected_device(),"write":"Not performed","firmware_boot":"Not performed"}));
             match serde_json::to_vec_pretty(&data)
                 .map_err(anyhow::Error::from)
                 .and_then(|b| std::fs::write(path, b).map_err(anyhow::Error::from))
@@ -507,6 +619,7 @@ impl App {
                             .pick_file()
                     {
                         self.download_report = None;
+                        self.raid_report = None;
                         self.analyze(path, ctx.clone());
                     }
                 });
@@ -631,7 +744,7 @@ impl App {
         card().show(ui, |ui| {
             caption(ui, "03   WRITE METHOD");
             ui.add_space(10.);
-            ui.add_enabled_ui(!self.busy, |ui| {
+            ui.add_enabled_ui(!self.busy && !self.raid_requested, |ui| {
                 ui.radio_value(
                     &mut self.mode,
                     Action::Compatible,
@@ -822,7 +935,7 @@ impl eframe::App for App {
             .show(ui, |ui| {
                 ui.add(
                     egui::ProgressBar::new(self.progress)
-                        .animate(self.downloading && self.progress == 0.)
+                        .animate((self.downloading || self.preparing) && self.progress == 0.)
                         .fill(GREEN)
                         .desired_height(5.),
                 );
@@ -907,6 +1020,8 @@ impl eframe::App for App {
                                     ui.set_min_width(left);
                                     self.source_card(ui, &ctx);
                                     ui.add_space(4.);
+                                    self.raid_card(ui, &ctx);
+                                    ui.add_space(4.);
                                     self.target_card(ui, &ctx);
                                     ui.add_space(4.);
                                     self.method_card(ui);
@@ -960,6 +1075,55 @@ pub fn launch(image: Option<PathBuf>) -> eframe::Result<()> {
 #[cfg(test)]
 mod download_ui_tests {
     use super::*;
+    #[test]
+    fn reopening_prepared_image_selects_original_image_mode() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fixture.iso");
+        std::fs::write(&path, [0u8; 512]).unwrap();
+        let mut info = image::inspect(&path, &mut |_, _, _| {}, &|| false).unwrap();
+        info.checks.push(image::Check {
+            label: "Intel IMSM/RST startup".into(),
+            status: "info".into(),
+            detail: "Prepared".into(),
+        });
+        app.tx.send(Event::Image(Box::new(Ok(info)))).unwrap();
+        app.receive(&ctx);
+        assert!(app.raid_requested);
+        assert_eq!(app.mode, Action::Raw);
+        assert!(app.selected.is_none());
+        assert!(!app.can_write());
+    }
+
+    #[test]
+    fn raid_panel_explains_preparation_and_never_selects_a_device() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        app.raid_requested = true;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let ctx = ui.ctx().clone();
+            app.raid_card(ui, &ctx);
+        });
+        let text = output
+            .shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::epaint::Shape::Text(t) = &s.shape {
+                    Some(t.galley.text())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        output.textures_delta.clear();
+        assert!(text.contains("Prepare RAID image"));
+        assert!(text.contains("finalizer before reboot"));
+        assert!(!app.can_write());
+        assert!(app.selected.is_none());
+    }
+
     #[test]
     fn download_panel_renders_required_controls() {
         let ctx = egui::Context::default();

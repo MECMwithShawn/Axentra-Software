@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Explicit developer build stage; the desktop writer never runs image code.
+# Explicit image build stage, also bundled by the desktop preparation worker.
 set -Eeuo pipefail
 if [[ ${1:-} != --inside-private-mounts ]]; then
     exec unshare --mount --propagation private -- "$0" --inside-private-mounts "$@"
@@ -21,6 +21,7 @@ cleanup() {
     return "$failed"
 }
 trap 'cleanup || true' EXIT
+echo "AXENTRA: Extracting the source ISO" >&2
 xorriso -osirrox on -indev "$source_iso" -extract / "$work/iso"
 iso=$work/iso
 [[ $(find "$iso/casper" -maxdepth 1 -name '*.squashfs' | wc -l) == 1 ]]
@@ -28,6 +29,7 @@ grep -qi zorin "$iso/.disk/info"
 [[ -f $iso/casper/initrd.zstd && -f $iso/casper/vmlinuz ]]
 [[ -f $iso/EFI/BOOT/BOOTX64.EFI || -f $iso/efi/boot/bootx64.efi ]]
 # Fail closed on layered or unfamiliar layouts; no partition/loop device needed.
+echo "AXENTRA: Expanding the live filesystem" >&2
 unsquashfs -d "$root" "$iso/casper/filesystem.squashfs"
 grep -Eq '^ID="?zorin"?$' "$root/etc/os-release"
 grep -Eq '^VERSION_ID="?18([."][0-9.]*)?"?$' "$root/etc/os-release"
@@ -56,6 +58,7 @@ chmod +x "$root/usr/sbin/policy-rc.d"
 cp -a "$root/etc/resolv.conf" "$work/resolv.conf.original"
 rm "$root/etc/resolv.conf"
 cp -L /etc/resolv.conf "$root/etc/resolv.conf"
+echo "AXENTRA: Installing mdadm and mdmon inside the image" >&2
 chroot "$root" apt-get update
 chroot "$root" env DEBIAN_FRONTEND=noninteractive apt-get install -y mdadm initramfs-tools python3
 install -Dm755 "$here/zz-axentra-imsm" "$root/etc/initramfs-tools/hooks/zz-axentra-imsm"
@@ -63,6 +66,21 @@ install -Dm755 "$here/axentra-imsm" "$root/etc/initramfs-tools/scripts/local-top
 install -Dm755 "$here/axentra-imsm" "$root/etc/initramfs-tools/scripts/casper-premount/axentra-imsm"
 install -Dm755 "$here/axentra_raid.py" "$root/usr/local/sbin/axentra-raid-finalize"
 printf 'DEVICE partitions containers\nAUTO +imsm -all\nHOMEHOST <ignore>\n' > "$root/etc/mdadm/mdadm.conf"
+
+# Keep the target-finalization instructions available offline on live media.
+install -Dm644 "$here/INSTALL-RAID.txt" "$root/usr/share/doc/axentra/INSTALL-RAID.txt"
+mkdir -p "$root/usr/share/applications"
+cat > "$root/usr/share/applications/axentra-raid-instructions.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Axentra RAID installation instructions
+Comment=Read before installing or restarting on Intel IMSM RAID
+Exec=xdg-open /usr/share/doc/axentra/INSTALL-RAID.txt
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+DESKTOP
+
 # Preserve Casper's live-media UUID and boot mode without making target kernels live kernels.
 install -Dm644 "$original/conf/uuid.conf" "$root/etc/axentra-live-uuid"
 cat > "$root/etc/initramfs-tools/hooks/zzz-axentra-live" <<'HOOK'
@@ -74,6 +92,7 @@ cp /etc/axentra-live-uuid "$DESTDIR/conf/uuid.conf"
 printf 'BOOT=casper\n' > "$DESTDIR/conf/conf.d/default-boot-to-casper.conf"
 HOOK
 chmod +x "$root/etc/initramfs-tools/hooks/zzz-axentra-live"
+echo "AXENTRA: Rebuilding and checking the live initramfs" >&2
 chroot "$root" mkinitramfs -c gzip -o /tmp/axentra-live-initrd "$kernel"
 lsinitramfs "$root/tmp/axentra-live-initrd" > "$work/initrd-files.txt"
 python3 - "$here" "$work/initrd-files.txt" <<'PY'
@@ -107,12 +126,14 @@ for manifest in "$iso/casper/filesystem.manifest-remove" "$iso/casper/filesystem
 done
 cleanup
 mounted=()
+echo "AXENTRA: Compressing the prepared live filesystem" >&2
 mksquashfs "$root" "$work/filesystem.squashfs" -noappend -comp xz
 mv "$work/filesystem.squashfs" "$iso/casper/filesystem.squashfs"
 du -sx --block-size=1 "$root" | cut -f1 > "$iso/casper/filesystem.size"
 # Recompute media checksums; preserve original EFI executables and boot catalog.
 (cd "$iso" && find . -type f ! -name md5sum.txt ! -path './boot.catalog' -print0 | sort -z | xargs -0 md5sum > "$work/md5sum.txt")
 mv "$work/md5sum.txt" "$iso/md5sum.txt"
+echo "AXENTRA: Rebuilding the ISO and preserving its boot equipment" >&2
 xorriso -indev "$source_iso" -outdev "$output" -boot_image any replay \
     -map "$iso/casper" /casper -map "$iso/md5sum.txt" /md5sum.txt -commit
 sha256sum "$source_iso" "$output" | tee "$work/image-sha256.txt"

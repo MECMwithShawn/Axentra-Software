@@ -36,3 +36,46 @@ Windows boot, kernel-update reboot, Secure Boot, NVRAM, OVMF or Intel firmware
 tests. No physical storage was changed. These remain release blockers. This
 PR should stay draft, with no merge or production-support claim, until the
 README acceptance gate is exercised on disposable media and arrays.
+
+## Integrated Linux app and full Pro remaster — 2026-10-20
+
+The Linux GUI now embeds the preparation scripts, invokes a distinct pkexec
+image worker, installs missing build tools, checks a root-owned source copy
+against the entered publisher hash, and returns a separately inspected ISO.
+The parent publishes without overwriting an existing destination. Stop requests
+cleanup; host apt/dpkg operations finish before honoring cancellation. Selecting
+RAID mode gates creation on startup evidence and forces Original image mode.
+The prepared image includes offline installation/finalization instructions.
+No target partition is guessed and finalization remains explicit before reboot.
+
+Checks performed:
+
+- 47 Rust tests (43 library, 4 GUI) and 27 Python tests passed, plus ShellCheck.
+- Python tests cover worker request validation, file owner/type/symlink refusal,
+  checksum failure before execution, verified source snapshot use, cancellation,
+  dependency policy and clean-install archive directory ordering.
+- A clean .deb install exposed missing tar directory entries. The packaging
+  generator was fixed, a regression test added, and installation then passed.
+  The installed /usr/bin/axentra-usb matches the optimized release binary.
+- xorriso and its libisoburn dependency installed successfully on this host.
+- Full Pro preparation ran through the app's shared engine via --prepare-raid
+  and administrator authentication. Actual source copy/hash, extraction,
+  image package installation, live initramfs generation/verification, squashfs
+  compression and ISO boot-equipment replay completed.
+- Source: Zorin OS 18.1 Pro, 8,381,560,832 bytes, SHA-256
+  `3984789a2762d1aa359eda5fe19c757e3e5ea9a1bd5a4acc52099c3979905ded`.
+- Prepared output: 7,945,977,856 bytes, independent and app SHA-256
+  `9e45019e5f529117b7a3e7d2104466feeb9c36a0ea628084cb58a1c5a2e8071b`.
+- The final ISO passed the app EFI/IMSM/Casper inspection. xorriso reports its
+  replayed El Torito and hybrid system-area boot structures. Source and output
+  BOOTX64.EFI, grubx64.efi, mmx64.efi and Casper kernel hashes match exactly.
+- Independent unpacking of the final initramfs confirms mdadm/mdmon, both
+  startup hooks, generic AUTO +imsm policy without host UUIDs and the preserved
+  Casper UUID. Image package versions are retained in filesystem.manifest.
+
+The full build used the shared engine's CLI; the native GUI preparation click
+path has only headless coverage. No physical USB write, firmware boot, real
+IMSM/mdmon transition or installed-target finalization/reboot was performed.
+No existing RAID metadata, Windows files, EFI files or partition table was
+modified. Firmware/installer tests remain release blockers; keep PR #1 draft.
+A complete automatic installer/reboot integration is not implemented.
