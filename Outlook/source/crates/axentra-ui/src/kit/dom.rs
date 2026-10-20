@@ -16,12 +16,15 @@
 //!   `.ax-panes > .ax-pane`); `data-ax-default-focus` picks the element F6
 //!   lands on the first time.
 //! * `data-ax-keytip="N"`: ribbon key tip letters.
+//! * `data-ax-surface` with `data-ax-grip` handles (and
+//!   `data-ax-surface-move` areas on `data-ax-movable` surfaces): resizable
+//!   dialogs and in-app windows, see [`super::surface`].
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::prelude::*;
 
-const RUNTIME_JS: &str = include_str!("dom.js");
+pub(crate) const RUNTIME_JS: &str = include_str!("dom.js");
 
 /// Install the runtime. Idempotent; the shell calls it once after mount.
 pub fn install() {
@@ -137,7 +140,7 @@ mod tests {
 
     #[test]
     fn runtime_defines_the_api_the_helpers_call() {
-        for f in ["focusSel", "focusFirstIn", "openPopup", "openDialog", "push", "fit", "cycle", "announce", "flash", "setPrevent", "setKeytips"] {
+        for f in ["focusSel", "focusFirstIn", "openPopup", "openDialog", "push", "fit", "cycle", "announce", "flash", "setPrevent", "setKeytips", "watchSurface"] {
             assert!(RUNTIME_JS.contains(&format!("ax.{f} =")), "dom.js lacks ax.{f}");
         }
     }

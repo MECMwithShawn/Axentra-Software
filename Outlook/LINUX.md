@@ -1,11 +1,11 @@
 # Axentra Outlook on Linux
 
-Built and tested 2026-10-20 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.2**; **pre-release**, not a stable release.
+Built and tested 2026-10-20 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.3**; **pre-release**, not a stable release.
 
 ## Install and run
 
 ```bash
-sudo apt install ./axentra-outlook_0.1.2-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.3-1_amd64.deb
 ```
 
 Open **Axentra Outlook** from the application menu, or run `axentra-outlook`. The package installs to
@@ -15,7 +15,7 @@ applications.
 
 ## Available
 
-Native WebKitGTK window (Dioxus 0.7 desktop) whose blue header is the title bar (client-side decorations, following the GNOME button layout; Settings › General › Appearance can switch back to the system title bar), local SQLite store under `~/.local/share/axentra-outlook`, demo
+Native WebKitGTK window (Dioxus 0.7 desktop) whose blue header is the title bar (client-side decorations, following the GNOME button layout; Settings › General › Appearance can switch back to the system title bar), resizable dialogs and movable pop-out windows that remember their size, local SQLite store under `~/.local/share/axentra-outlook`, demo
 mailbox for offline use, Microsoft Graph sign-in through the system browser (authorization code + PKCE on a
 `http://localhost` loopback) or a device code, IMAP/SMTP accounts, Secret Service storage for passwords and
 tokens, encrypted monthly backups to the OneDrive folder, and the full mail, calendar, people and to-do
@@ -23,8 +23,11 @@ interface described in the [README](README.md).
 
 ## Verification
 
-- 417 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
-  (MIME, Graph JSON), OAuth PKCE, loopback callback, backup format/encryption/restore/retention, UI logic.
+- 433 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
+  (MIME, Graph JSON), OAuth PKCE, loopback callback, backup format/encryption/restore/retention, dialog sizing,
+  UI logic.
+- Resizing Settings and the other dialogs was checked by hand on this Zorin desktop (GNOME, X11) with a debug
+  build of the same code.
 - The backup feature was reviewed by three independent reviewers (encryption and secrets, restore integrity,
   schedule and UX); all 13 confirmed findings were fixed with regression tests before release.
 - The release binary was packaged with `packaging/linux/package.py`; `desktop-file-validate` passed and the
@@ -45,6 +48,8 @@ interface described in the [README](README.md).
 - The merged title bar was checked by hand on this Zorin desktop (GNOME, X11): dragging, double-click maximize,
   edge resizing and the window buttons. Right-clicking the header doesn't open the window menu (Alt+Space does),
   and the window has a 1px border instead of a drop shadow.
+- Dialogs resize with the mouse only; there is no keyboard resizing (GNOME keeps Alt+F7 and Alt+F8 for moving
+  and resizing windows). Small confirmations and short forms keep a fixed size.
 - Not yet built: app zoom, Groups and Files modules, rules / junk / quick-steps
   editors, Scheduling Assistant, rich-text task notes, task attachments.
 - The `.deb` install itself was not exercised by the build process (it needs `sudo`); report anything that
@@ -57,6 +62,7 @@ interface described in the [README](README.md).
 ![Calendar, work week](screenshots/linux-2026-10-19-calendar-light.png)
 ![People](screenshots/linux-2026-10-19-people-light.png)
 ![To Do, My Day](screenshots/linux-2026-10-19-todo-light.png)
+![Settings, enlarged by dragging its corner](screenshots/linux-2026-10-20-resizable-settings-light.png)
 
 Demo mailbox; no real mail. Captured from the same interface served by the development preview server at
 1440 × 900.

@@ -274,6 +274,7 @@ fn FolderPicker(ids: Vec<MessageId>, copy: bool, moving_folder: Option<FolderId>
         Dialog {
             title,
             width: 440,
+            resize_key: "folder-picker", min_width: 360, min_height: 320,
             on_close: move |_| close(ctx),
             actions: rsx! {
                 if new_name().is_none() && moving_folder.is_none() {
@@ -294,7 +295,7 @@ fn FolderPicker(ids: Vec<MessageId>, copy: bool, moving_folder: Option<FolderId>
                 oninput: move |v| query.set(v),
                 onkeydown: typing(ctx),
             }
-            div { class: "ax-mail-picker", role: "listbox", "aria-label": "Folders",
+            div { class: "ax-mail-picker ax-surface-fill", role: "listbox", "aria-label": "Folders",
                 if moving_folder.is_some() && q.is_empty() {
                     button {
                         r#type: "button",
@@ -387,6 +388,7 @@ fn SweepDialog(id: MessageId) -> Element {
         Dialog {
             title: "Sweep messages",
             width: 520,
+            resize_key: "sweep", min_width: 400, min_height: 320,
             on_close: move |_| close(ctx),
             actions: rsx! {
                 Button {
@@ -585,6 +587,7 @@ fn DetailsDialog(id: MessageId) -> Element {
         Dialog {
             title: "Message details",
             width: 640,
+            resize_key: "message-details", min_width: 420, min_height: 300,
             on_close: move |_| close(ctx),
             actions: rsx! {
                 Button {
@@ -598,7 +601,7 @@ fn DetailsDialog(id: MessageId) -> Element {
                 Button { label: "Close", variant: Variant::Primary, onclick: move |_| close(ctx) }
             },
             p { class: "ax-mail-dialog-note", "Headers kept for this message. Axentra stores the parsed message, so transport headers aren't available." }
-            pre { class: "ax-mail-headers ax-selectable", "{text}" }
+            pre { class: "ax-mail-headers ax-selectable ax-surface-fill", "{text}" }
         }
     }
 }
@@ -727,13 +730,14 @@ fn ManageCategoriesDialog() -> Element {
         Dialog {
             title: "Categories",
             width: 520,
+            resize_key: "categories", min_width: 400, min_height: 300,
             on_close: move |_| close(ctx),
             actions: rsx! {
                 Button { label: "Create category", icon: "add", variant: Variant::Subtle, class: "ax-mail-dialog-left", onclick: move |_| { let mut ctx = ctx; ctx.dialog.set(Some(MailDialog::NewCategory(Vec::new()))) } }
                 Button { label: "Done", variant: Variant::Primary, onclick: move |_| close(ctx) }
             },
             p { class: "ax-mail-dialog-note", "Categories are kept on this device." }
-            div { class: "ax-mail-catlist",
+            div { class: "ax-mail-catlist ax-surface-fill",
                 for c in cats {
                     {
                         let is_editing = editing().as_ref().is_some_and(|(o, _, _)| *o == c.name);
@@ -973,6 +977,7 @@ fn HelpDialog() -> Element {
         Dialog {
             title: "Help",
             width: 520,
+            resize_key: "mail-help", min_width: 480, min_height: 300,
             on_close: move |_| close(ctx),
             actions: rsx! {
                 Button { label: "Keyboard shortcuts", icon: "keyboard", class: "ax-mail-dialog-left", onclick: move |_| ctx.dialog.set(Some(MailDialog::Shortcuts)) }
@@ -1069,11 +1074,12 @@ fn ShortcutsDialog() -> Element {
         Dialog {
             title: "Keyboard shortcuts",
             width: 560,
+            resize_key: "shortcuts", min_width: 420, min_height: 320,
             on_close: move |_| close(ctx),
             p { class: "ax-mail-dialog-note", if off { "Keyboard shortcuts are turned off. Navigation keys and Delete still work." } else { "Shortcut set: Outlook" } }
             TextField { value: q(), placeholder: "Search shortcuts", autofocus: true, oninput: move |v| q.set(v), onkeydown: typing(ctx) }
             span { class: "ax-visually-hidden", role: "status", "{found} shortcuts found" }
-            div { class: "ax-mail-shortcuts",
+            div { class: "ax-mail-shortcuts ax-surface-fill",
                 for (section, rows) in SHORTCUTS.iter() {
                     {
                         let rows: Vec<(&str, &str)> = rows.iter().copied().filter(|(a, k)| query.is_empty() || a.to_lowercase().contains(&query) || k.to_lowercase().contains(&query)).collect();

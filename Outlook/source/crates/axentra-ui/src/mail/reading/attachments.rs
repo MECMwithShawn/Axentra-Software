@@ -261,12 +261,13 @@ fn AttachmentPreview(attachment: Attachment, on_close: EventHandler<()>) -> Elem
         Dialog {
             title: attachment.name.clone(),
             width: 720,
+            resize_key: "attachment-preview", min_width: 400, min_height: 240,
             on_close: move |_| on_close.call(()),
             actions: rsx! {
                 button { r#type: "button", class: "ax-btn", onclick: move |_| download(app, &a), Icon { name: "arrow_download" } span { "Download" } }
                 button { r#type: "button", class: "ax-btn ax-primary", onclick: move |_| on_close.call(()), "Close" }
             },
-            div { class: "ax-mail-preview-body",
+            div { class: "ax-mail-preview-body ax-surface-fill",
                 if is_image {
                     img { src: "{src}", alt: "{attachment.name}" }
                 } else {

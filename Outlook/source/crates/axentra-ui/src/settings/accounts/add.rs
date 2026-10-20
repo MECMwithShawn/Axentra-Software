@@ -690,7 +690,7 @@ pub fn AddAccountDialog(on_close: EventHandler<()>, #[props(default)] reauth: Op
         ),
     };
     rsx! {
-        AcctDialog { title, on_cancel: move |_| cancel(), actions, footer_start, {body} }
+        AcctDialog { title, resize_key: "add-account", min_width: 360, min_height: 360, on_cancel: move |_| cancel(), actions, footer_start, {body} }
     }
 }
 

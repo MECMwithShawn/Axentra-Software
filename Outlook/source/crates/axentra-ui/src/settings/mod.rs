@@ -145,7 +145,17 @@ pub fn SettingsDialog(page: SettingsPage) -> Element {
     let searching = !query().trim().is_empty();
     let current_cat = page_id.category();
     rsx! {
-        Dialog { title: "Settings", bare: true, width: 1080, height: 760, class: "ax-settings", modal_scrim: true, on_close: move |_| close(),
+        Dialog {
+            title: "Settings",
+            bare: true,
+            width: 1080,
+            height: 760,
+            resize_key: "settings",
+            min_width: 720,
+            min_height: 480,
+            class: "ax-settings",
+            modal_scrim: true,
+            on_close: move |_| close(),
             div { class: "ax-settings-grid",
                 nav { class: "ax-settings-cats", "aria-label": "Settings categories",
                     h2 { class: "ax-settings-title", "Settings" }

@@ -447,12 +447,13 @@ pub fn PreviewDialog(index: usize) -> Element {
         Dialog {
             title: "{a.name}",
             width: 720,
+            resize_key: "attachment-preview", min_width: 400, min_height: 240,
             on_close: move |_| close(),
             actions: rsx! {
                 Button { label: "Remove attachment", variant: Variant::Subtle, icon: "delete", class: "ax-compose-dialog-left", onclick: move |_| { form.dialog.set(None); remove(form, index); } }
                 Button { label: "Close", variant: Variant::Primary, onclick: move |_| close() }
             },
-            div { class: "ax-compose-preview", {body} }
+            div { class: "ax-compose-preview ax-surface-fill", {body} }
         }
     }
 }

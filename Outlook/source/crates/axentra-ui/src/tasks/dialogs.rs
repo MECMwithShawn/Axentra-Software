@@ -148,7 +148,7 @@ fn PrefSwitch(#[props(into)] label: String, pref: Pref) -> Element {
 fn SettingsDialog() -> Element {
     let mut ctx = use_todo();
     rsx! {
-        Dialog { title: "To Do settings", width: 520, on_close: move |_| ctx.dialog.set(None),
+        Dialog { title: "To Do settings", width: 520, resize_key: "todo-settings", min_width: 400, min_height: 300, on_close: move |_| ctx.dialog.set(None),
             div { class: "ax-todo-settings",
                 h3 { "General" }
                 PrefSwitch { label: "Confirm before deleting", pref: Pref::ConfirmDelete }
@@ -196,7 +196,7 @@ const SHORTCUTS: [(&str, &str); 14] = [
 fn ShortcutsDialog() -> Element {
     let mut ctx = use_todo();
     rsx! {
-        Dialog { title: "Keyboard shortcuts", width: 560, on_close: move |_| ctx.dialog.set(None),
+        Dialog { title: "Keyboard shortcuts", width: 560, resize_key: "shortcuts", min_width: 420, min_height: 320, on_close: move |_| ctx.dialog.set(None),
             div { class: "ax-todo-shortcuts", role: "list",
                 h3 { "To Do" }
                 for (action, keys) in SHORTCUTS {

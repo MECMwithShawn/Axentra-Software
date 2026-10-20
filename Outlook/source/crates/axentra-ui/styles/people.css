@@ -258,7 +258,6 @@
 .ax-people-source { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
 
 /* ------------------------------------------------------------ forms */
-.ax-dialog.ax-people-form-dialog { max-height: 85vh; }
 .ax-people-form { display: flex; flex-direction: column; gap: 16px; padding: 4px 4px 4px 0; }
 .ax-people-form-photo { display: flex; align-items: center; gap: 12px; }
 .ax-people-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
@@ -315,6 +314,8 @@
 .ax-people-suggestion:hover, .ax-people-suggestion.ax-active { background: var(--ax-bg-subtle-hover); }
 .ax-people-members-head { font-weight: var(--ax-weight-semibold); }
 .ax-people-members { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
+/* A resized list editor shows all members; the dialog body scrolls. */
+.ax-dialog[data-ax-sized] > .ax-dialog-body .ax-people-members { max-height: none; }
 .ax-people-members .ax-people-member { margin: 0; width: auto; }
 
 /* Confirmations sit above other dialogs */

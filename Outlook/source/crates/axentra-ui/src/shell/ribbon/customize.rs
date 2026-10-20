@@ -70,6 +70,7 @@ pub fn CustomizeDialog(tab: RibbonTab, account: AccountId, on_close: EventHandle
         Dialog {
             title: "Customize the {tab_label} tab",
             width: 860,
+            resize_key: "customize-ribbon", min_width: 640, min_height: 420,
             height: 640,
             class: "ax-customize",
             modal_scrim: true,

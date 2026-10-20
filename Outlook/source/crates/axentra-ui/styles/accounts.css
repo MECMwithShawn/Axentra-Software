@@ -191,6 +191,8 @@
 .ax-acct-dialog .ax-select, .ax-acct-form .ax-select { width: 100%; }
 
 .ax-acct-server-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 116px; gap: var(--ax-space-s); align-items: start; }
+/* The security select fits its 116px column (no 160px field minimum). */
+.ax-acct-server-row .ax-select { min-width: 0; }
 .ax-acct-port .ax-acct-input { text-align: left; }
 
 /* Advanced expander */

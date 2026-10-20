@@ -410,8 +410,11 @@
 }
 .ax-mail-attachment-more:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); border-left-color: var(--ax-stroke-2); }
 .ax-mail-attachment-actions { display: flex; gap: 16px; font-size: var(--ax-text-200); }
-.ax-mail-preview-body { display: flex; justify-content: center; max-height: 70vh; overflow: auto; }
-.ax-mail-preview-body img { max-width: 100%; height: auto; background: var(--ax-bg-3); }
+/* Not stretched: a picture keeps its proportions (a tall one scrolls). */
+.ax-mail-preview-body { display: flex; justify-content: center; align-items: flex-start; max-height: 70vh; overflow: auto; }
+.ax-mail-preview-body img { max-width: 100%; height: auto; object-fit: contain; background: var(--ax-bg-3); }
+/* A resized preview fits the picture inside, centred. */
+.ax-dialog[data-ax-sized] > .ax-dialog-body > .ax-mail-preview-body > img { max-height: 100%; margin: auto; }
 .ax-mail-preview-text { margin: 0; width: 100%; white-space: pre-wrap; font-family: var(--ax-font-mono); font-size: var(--ax-text-200); }
 
 /* meeting invitation */
@@ -432,22 +435,28 @@
 .ax-mail-summary-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 520px; }
 
 /* read window ("Open in new window") */
+/* Size and position come from kit::surface (resizable, moved by its bar);
+   no transform, so menus inside stay positioned against the viewport. */
 .ax-mail-read-window {
-  position: fixed; z-index: 840; top: 56px; left: 50%; transform: translateX(-50%);
-  width: min(900px, calc(100vw - 48px)); height: min(760px, calc(100vh - 80px)); /* ESTIMATE: popout 900x700 */
-  display: flex; flex-direction: column; overflow: hidden; background: var(--ax-bg-1);
+  position: fixed; z-index: 840;
+  display: flex; flex-direction: column; background: var(--ax-bg-1);
   border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28); border: 1px solid var(--ax-stroke-3);
 }
+.ax-mail-read-window-bar {
+  display: flex; align-items: center; gap: 8px; flex: none; height: 40px; padding: 0 4px 0 16px;
+  border-bottom: 1px solid var(--ax-stroke-3); color: var(--ax-fg-2);
+}
+.ax-mail-read-window-title { flex: 1 1 auto; min-width: 0; font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
 .ax-mail-reading-scroll:focus-visible { outline: none; }
 
 /* compose hosting */
 .ax-mail-compose-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-.ax-mail-compose-popout {
-  position: fixed; z-index: 850; top: 64px; left: 50%; transform: translateX(-50%);
-  width: min(900px, calc(100vw - 48px)); height: min(700px, calc(100vh - 96px));
-  display: flex; flex-direction: column; overflow: hidden; background: var(--ax-bg-1);
-  border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28);
-}
+/* The pop-out compose window (.ax-compose-window) is fixed and places
+   itself; the host adds no box (a transformed one would become the
+   window's containing block and clip it). The "open in a separate window"
+   placeholder would sit behind the window, so it isn't shown here. */
+.ax-mail-compose-popout { display: contents; }
+.ax-mail-compose-popout > .ax-compose-placeholder { display: none; }
 
 /* drag ghost (created by the drag helper script) */
 .ax-mail-drag-ghost {

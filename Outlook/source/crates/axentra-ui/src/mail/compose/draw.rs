@@ -136,6 +136,7 @@ pub fn DrawDialog(tool: Tool, color: String) -> Element {
         Dialog {
             title: "Drawing canvas",
             width: 640,
+            resize_key: "draw", min_width: 480, min_height: 380,
             on_close: move |_| close(),
             actions: rsx! {
                 Button { label: "Insert", variant: Variant::Primary, disabled: ink == 0, title: if ink == 0 { "Draw something first" } else { "Insert the drawing into the message" }, onclick: insert }
@@ -178,7 +179,7 @@ pub fn DrawDialog(tool: Tool, color: String) -> Element {
                 IconButton { icon: "arrow_undo", title: "Undo", disabled: all == 0, onclick: undo }
                 IconButton { icon: "delete", title: "Clear", disabled: all == 0, onclick: clear }
             }
-            canvas { id: "{canvas_id}", class: "ax-compose-canvas", "aria-label": "Drawing area" }
+            canvas { id: "{canvas_id}", class: "ax-compose-canvas ax-surface-fill", "aria-label": "Drawing area" }
         }
     }
 }

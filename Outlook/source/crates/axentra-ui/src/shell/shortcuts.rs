@@ -96,7 +96,7 @@ pub fn ShortcutsDialog() -> Element {
     }));
     let close = move |_| shell.shortcuts_open.set(false);
     rsx! {
-        Dialog { title: "Keyboard shortcuts", width: 560, class: "ax-shortcuts", on_close: close,
+        Dialog { title: "Keyboard shortcuts", width: 560, resize_key: "shortcuts", min_width: 420, min_height: 320, class: "ax-shortcuts", on_close: close,
             div { class: "ax-shortcuts-mode",
                 span { "Shortcut set: {keymap::mode_label(mode)}" }
                 button {

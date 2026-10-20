@@ -44,6 +44,8 @@ pub const KV_ALLOWLIST: &[&str] = &[
     "calendar.time_scale",
     "shell.my_day_tab",
     "shell.my_day_view",
+    // Remembered dialog and pop-out window sizes (axentra-ui kit::surface).
+    "shell.surfaces",
 ];
 
 /// Allowlisted keys that hold structure other data refers to by name

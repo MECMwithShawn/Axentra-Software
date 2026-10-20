@@ -391,7 +391,15 @@ pub fn use_titlebar_events(controls: Option<WindowControls>) {
     use_future(move || async move {
         let Some(wc) = controls else { return };
         let mut ev = document::eval(TITLEBAR_JS);
-        while let Ok(msg) = ev.recv::<String>().await {
+        loop {
+            let msg = match ev.recv::<String>().await {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::warn!(?e, "title bar channel closed");
+                    break;
+                }
+            };
+            tracing::debug!(%msg, "title bar message");
             match msg.as_str() {
                 "drag" => wc.start_drag.call(()),
                 "double" => wc.run(wc.double_click),
@@ -404,7 +412,38 @@ pub fn use_titlebar_events(controls: Option<WindowControls>) {
             }
         }
     });
+    // Diagnostics (AXENTRA_TITLEBAR_PROBE=1): report what the page sees at the
+    // window edge and send one harmless message through the title bar channel.
+    use_future(move || async move {
+        if controls.is_none() || std::env::var_os("AXENTRA_TITLEBAR_PROBE").is_none() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let probe = document::eval(PROBE_JS);
+        match probe.join::<String>().await {
+            Ok(v) => tracing::info!(probe = %v, "title bar probe"),
+            Err(e) => tracing::warn!(?e, "title bar probe failed"),
+        }
+        let _ = document::eval("window.axWindowSend && window.axWindowSend('probe'); return 1;").join::<i32>().await;
+    });
 }
+
+const PROBE_JS: &str = r#"
+const h = document.querySelector('[data-ax-resize=e]');
+const at = document.elementFromPoint(window.innerWidth - 2, Math.round(window.innerHeight / 2));
+const head = document.elementFromPoint(Math.round(window.innerWidth * 0.62), 24);
+return JSON.stringify({
+  installed: !!window.axWindowInstalled,
+  sendFn: typeof window.axWindowSend,
+  handles: document.querySelectorAll('[data-ax-resize]').length,
+  handleRect: h ? [h.getBoundingClientRect().x, h.getBoundingClientRect().width, h.getBoundingClientRect().height] : null,
+  handlePointerEvents: h ? getComputedStyle(h).pointerEvents : null,
+  atRightEdge: at ? at.tagName + '.' + at.className + (at.hasAttribute('data-ax-resize') ? ' [resize]' : '') : null,
+  atHeader: head ? head.tagName + '.' + head.className + (head.hasAttribute('data-ax-drag-region') ? ' [drag]' : '') : null,
+  dragRegions: document.querySelectorAll('[data-ax-drag-region]').length,
+  inner: [window.innerWidth, window.innerHeight],
+});
+"#;
 
 /// Caption buttons for one side of the header (§3.1 #12): 46×48, 16px
 /// glyphs, in the desktop's order. Renders nothing when that side is empty.
@@ -459,9 +498,11 @@ pub fn CaptionButtons(end: bool) -> Element {
 pub fn ResizeHandles() -> Element {
     let Some(wc) = use_window_controls() else { return rsx! {} };
     if (wc.is_maximized)() {
+        tracing::debug!("resize handles hidden: maximized");
         return rsx! {};
     }
     let tiled = (wc.tiled)();
+    tracing::debug!(?tiled, "resize handles shown");
     rsx! {
         div { class: "ax-resize-handles", "aria-hidden": "true",
             for edge in ResizeEdge::ALL.into_iter().filter(|e| !tiled.covers(*e)) {

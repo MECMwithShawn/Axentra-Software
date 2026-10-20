@@ -219,6 +219,7 @@ pub fn WhatsNewDialog() -> Element {
         Dialog {
             title: "What's new",
             width: 520,
+            resize_key: "whats-new", min_width: 400, min_height: 300,
             on_close: move |_| shell.whats_new_open.set(false),
             actions: rsx! { Button { label: "Close", variant: Variant::Primary, onclick: move |_| shell.whats_new_open.set(false) } },
             div { class: "ax-whats-new",

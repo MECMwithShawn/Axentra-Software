@@ -163,7 +163,7 @@ pub fn CategoriesPage() -> Element {
                             _ => {}
                         },
                     }
-                    div { class: "ax-cat-colors", role: "radiogroup", "aria-label": "Colour", "data-ax-roving": "grid", "data-ax-cols": "13",
+                    div { class: "ax-cat-colors", role: "radiogroup", "aria-label": "Colour", "data-ax-roving": "grid", "data-ax-cols": "auto",
                         for (c, light, _) in CATEGORY_COLORS.iter().copied() {
                             button {
                                 key: "{c}",

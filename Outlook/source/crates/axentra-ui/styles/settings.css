@@ -1,7 +1,9 @@
 /* Settings dialog (docs/spec/shell.md §7.1): category nav, page nav, content. */
 
-.ax-dialog.ax-settings { position: relative; max-height: 90vh; }
-.ax-settings-grid { display: grid; grid-template-columns: 200px 220px minmax(0, 1fr); height: 100%; min-height: 0; }
+.ax-dialog.ax-settings { position: relative; }
+/* The grid clips to the rounded corners (the dialog itself doesn't, so its
+   resize grips can straddle the border). */
+.ax-settings-grid { display: grid; grid-template-columns: 200px 220px minmax(0, 1fr); height: 100%; min-height: 0; border-radius: inherit; overflow: hidden; }
 .ax-settings-cats { display: flex; flex-direction: column; gap: 8px; padding: 20px 12px; background: var(--ax-bg-2); min-height: 0; overflow-y: auto; }
 .ax-settings-title { padding: 0 8px 4px; font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold); }
 .ax-settings-pages { padding: 20px 8px; border-right: 1px solid var(--ax-stroke-2); min-height: 0; overflow-y: auto; }
@@ -41,9 +43,16 @@
 .ax-set-desc { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
 .ax-set-section > .ax-set-desc { margin-bottom: 8px; }
 .ax-set-section-body { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 4px; }
-.ax-set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; width: 100%; min-height: 40px; padding: 4px 0; border-radius: var(--ax-radius-m); }
-.ax-set-row-text { display: flex; flex-direction: column; min-width: 0; }
-.ax-set-row-control { flex: none; display: flex; align-items: center; gap: 8px; }
+/* In a narrow (resized) dialog the control wraps under its label. */
+.ax-set-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 24px; width: 100%; min-height: 40px; padding: 4px 0; border-radius: var(--ax-radius-m); }
+.ax-set-row-text { display: flex; flex-direction: column; flex: 1 1 180px; min-width: 0; }
+.ax-set-row-control { flex: none; display: flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; }
+.ax-set-row-control > .ax-field, .ax-set-row-control .ax-select-wrap { max-width: 100%; min-width: 0; }
+.ax-set-row-control .ax-select { min-width: 0; }
+.ax-settings .ax-slider { max-width: 100%; }
+.ax-settings .ax-slider input[type="range"] { min-width: 0; flex: 0 1 auto; }
+.ax-settings .ax-sender-add { flex-wrap: wrap; }
+.ax-settings .ax-sender-add > .ax-field { flex: 1 1 200px; min-width: 0; }
 .ax-set-value { color: var(--ax-fg-2); }
 .ax-set-note { display: flex; align-items: center; gap: 6px; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); padding: 4px 0; }
 .ax-set-error { color: var(--ax-danger-fg); font-size: var(--ax-text-200); }
@@ -52,7 +61,7 @@
 .ax-set-preview { margin-top: 8px; padding: 12px; width: 100%; border: 1px dashed var(--ax-stroke-2); border-radius: var(--ax-radius-m); color: var(--ax-fg-1); }
 
 /* Appearance */
-.ax-theme-grid { display: grid; grid-template-columns: repeat(5, 92px); gap: 8px 12px; }
+.ax-theme-grid { display: grid; grid-template-columns: repeat(auto-fill, 92px); gap: 8px 12px; width: 100%; max-width: 508px; }
 .ax-theme-tile {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 4px; border: none; border-radius: var(--ax-radius-l);
   background: transparent; color: var(--ax-fg-1); font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
@@ -104,7 +113,7 @@
 .ax-cat-swatch { width: 20px; height: 20px; border: none; border-radius: var(--ax-radius-m); flex: none; padding: 0; }
 .ax-cat-swatch:hover { box-shadow: 0 0 0 2px var(--ax-stroke-1-hover); }
 .ax-cat-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 520px; padding: 12px; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); }
-.ax-cat-colors { display: grid; grid-template-columns: repeat(13, 24px); gap: 6px; }
+.ax-cat-colors { display: grid; grid-template-columns: repeat(auto-fill, 24px); gap: 6px; width: 100%; max-width: 384px; }
 .ax-cat-color { width: 24px; height: 24px; padding: 0; border: none; border-radius: var(--ax-radius-m); }
 .ax-cat-color.ax-selected { box-shadow: 0 0 0 2px var(--ax-bg-1), 0 0 0 4px var(--ax-stroke-brand); }
 
@@ -183,6 +192,8 @@
 .ax-backup-empty { width: 100%; max-width: 680px; padding: 8px 0; }
 .ax-backup-dialog-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .ax-backup-preview-accounts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+/* A resized restore dialog shows all accounts (its own body scrolls). */
+.ax-dialog[data-ax-sized] > .ax-dialog-body .ax-backup-preview-accounts { max-height: none; }
 .ax-backup-preview-account {
   display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; min-width: 0;
   border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-l); background: var(--ax-bg-1);

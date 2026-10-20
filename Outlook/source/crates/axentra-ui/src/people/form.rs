@@ -297,6 +297,7 @@ pub fn NewContactDialog(initial: Contact) -> Element {
         Dialog {
             title: "New contact",
             width: 600,
+            resize_key: "contact-form", min_width: 440, min_height: 360,
             class: "ax-people-form-dialog",
             on_close: move |_| cancel(),
             actions: rsx! {

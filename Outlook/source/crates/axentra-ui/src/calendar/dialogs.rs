@@ -119,6 +119,7 @@ fn CancelMeetingDialog(occ: Occurrence) -> Element {
         Dialog {
             title: "Cancel meeting",
             width: 480,
+            resize_key: "cancel-meeting", min_width: 400, min_height: 280,
             on_close: move |_| close(cal),
             actions: rsx! {
                 Button {
@@ -136,12 +137,12 @@ fn CancelMeetingDialog(occ: Occurrence) -> Element {
                 }
                 Button { label: "Back", onclick: move |_| close(cal) }
             },
-            div { class: "ax-cal-dialog-body",
+            div { class: "ax-cal-dialog-body ax-surface-fill",
                 p { class: "ax-semibold", {display_title(&occ.event)} }
                 p { class: "ax-muted", "{when}" }
                 p { {format!("Attendees: {}", occ.event.attendees.iter().map(|a| a.email.display().to_string()).collect::<Vec<_>>().join(", "))} }
                 textarea {
-                    class: "ax-textarea ax-cal-cancel-msg",
+                    class: "ax-textarea ax-cal-cancel-msg ax-surface-fill",
                     placeholder: "Add a message for attendees",
                     "aria-label": "Add a message for attendees",
                     value: "{message}",
@@ -201,7 +202,7 @@ fn MoveScopeDialog(occ: Occurrence, start: chrono::DateTime<chrono::Utc>, end: c
     rsx! {
         Dialog {
             title: "Move recurring event",
-            width: 460,
+            width: 500,
             on_close: move |_| close(cal),
             actions: rsx! {
                 Button { label: "Move this event", variant: Variant::Primary, onclick: move |_| { close(cal); move_occurrence(app, cal, &o1, start, end, all_day, false) } }
@@ -332,7 +333,7 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
 fn ShortcutsDialog() -> Element {
     let cal = use_cal();
     rsx! {
-        Dialog { title: "Keyboard shortcuts", width: 560, on_close: move |_| close(cal),
+        Dialog { title: "Keyboard shortcuts", width: 560, resize_key: "shortcuts", min_width: 420, min_height: 320, on_close: move |_| close(cal),
             div { class: "ax-cal-shortcuts",
                 div { class: "ax-muted", style: "margin-bottom:8px", "Shortcut set: Outlook" }
                 h3 { class: "ax-cal-shortcuts-head", "Calendar" }

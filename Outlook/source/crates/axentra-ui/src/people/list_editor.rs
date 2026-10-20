@@ -124,6 +124,7 @@ pub fn ListEditorDialog(id: Option<ContactListId>, seed: Vec<EmailAddress>) -> E
         Dialog {
             title: if is_new { "New contact list" } else { "Edit contact list" },
             width: 600,
+            resize_key: "contact-list", min_width: 440, min_height: 360,
             class: "ax-people-form-dialog",
             on_close: move |_| cancel(),
             actions: rsx! {

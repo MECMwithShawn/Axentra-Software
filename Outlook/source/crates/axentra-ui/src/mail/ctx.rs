@@ -305,6 +305,9 @@ pub struct MailCtx {
     pub today: Signal<NaiveDate>,
     /// Width of the reading pane, for body height estimates.
     pub reading_width: Signal<f64>,
+    /// Width inside the read window ("Open in new window"; it is resizable),
+    /// for its body height estimates.
+    pub read_window_width: Signal<f64>,
     /// Set by text inputs inside the module so the module's own shortcut
     /// handler ignores the same key event (non-reactive; stale after 100 ms).
     pub typing: CopyValue<Option<std::time::Instant>>,
@@ -355,6 +358,7 @@ impl MailCtx {
             tree_focus: Signal::new(None),
             today: Signal::new(Local::now().date_naive()),
             reading_width: Signal::new(640.0),
+            read_window_width: Signal::new(898.0),
             typing: CopyValue::new(None),
             scroll_to: Signal::new(None),
             focus_list: Signal::new(0),

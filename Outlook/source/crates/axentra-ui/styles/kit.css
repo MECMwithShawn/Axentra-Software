@@ -257,8 +257,84 @@
 .ax-dialog-title .ax-icon-btn { margin: -4px -8px -4px 0; }
 .ax-dialog-body { overflow: auto; flex: 1; min-height: 0; }
 .ax-dialog-text { color: var(--ax-fg-1); }
-.ax-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; }
-.ax-dialog-actions .ax-btn { min-width: 96px; }
+.ax-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-top: 16px; }
+/* Buttons keep their labels; a row too narrow for them wraps. */
+.ax-dialog-actions .ax-btn { min-width: 96px; flex-shrink: 0; }
+
+/* ---------------------------------------------------------------- Resizable surfaces (kit::surface)
+   --ax-sw / --ax-sh: the surface's size, --ax-sx / --ax-sy: its position
+   once placed (data-ax-placed). Rust renders them, the page script
+   (dom.js) updates them while a grip is dragged. The window clamp lives
+   here, so a surface stays inside when the window shrinks and gets its
+   size back when it grows. Surfaces stay below the title bar when the
+   header is one. */
+.ax-app { --ax-surface-margin: 16px; --ax-surface-top: 16px; }
+.ax-app[data-window] { --ax-surface-top: var(--ax-header-h); }
+/* Centred dialogs stay below the title bar too. */
+.ax-app[data-window] :is(.ax-dialog-overlay, .ax-acct-overlay) { padding-top: calc(var(--ax-surface-top) - var(--ax-surface-margin)); }
+.ax-app .ax-surface {
+  position: relative;
+  width: min(var(--ax-sw), calc(100vw - 2 * var(--ax-surface-margin)));
+  max-width: calc(100vw - 2 * var(--ax-surface-margin));
+  max-height: calc(100vh - var(--ax-surface-top) - var(--ax-surface-margin));
+}
+.ax-app .ax-surface[data-ax-sized] { height: min(var(--ax-sh), calc(100vh - var(--ax-surface-top) - var(--ax-surface-margin))); }
+.ax-app .ax-surface[data-ax-placed] {
+  position: fixed; margin: 0;
+  left: clamp(var(--ax-surface-margin), var(--ax-sx), calc(100vw - var(--ax-surface-margin) - min(var(--ax-sw), 100vw - 2 * var(--ax-surface-margin))));
+  top: clamp(var(--ax-surface-top), var(--ax-sy), calc(100vh - var(--ax-surface-margin) - min(var(--ax-sh), 100vh - var(--ax-surface-top) - var(--ax-surface-margin))));
+}
+/* Placed but content-high (only the width was dragged): the left edge is
+   explicit and the dialog stays vertically centred in its overlay, so it
+   still fits when its content changes. */
+.ax-app .ax-surface[data-ax-placed]:not([data-ax-sized]) {
+  position: relative; left: auto; top: auto; margin-right: auto;
+  margin-left: clamp(var(--ax-surface-margin), var(--ax-sx), calc(100vw - var(--ax-surface-margin) - min(var(--ax-sw), 100vw - 2 * var(--ax-surface-margin))));
+}
+/* In-app windows (pop-outs) are fixed and open centred. */
+.ax-app .ax-surface.ax-surface-float { position: fixed; }
+.ax-app .ax-surface.ax-surface-float:not([data-ax-placed]) {
+  left: calc((100vw - min(var(--ax-sw), 100vw - 2 * var(--ax-surface-margin))) / 2);
+  top: max(var(--ax-surface-top), calc((100vh - min(var(--ax-sh), 100vh - var(--ax-surface-top) - var(--ax-surface-margin))) / 2));
+}
+/* A resized dialog gives its extra height to the part marked
+   .ax-surface-fill (a list, a preview, a canvas; or a fill inside a fill):
+   the body becomes a column. Child combinators, so a dialog opened inside
+   a resized one (e.g. from Settings) isn't affected. */
+.ax-dialog.ax-surface[data-ax-sized] > .ax-dialog-body:has(> .ax-surface-fill) { display: flex; flex-direction: column; }
+.ax-dialog.ax-surface[data-ax-sized] > .ax-dialog-body > .ax-surface-fill,
+.ax-dialog.ax-surface[data-ax-sized] > .ax-dialog-body > .ax-surface-fill > .ax-surface-fill { flex: 1 1 auto; min-height: 96px; max-height: none; }
+/* Grips: 6px edges just outside the border (clear of scrollbars that reach
+   it), 12px corners reaching 4px in; the top edge straddles the border.
+   Corners come last, so they win where they overlap an edge. */
+.ax-dialog.ax-dialog-bare.ax-surface { overflow: visible; }
+.ax-grips { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.ax-grip { position: absolute; pointer-events: auto; }
+.ax-grip-n, .ax-grip-s { left: 4px; right: 4px; height: 6px; cursor: ns-resize; }
+.ax-grip-e, .ax-grip-w { top: 4px; bottom: 4px; width: 6px; cursor: ew-resize; }
+.ax-grip-n { top: -4px; }
+.ax-grip-s { bottom: -6px; }
+.ax-grip-e { right: -6px; }
+.ax-grip-w { left: -6px; }
+.ax-grip-ne, .ax-grip-nw, .ax-grip-se, .ax-grip-sw { width: 12px; height: 12px; }
+.ax-grip-ne { top: -5px; right: -8px; cursor: nesw-resize; }
+.ax-grip-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.ax-grip-nw { top: -5px; left: -8px; cursor: nwse-resize; }
+.ax-grip-se { bottom: -8px; right: -8px; cursor: nwse-resize; }
+/* With the header as the title bar a surface can reach up to the header
+   band: its top grips start at its border instead of above it, so they
+   never cover the caption buttons. */
+.ax-app[data-window] :is(.ax-grip-n, .ax-grip-ne, .ax-grip-nw) { top: 0; }
+[data-ax-surface-move] { cursor: default; }
+/* While a grip or title is dragged: one cursor everywhere, no text
+   selection, and frames (message bodies) don't swallow the pointer. */
+[data-ax-surface-drag], [data-ax-surface-drag] * { user-select: none !important; -webkit-user-select: none !important; }
+[data-ax-surface-drag] iframe { pointer-events: none; }
+[data-ax-surface-drag="n"] *, [data-ax-surface-drag="s"] * { cursor: ns-resize !important; }
+[data-ax-surface-drag="e"] *, [data-ax-surface-drag="w"] * { cursor: ew-resize !important; }
+[data-ax-surface-drag="ne"] *, [data-ax-surface-drag="sw"] * { cursor: nesw-resize !important; }
+[data-ax-surface-drag="nw"] *, [data-ax-surface-drag="se"] * { cursor: nwse-resize !important; }
+[data-ax-surface-drag="move"] * { cursor: move !important; }
 
 /* ---------------------------------------------------------------- Feedback */
 .ax-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: var(--ax-text-200); font-weight: var(--ax-weight-semibold); background: var(--ax-bg-brand); color: var(--ax-fg-on-brand); }

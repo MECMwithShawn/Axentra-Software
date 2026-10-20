@@ -7,6 +7,7 @@
 
 pub mod dom;
 pub mod keys;
+pub mod surface;
 
 mod button;
 mod dialog;
@@ -21,6 +22,7 @@ pub use feedback::*;
 pub use form::*;
 pub use menu::*;
 pub use persona::*;
+pub use surface::{SurfaceGrips, SurfaceSpec, use_surface};
 
 /// Convert a displayed shortcut ("Ctrl+Shift+R", "Ctrl+> or Ctrl+.") to the
 /// `aria-keyshortcuts` form ("Control+Shift+R", space-separated alternatives).

@@ -102,7 +102,7 @@ pub fn AppearancePage() -> Element {
     let dark_in_effect = s.theme != ThemeMode::Light;
     rsx! {
         Section { title: "Theme", description: "Colour themes change the header, buttons and highlights.",
-            div { class: "ax-theme-grid", role: "radiogroup", "aria-label": "Theme", "data-ax-roving": "grid", "data-ax-cols": "5",
+            div { class: "ax-theme-grid", role: "radiogroup", "aria-label": "Theme", "data-ax-roving": "grid", "data-ax-cols": "auto",
                 for t in theme::COLOR_THEMES {
                     button {
                         key: "{t.id}",

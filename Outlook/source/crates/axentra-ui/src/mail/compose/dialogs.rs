@@ -442,14 +442,15 @@ fn AddressBookDialog(field: Field) -> Element {
         Dialog {
             title: "Add recipients",
             width: 480,
+            resize_key: "address-book", min_width: 380, min_height: 360,
             on_close: move |_| close(form),
             actions: rsx! {
                 Button { label: "Save", variant: Variant::Primary, disabled: chosen.is_empty(), onclick: save }
                 Button { label: "Cancel", onclick: move |_| close(form) }
             },
-            div { class: "ax-compose-book",
+            div { class: "ax-compose-book ax-surface-fill",
                 TextField { placeholder: "Search people", class: "ax-compose-book-search", value: query(), oninput: move |v| query.set(v) }
-                div { class: "ax-compose-book-list", role: "listbox", "aria-multiselectable": "true", "aria-label": "Contacts",
+                div { class: "ax-compose-book-list ax-surface-fill", role: "listbox", "aria-multiselectable": "true", "aria-label": "Contacts",
                     if people.is_empty() {
                         div { class: "ax-compose-book-empty", "We didn't find anyone. Check the spelling or search for someone else." }
                     }

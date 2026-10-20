@@ -16,7 +16,7 @@ use super::actions;
 use super::ctx::{MailCtx, Open, use_mail, use_model};
 use super::menus::{self, Target};
 use super::model::bare_subject;
-use crate::kit::{Avatar, Icon, IconButton, Menu, MenuButton, MenuItem};
+use crate::kit::{Avatar, Icon, IconButton, Menu, MenuButton, MenuItem, SurfaceGrips, SurfaceSpec, dom, use_surface};
 use crate::state::{AppState, NavRequest, store, use_app};
 use attachments::AttachmentWell;
 use body::BodyTheme;
@@ -149,16 +149,48 @@ fn hidden_in_conversation(role: FolderRole, open_role: FolderRole) -> bool {
     matches!(role, FolderRole::Deleted | FolderRole::Junk) && role != open_role
 }
 
+/// Width a message body frame gets, for its height estimate: the reading
+/// pane's (or the read window's) content width less the card padding.
+fn frame_width(container: f64, window: bool) -> f64 {
+    (container - if window { 78.0 } else { 72.0 }).max(240.0)
+}
+
 /// "Open in new window" (Shift+Enter): the conversation in a window over
-/// the app, closed with Escape or its Close button.
+/// the app, closed with Escape or its Close button. The window is resizable,
+/// moves by its title bar, and remembers where it was ("read-window").
 #[component]
 pub fn ReadWindow(open: Open) -> Element {
+    let mut ctx = use_mail();
+    let id = dom::use_unique_id("ax-mail-read-window");
+    let surface = use_surface(&id, Some(SurfaceSpec::new("read-window", 900, Some(760)).min(Some(480), Some(360)).movable()));
     let k = format!("{}-{}", open.message, open.conversation.clone().unwrap_or_default());
+    let subject = store().message(open.message).ok().flatten().map(|m| bare_subject(&m.subject).to_string()).unwrap_or_default();
+    let subject = if subject.trim().is_empty() { "(No subject)".to_string() } else { subject };
     rsx! {
         // Keyed on the outer element: a key on a nested child is dropped in
         // release builds, and the window must remount when the message changes.
-        div { key: "{k}", class: "ax-mail-read-window", role: "dialog", "aria-label": "Message window",
+        div {
+            key: "{k}",
+            id: "{id}",
+            class: "ax-mail-read-window ax-surface ax-surface-float",
+            role: "dialog",
+            "aria-label": "Message window",
+            style: surface.style(),
+            onresize: move |e: ResizeEvent| {
+                if let Ok(size) = e.data().get_content_box_size()
+                    && (size.width - *ctx.read_window_width.peek()).abs() > 8.0
+                {
+                    ctx.read_window_width.set(size.width);
+                }
+            },
+            ..surface.attributes(),
+            div { class: "ax-mail-read-window-bar", "data-ax-surface-move": "true",
+                Icon { name: "mail", size: 16 }
+                span { class: "ax-mail-read-window-title ax-ellipsis", "{subject}" }
+                IconButton { icon: "dismiss", title: "Close (Esc)", onclick: move |_| ctx.popout.set(None) }
+            }
             ConversationView { open, full: false, window: true }
+            SurfaceGrips {}
         }
     }
 }
@@ -303,7 +335,6 @@ fn ConversationView(open: Open, full: bool, window: bool) -> Element {
                             title: "Print (Ctrl+P)",
                             onclick: move |_| actions::print(),
                         }
-                        IconButton { icon: "dismiss", title: "Close (Esc)", onclick: move |_| ctx.popout.set(None) }
                     }
                     if full {
                         IconButton { icon: "dismiss", title: "Close", onclick: move |_| ctx.full_view.set(false) }
@@ -484,7 +515,7 @@ fn MessageCard(
     let allowed = ctx.allowed_remote.read().contains(&id) || !settings.block_external_images || s.is_safe_sender(&msg.from.address).unwrap_or(false);
     let mut history = use_signal(|| false);
     let zoom = *ctx.zoom.read();
-    let width = if window { 820.0 } else { (*ctx.reading_width.read() - 72.0).max(240.0) };
+    let width = frame_width(if window { *ctx.read_window_width.read() } else { *ctx.reading_width.read() }, window);
     let doc = body::build(&body, allowed, theme, zoom, history(), width);
     let time = crate::fmt::full_time(msg.received_at, settings.use_24h_time);
     let long = format!("{} {}", msg.received_at.with_timezone(&Local).format("%A, %B %-d, %Y"), crate::fmt::time(msg.received_at, settings.use_24h_time));
@@ -760,5 +791,22 @@ fn MeetingBar(event_id: EventId, kind: MeetingMessageKind) -> Element {
             }
             button { r#type: "button", class: "ax-mail-link", onclick: move |_| app.navigate(NavRequest::Event(event_id)), "View in calendar" }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn body_frames_are_estimated_at_the_width_they_get() {
+        // The read window at its default 900px (898 inside its border)
+        // keeps the old 820px estimate; resized, the estimate follows.
+        assert_eq!(frame_width(898.0, true), 820.0);
+        assert_eq!(frame_width(478.0, true), 400.0);
+        assert!(body::estimate_height(&"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>".repeat(20), frame_width(478.0, true), 100) > body::estimate_height(&"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>".repeat(20), frame_width(898.0, true), 100));
+        // Never narrower than 240px; the reading pane keeps its own padding.
+        assert_eq!(frame_width(100.0, true), 240.0);
+        assert_eq!(frame_width(712.0, false), 640.0);
     }
 }

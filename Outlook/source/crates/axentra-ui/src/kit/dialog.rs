@@ -1,11 +1,12 @@
 //! Modal dialogs (Fluent DialogSurface): scrim, focus trap, initial focus,
 //! Escape to close, Enter for the default button and focus return to the
-//! invoker.
+//! invoker. Dialogs with a `resize_key` are resizable ([`super::surface`]).
 
 use dioxus::prelude::*;
 
 use super::button::{Button, IconButton, Variant};
 use super::dom;
+use super::surface::{SurfaceGrips, SurfaceSpec, use_surface};
 
 /// Modal dialog. Escape and clicking the overlay call `on_close`.
 ///
@@ -15,6 +16,10 @@ use super::dom;
 /// trapped inside; Enter outside buttons and lists presses the default
 /// button (`on_default`, or a `Button { default_action: true }`); when the
 /// dialog closes, focus returns to the element that opened it.
+///
+/// With `resize_key` the dialog is resizable from its edges and corners and
+/// remembers its size under that key; `width` and `height` are then the
+/// default size. Small confirmations stay fixed (no key).
 #[component]
 pub fn Dialog(
     #[props(into)] title: String,
@@ -43,8 +48,17 @@ pub fn Dialog(
     /// `autofocus`, else the first focusable element of the body).
     #[props(into)]
     initial_focus: Option<String>,
+    /// Make the dialog resizable and remember its size under this key
+    /// ("settings", "contact-form", ...; see `kit::surface`).
+    #[props(into)]
+    resize_key: Option<String>,
+    /// Smallest size while resizing (default: `kit::surface::default_min`).
+    min_width: Option<u32>,
+    min_height: Option<u32>,
 ) -> Element {
     let id = dom::use_unique_id("ax-dialog");
+    let surface = use_surface(&id, resize_key.clone().map(|k| SurfaceSpec::new(k, width, height).min(min_width, min_height)));
+    let spec = surface.spec();
     // Focus goes back to whatever opened the dialog.
     use_drop({
         let id = id.clone();
@@ -52,7 +66,12 @@ pub fn Dialog(
     });
     let title_id = format!("{id}-title");
     let body_id = format!("{id}-body");
-    let h = height.map(|h| format!(";height:min({h}px, calc(100vh - 48px))")).unwrap_or_default();
+    let style = if spec.is_some() {
+        surface.style()
+    } else {
+        let h = height.map(|h| format!(";height:min({h}px, calc(100vh - 48px))")).unwrap_or_default();
+        format!("width:min({width}px, calc(100vw - 48px)){h}")
+    };
     rsx! {
         div {
             class: "ax-dialog-overlay",
@@ -61,13 +80,14 @@ pub fn Dialog(
                 id: "{id}",
                 class: "ax-dialog {class}",
                 class: if bare { "ax-dialog-bare" },
+                class: if spec.is_some() { "ax-surface" },
                 role: if alert { "alertdialog" } else { "dialog" },
                 "aria-modal": "true",
                 "aria-labelledby": if bare { None } else { Some(title_id.clone()) },
                 "aria-label": if bare { Some(title.clone()) } else { None },
                 "aria-describedby": if alert { Some(body_id.clone()) } else { None },
                 tabindex: "-1",
-                style: "width:min({width}px, calc(100vw - 48px)){h}",
+                style: "{style}",
                 onclick: move |e| e.stop_propagation(),
                 onmounted: {
                     let id = id.clone();
@@ -82,6 +102,7 @@ pub fn Dialog(
                         on_close.call(());
                     }
                 },
+                ..surface.attributes(),
                 if bare {
                     {children}
                 } else {
@@ -103,6 +124,9 @@ pub fn Dialog(
                         "data-ax-default": "true",
                         onclick: move |_| h.call(()),
                     }
+                }
+                if spec.is_some() {
+                    SurfaceGrips {}
                 }
             }
         }

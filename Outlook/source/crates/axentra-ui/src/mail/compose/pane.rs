@@ -20,7 +20,7 @@ use super::recipients::RecipientRow;
 use super::ribbon::ribbon_tabs;
 use super::send_queue;
 use super::state::{Field, Form, RIBBON, RibbonState};
-use crate::kit::{Button, EmptyState, Icon, IconButton};
+use crate::kit::{Button, EmptyState, Icon, IconButton, SurfaceGrips, SurfaceSpec, dom, use_surface};
 use crate::shell::ribbon::Ribbon;
 use crate::state::{AppState, ComposeRequest, store, use_app};
 
@@ -269,16 +269,25 @@ fn save_on_drop(app: AppState, form: Form) {
 }
 
 /// The form's own window (pop-out): title bar, compose ribbon, then the
-/// form with the action bar at the top.
+/// form with the action bar at the top. Resizable, moved by its title bar,
+/// and it remembers where it was ("compose-popout", `kit::surface`).
 #[component]
 fn PopoutWindow(focus_body: bool) -> Element {
     let app = use_app();
     let form = use_context::<Form>();
+    let id = dom::use_unique_id("ax-compose-window");
+    let surface = use_surface(&id, Some(SurfaceSpec::new("compose-popout", 900, Some(700)).min(Some(520), Some(400)).movable()));
     let subject = form.draft.read().subject.clone();
     let title = if subject.trim().is_empty() { "(No subject)".to_string() } else { subject };
     rsx! {
-        div { class: "ax-compose-window", role: "main", "aria-label": "New message",
-            div { class: "ax-compose-titlebar",
+        div {
+            id: "{id}",
+            class: "ax-compose-window ax-surface ax-surface-float",
+            role: "main",
+            "aria-label": "New message",
+            style: surface.style(),
+            ..surface.attributes(),
+            div { class: "ax-compose-titlebar", "data-ax-surface-move": "true",
                 Icon { name: "mail", size: 16 }
                 span { class: "ax-compose-titlebar-text ax-ellipsis", "{title}" }
                 IconButton {
@@ -296,6 +305,7 @@ fn PopoutWindow(focus_body: bool) -> Element {
                 Ribbon { tabs: ribbon_tabs(), on_command: move |id: String| commands::run(app, form, &id) }
             }
             FormBody { popout: true, focus_body }
+            SurfaceGrips {}
         }
     }
 }

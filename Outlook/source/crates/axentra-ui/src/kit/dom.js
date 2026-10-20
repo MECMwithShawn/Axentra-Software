@@ -1,8 +1,9 @@
 // Axentra shell DOM runtime. Installed once by the shell (kit::dom::install).
 // Handles what has to happen synchronously in the page: roving focus in
 // composite widgets, the modal focus trap, focus restoration, F6 regions,
-// styled tooltips, ribbon key tips, live-region announcements and default
-// actions the webview must not run (browser shortcuts).
+// styled tooltips, ribbon key tips, live-region announcements, resizing and
+// moving dialogs and in-app windows, and default actions the webview must
+// not run (browser shortcuts).
 (function () {
   if (window.axShell) return;
   const ax = (window.axShell = {});
@@ -81,7 +82,8 @@
   // ------------------------------------------------------------ roving focus
   // A composite widget marks itself data-ax-roving="horizontal|vertical|both|grid"
   // and its items data-ax-item. data-ax-wrap wraps around, data-ax-typeahead
-  // jumps by first letters, data-ax-cols gives the grid width.
+  // jumps by first letters, data-ax-cols gives the grid width ("auto": as
+  // many as sit on the first row, for grids that wrap in resizable dialogs).
   let typeBuf = "";
   let typeTimer = 0;
   const items = (box) =>
@@ -107,7 +109,11 @@
     if (!list.length) return false;
     const orient = box.getAttribute("data-ax-roving");
     const wrap = box.hasAttribute("data-ax-wrap");
-    const cols = parseInt(box.getAttribute("data-ax-cols") || "1", 10);
+    const colsAttr = box.getAttribute("data-ax-cols") || "1";
+    const cols =
+      colsAttr === "auto"
+        ? Math.max(1, list.filter((el) => Math.abs(el.offsetTop - list[0].offsetTop) < 2).length)
+        : parseInt(colsAttr, 10);
     const i = list.indexOf(current);
     const vert = orient !== "horizontal";
     const horiz = orient !== "vertical";
@@ -541,6 +547,242 @@
     el.classList.add("ax-flash");
     setTimeout(() => el.classList.remove("ax-flash"), 1300);
   };
+
+  // ------------------------------------------------------------ resizable surfaces
+  // Dialogs and in-app windows marked data-ax-surface (kit::surface) resize
+  // from their data-ax-grip handles and, when data-ax-movable, move by their
+  // data-ax-surface-move area. The arithmetic follows kit::surface::{resize,
+  // moved}; CSS keeps the result inside the window (kit.css, .ax-surface).
+  // Rust hears about each finished gesture through watchSurface.
+  const surfaceSends = new Map();
+  ax.watchSurface = async (id, send) => {
+    for (let i = 0; i < 200 && !doc.getElementById(id); i++) await new Promise((r) => setTimeout(r, 25));
+    if (!doc.getElementById(id)) return;
+    surfaceSends.set(id, send);
+    await new Promise((resolve) => {
+      const timer = setInterval(() => {
+        if (doc.getElementById(id) && surfaceSends.get(id) === send) return;
+        clearInterval(timer);
+        if (surfaceSends.get(id) === send) surfaceSends.delete(id);
+        resolve();
+      }, 1000);
+    });
+  };
+  const clampN = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+  const cssPx = (el, name, dflt) => {
+    const v = parseFloat(getComputedStyle(el).getPropertyValue(name));
+    return isNaN(v) ? dflt : v;
+  };
+  // The viewport minus the surface margins (below the title bar when the
+  // header is the window's title bar).
+  const surfaceBounds = (el) => {
+    const m = cssPx(el, "--ax-surface-margin", 16);
+    return { left: m, top: cssPx(el, "--ax-surface-top", m), right: innerWidth - m, bottom: innerHeight - m };
+  };
+  const pair = (el, attr) => (el.getAttribute(attr) || "").split(" ").map((v) => parseInt(v, 10));
+  const resizeRect = (s, edge, dx, dy, min, b) => {
+    const minW = Math.min(min[0] || 0, Math.max(0, b.right - b.left));
+    const minH = Math.min(min[1] || 0, Math.max(0, b.bottom - b.top));
+    let l = s.x, t = s.y, r = s.x + s.w, bt = s.y + s.h;
+    if (edge.includes("w")) l = clampN(l + dx, b.left, r - minW);
+    if (edge.includes("e")) r = clampN(r + dx, l + minW, b.right);
+    if (edge.includes("n")) t = clampN(t + dy, b.top, bt - minH);
+    if (edge.includes("s")) bt = clampN(bt + dy, t + minH, b.bottom);
+    return { x: l, y: t, w: r - l, h: bt - t };
+  };
+  // A rectangle as the surface CSS shows it: capped to the bounds, pulled inside.
+  const fitRect = (s, b) => {
+    const w = Math.min(s.w, Math.max(0, b.right - b.left));
+    const h = Math.min(s.h, Math.max(0, b.bottom - b.top));
+    return { x: clampN(s.x, b.left, b.right - w), y: clampN(s.y, b.top, b.bottom - h), w, h };
+  };
+  const moveRect = (s, dx, dy, b) => ({
+    x: clampN(s.x + dx, b.left, b.right - s.w),
+    y: clampN(s.y + dy, b.top, b.bottom - s.h),
+    w: s.w,
+    h: s.h,
+  });
+  // The layout box, without the opening animation's scale (about the centre).
+  const rectOf = (el) => {
+    const r = el.getBoundingClientRect();
+    const w = el.offsetWidth || r.width;
+    const h = el.offsetHeight || r.height;
+    return { x: Math.round(r.left + (r.width - w) / 2), y: Math.round(r.top + (r.height - h) / 2), w: Math.round(w), h: Math.round(h) };
+  };
+  // The size the surface keeps (its inline --ax-sw / --ax-sh), which can be
+  // larger than what a small window shows; h is null for a content-height
+  // surface (no data-ax-sized).
+  const storedSize = (el, shown) => {
+    const v = (name, dflt) => {
+      const n = parseFloat(el.style.getPropertyValue(name));
+      return isNaN(n) ? dflt : Math.round(n);
+    };
+    return { w: v("--ax-sw", shown.w), h: el.hasAttribute("data-ax-sized") ? v("--ax-sh", shown.h) : null };
+  };
+  // What a gesture keeps (kit::surface::kept): the sides it drags as shown,
+  // the others as stored, so a squeezed surface keeps its full size and a
+  // content-height one whose width is dragged stays content-height.
+  const keptRect = (stored, r, edge) => ({
+    x: r.x,
+    y: r.y,
+    w: /[ew]/.test(edge) ? r.w : stored.w,
+    h: /[ns]/.test(edge) ? r.h : stored.h,
+  });
+  // Explicit rectangle: the same custom properties and attributes Rust renders.
+  const place = (el, r) => {
+    el.style.setProperty("--ax-sw", r.w + "px");
+    if (r.h == null) {
+      el.style.removeProperty("--ax-sh");
+      el.removeAttribute("data-ax-sized");
+    } else {
+      el.style.setProperty("--ax-sh", r.h + "px");
+      el.setAttribute("data-ax-sized", "true");
+    }
+    el.style.setProperty("--ax-sx", r.x + "px");
+    el.style.setProperty("--ax-sy", r.y + "px");
+    el.setAttribute("data-ax-placed", "true");
+  };
+  const reportSurface = (el, msg) => {
+    const send = surfaceSends.get(el.id);
+    if (send) send(msg);
+  };
+  // Double-click on a grip: back to the default size, centred.
+  const resetSurface = (el) => {
+    const d = (el.getAttribute("data-ax-size-default") || "").split(" ");
+    if (d[0]) el.style.setProperty("--ax-sw", parseInt(d[0], 10) + "px");
+    if (d[1] && d[1] !== "auto") {
+      el.style.setProperty("--ax-sh", parseInt(d[1], 10) + "px");
+      el.setAttribute("data-ax-sized", "true");
+    } else {
+      el.style.removeProperty("--ax-sh");
+      el.removeAttribute("data-ax-sized");
+    }
+    el.style.removeProperty("--ax-sx");
+    el.style.removeProperty("--ax-sy");
+    el.removeAttribute("data-ax-placed");
+    reportSurface(el, { reset: true });
+  };
+  // The gesture in progress: a grip press (kind "size") or a press on a move
+  // area ("move", which starts after 4px). Nothing changes until the pointer
+  // moves, so a plain click or the first half of a double-click leaves the
+  // surface alone.
+  let gesture = null;
+  let swallowClick = false;
+  // A grip press (or a move) ended before its button came up (the window
+  // lost focus, or the button came up outside): its release still clicks
+  // nothing. Cleared by the next press.
+  let pressHeld = false;
+  const SURFACE_INTERACTIVE =
+    'button, a[href], input, select, textarea, [contenteditable="true"], [role="button"], [role="menuitem"], [role="tab"], [tabindex]:not([tabindex="-1"])';
+  const endGesture = (early) => {
+    const g = gesture;
+    gesture = null;
+    root.removeAttribute("data-ax-surface-drag");
+    if (early && g && (g.kind === "size" || g.active)) pressHeld = true;
+    if (!g || !g.active) return false;
+    reportSurface(g.el, g.rect);
+    return true;
+  };
+  doc.addEventListener(
+    "mousedown",
+    (e) => {
+      pressHeld = false;
+      if (gesture) endGesture();
+      if (e.button !== 0) return;
+      const t = e.target instanceof Element ? e.target : null;
+      if (!t) return;
+      const grip = t.closest("[data-ax-grip]");
+      const el = t.closest("[data-ax-surface]");
+      if (!el) return;
+      if (grip && el.contains(grip)) {
+        // Never focus, select text or reach the overlay underneath.
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.detail >= 2) {
+          resetSurface(el);
+          swallowClick = true;
+          return;
+        }
+        gesture = { el, kind: "size", edge: grip.getAttribute("data-ax-grip") || "se" };
+      } else {
+        const handle = t.closest("[data-ax-surface-move]");
+        if (!handle || !el.contains(handle) || !el.hasAttribute("data-ax-movable")) return;
+        const ctl = t.closest(SURFACE_INTERACTIVE);
+        if (ctl && handle.contains(ctl)) return;
+        // Empty title space: keep focus where it is, no text selection.
+        e.preventDefault();
+        gesture = { el, kind: "move" };
+      }
+      const b = surfaceBounds(el);
+      const start = fitRect(rectOf(el), b);
+      Object.assign(gesture, { px: e.clientX, py: e.clientY, start, stored: storedSize(el, start), b, min: pair(el, "data-ax-size-min"), active: false });
+    },
+    true
+  );
+  window.addEventListener(
+    "mousemove",
+    (e) => {
+      const g = gesture;
+      if (!g) return;
+      if (!(e.buttons & 1)) {
+        // The button came up outside the page.
+        endGesture(true);
+        return;
+      }
+      const dx = Math.round(e.clientX - g.px);
+      const dy = Math.round(e.clientY - g.py);
+      if (!g.active) {
+        if (g.kind === "move" ? Math.abs(dx) + Math.abs(dy) < 4 : !dx && !dy) return;
+        g.active = true;
+        root.setAttribute("data-ax-surface-drag", g.kind === "move" ? "move" : g.edge);
+        hideTip();
+      }
+      e.preventDefault();
+      const r = g.kind === "move" ? moveRect(g.start, dx, dy, g.b) : resizeRect(g.start, g.edge, dx, dy, g.min, g.b);
+      g.rect = keptRect(g.stored, r, g.kind === "move" ? "" : g.edge);
+      place(g.el, g.rect);
+    },
+    true
+  );
+  window.addEventListener(
+    "mouseup",
+    (e) => {
+      if (e.button !== 0) return;
+      // A grip press never clicks anything (released over the scrim it
+      // would close the dialog); a move swallows its click only when the
+      // surface moved. The click follows in the same task.
+      if (gesture) {
+        swallowClick = gesture.kind === "size" || gesture.active;
+        endGesture();
+      } else if (pressHeld) {
+        swallowClick = true;
+      }
+      pressHeld = false;
+      if (swallowClick) setTimeout(() => (swallowClick = false), 0);
+    },
+    true
+  );
+  doc.addEventListener(
+    "click",
+    (e) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      if (e.detail === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true
+  );
+  doc.addEventListener(
+    "dblclick",
+    (e) => {
+      if (e.target instanceof Element && e.target.closest("[data-ax-grip]")) e.stopPropagation();
+    },
+    true
+  );
+  window.addEventListener("blur", () => {
+    if (gesture) endGesture(true);
+  });
 
   // ------------------------------------------------------------ keys with no focus
   // With nothing focused, key events target <body>, outside the app root

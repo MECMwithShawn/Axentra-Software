@@ -37,7 +37,7 @@ pub fn AddCalendarDialog() -> Element {
     let mut cal = use_cal();
     let mut page = use_signal(|| Page::Blank);
     rsx! {
-        Dialog { title: "Add calendar", width: 800, class: "ax-cal-addcal", on_close: move |_| cal.dialog.set(None),
+        Dialog { title: "Add calendar", width: 800, resize_key: "add-calendar", min_width: 600, min_height: 400, class: "ax-cal-addcal", on_close: move |_| cal.dialog.set(None),
             div { class: "ax-cal-addcal-body",
                 nav { class: "ax-cal-addcal-nav", role: "tablist", "aria-orientation": "vertical",
                     for (p, label, icon) in PAGES {

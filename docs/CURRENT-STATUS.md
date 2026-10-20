@@ -9,7 +9,7 @@ All nine applications have native Linux development previews installed and launc
 | [CrystalWire](../CrystalWire/) | 0.8.11 | None | [Installed preview](../CrystalWire/LINUX.md) |
 | [Ghost](../Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](../Ghost/LINUX.md) |
 | [Mail](../Mail/) | 0.1.20 | None | [Installed preview](../Mail/LINUX.md) |
-| [Outlook](../Outlook/) | 0.1.2 | 0.1.2 pre-release (Linux .deb) | [Pre-release package](../Outlook/LINUX.md) |
+| [Outlook](../Outlook/) | 0.1.3 | 0.1.3 pre-release (Linux .deb) | [Pre-release package](../Outlook/LINUX.md) |
 | [Spaces](../Spaces/) | 0.1.2 | None | [Installed preview](../Spaces/LINUX.md) |
 | [Vault](../Vault/) | 0.1.0 | None | [Installed preview](../Vault/LINUX.md) |
 | [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
@@ -22,7 +22,7 @@ All nine applications have native Linux development previews installed and launc
 
 ## Axentra Outlook (added 2026-10-19)
 
-[Axentra Outlook](../Outlook/) 0.1.2 is a Linux-native mail, calendar, people and to-do client in the new Outlook layout. Its source is published in [Outlook/source](../Outlook/source/), and its `.deb` (installing to `/opt/axentra/outlook` with a Command manifest) is a public GitHub pre-release, `outlook-v0.1.2` (earlier pre-releases remain available). 0.1.1 added encrypted monthly backups to the OneDrive folder; 0.1.2 makes the blue header the window title bar. 417 Rust tests passed; Microsoft Graph sign-in and sync were checked with a real Outlook.com account on a test build. Limits are in its [Linux page](../Outlook/LINUX.md).
+[Axentra Outlook](../Outlook/) 0.1.3 is a Linux-native mail, calendar, people and to-do client in the new Outlook layout. Its source is published in [Outlook/source](../Outlook/source/), and its `.deb` (installing to `/opt/axentra/outlook` with a Command manifest) is a public GitHub pre-release, `outlook-v0.1.3` (earlier pre-releases remain available). 0.1.1 added encrypted monthly backups to the OneDrive folder; 0.1.2 made the blue header the window title bar; 0.1.3 makes Settings and the other larger dialogs resizable with remembered sizes, and lets you move the compose and read pop-out windows. 433 Rust tests passed; Microsoft Graph sign-in and sync were checked with a real Outlook.com account on a test build. Limits are in its [Linux page](../Outlook/LINUX.md).
 
 ## Installation locations
 

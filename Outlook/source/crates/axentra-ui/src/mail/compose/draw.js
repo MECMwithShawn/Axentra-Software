@@ -13,11 +13,17 @@ for (let i = 0; i < 100 && !canvas; i++) {
 }
 if (!canvas) return;
 const dpr = window.devicePixelRatio || 1;
-const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
-canvas.width = Math.round(cssW * dpr);
-canvas.height = Math.round(cssH * dpr);
 const ctx = canvas.getContext("2d");
-ctx.scale(dpr, dpr);
+let cssW = 0, cssH = 0;
+// The bitmap matches the canvas's CSS size (the dialog is resizable).
+function fitBitmap() {
+  cssW = canvas.clientWidth;
+  cssH = canvas.clientHeight;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitBitmap();
 const pen = { tool: "pen", color: "#000000", width: 4 };
 const strokes = [];
 let current = null;
@@ -64,6 +70,17 @@ canvas.addEventListener("pointermove", (e) => {
   redraw();
 });
 const end = () => { if (current) { current = null; report(); } };
+// A resized dialog resizes the paper: strokes keep their place from the
+// top-left corner and are redrawn at the new size.
+const resized = window.ResizeObserver
+  ? new ResizeObserver(() => {
+      if (canvas.clientWidth && canvas.clientHeight && (canvas.clientWidth !== cssW || canvas.clientHeight !== cssH)) {
+        fitBitmap();
+        redraw();
+      }
+    })
+  : null;
+if (resized) resized.observe(canvas);
 canvas.addEventListener("pointerup", end);
 canvas.addEventListener("pointercancel", end);
 
@@ -90,6 +107,7 @@ await new Promise((resolve) => {
   const timer = setInterval(() => {
     if (!canvas.isConnected) {
       clearInterval(timer);
+      if (resized) resized.disconnect();
       if (window.axDraw[cfg.id] === api) delete window.axDraw[cfg.id];
       resolve();
     }

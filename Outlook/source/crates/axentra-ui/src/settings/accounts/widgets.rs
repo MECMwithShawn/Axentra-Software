@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 
-use crate::kit::{Icon, IconButton, keys};
+use crate::kit::{Icon, IconButton, SurfaceGrips, SurfaceSpec, dom, keys, use_surface};
 
 /// Copy text to the clipboard (with a fallback for webviews without the
 /// async Clipboard API).
@@ -32,7 +32,8 @@ fn focus_edge(last: bool) {
 /// Modal dialog for the account flows: 480 px, title in Subtitle 1, actions
 /// right-aligned (primary last). Escape calls `on_cancel` and never reaches
 /// the Settings dialog underneath; clicks on the backdrop are ignored so an
-/// in-progress sign-in can't be dismissed by accident.
+/// in-progress sign-in can't be dismissed by accident. With `resize_key` it
+/// is resizable and remembers its size (`kit::surface`).
 #[component]
 pub fn AcctDialog(
     #[props(into)] title: String,
@@ -44,7 +45,16 @@ pub fn AcctDialog(
     #[props(default = 480)] width: u32,
     #[props(default = "dialog".to_string(), into)] role: String,
     #[props(into, default)] described_by: String,
+    /// Make the dialog resizable and remember its size under this key.
+    #[props(into)]
+    resize_key: Option<String>,
+    min_width: Option<u32>,
+    min_height: Option<u32>,
 ) -> Element {
+    let id = dom::use_unique_id("ax-acct-dialog");
+    let surface = use_surface(&id, resize_key.clone().map(|k| SurfaceSpec::new(k, width, None).min(min_width, min_height)));
+    let spec = surface.spec();
+    let style = if spec.is_some() { surface.style() } else { format!("width:{width}px") };
     // Remember what had focus, and give it back when the dialog closes (or,
     // when that element is gone, the account list / settings dialog).
     use_hook(|| {
@@ -73,12 +83,15 @@ pub fn AcctDialog(
             },
             div { tabindex: "0", class: "ax-acct-sentinel", onfocus: move |_| focus_edge(true) }
             div {
+                id: "{id}",
                 class: "ax-acct-dialog",
+                class: if spec.is_some() { "ax-surface" },
                 role: "{role}",
                 "aria-modal": "true",
                 "aria-labelledby": "ax-acct-dialog-title",
                 "aria-describedby": if described_by.is_empty() { None } else { Some(described_by.clone()) },
-                style: "width:{width}px",
+                style: "{style}",
+                ..surface.attributes(),
                 div { class: "ax-acct-dialog-head",
                     h2 { id: "ax-acct-dialog-title", class: "ax-acct-dialog-title", "{title}" }
                     IconButton { icon: "dismiss", title: "Close", class: "ax-acct-dialog-close", onclick: move |_| on_cancel.call(()) }
@@ -90,6 +103,9 @@ pub fn AcctDialog(
                         div { class: "ax-grow" }
                         if let Some(a) = actions { {a} }
                     }
+                }
+                if spec.is_some() {
+                    SurfaceGrips {}
                 }
             }
             div { tabindex: "0", class: "ax-acct-sentinel", onfocus: move |_| focus_edge(false) }

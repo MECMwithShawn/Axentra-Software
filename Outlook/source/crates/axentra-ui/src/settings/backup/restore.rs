@@ -139,7 +139,7 @@ pub fn RestoreDialog(file: BackupFile, on_close: EventHandler<()>) -> Element {
     };
 
     rsx! {
-        Dialog { title: "Restore from backup", width: 560, modal_scrim: true, on_close: move |_| close(), actions,
+        Dialog { title: "Restore from backup", width: 560, resize_key: "restore-backup", min_width: 420, min_height: 220, modal_scrim: true, on_close: move |_| close(), actions,
             div { class: "ax-backup-dialog-body", "aria-busy": if busy { "true" } else { "false" },
                 if let Some(e) = error() {
                     MessageBar { intent: Intent::Error, text: e }

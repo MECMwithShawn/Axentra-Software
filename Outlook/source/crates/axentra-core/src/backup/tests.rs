@@ -427,6 +427,8 @@ fn strip_secrets_handles_nesting_and_case() {
     });
     assert_eq!(strip_secrets(&v), serde_json::json!({ "x": { "y": [ { "ok": 6 } ] }, "ms_client_id": "id", "host": "h" }));
     assert!(kv_allowed("todo.groups") && kv_allowed("people.ui.sort") && kv_allowed("todo.prefs.views"));
+    // Remembered dialog sizes are preferences.
+    assert!(kv_allowed("shell.surfaces"));
     assert!(!kv_allowed("todo.groupsx") && !kv_allowed("sync.cursor") && !kv_allowed("backup.last") && !kv_allowed("todo.prefs.token"));
     assert!(!kv_allowed("backup.written"), "this device's own file list stays here");
 }

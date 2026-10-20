@@ -140,6 +140,7 @@ fn use_gdk_window_state(desktop: &Rc<DesktopService>, maximized: Signal<bool>, t
             let id = desktop.gtk_window().connect_window_state_event(move |_, event| {
                 let state = event.new_window_state();
                 let (max, edges) = (state.contains(gtk::gdk::WindowState::MAXIMIZED), tiled_edges(state));
+                tracing::debug!(?state, max, ?edges, "gdk window state");
                 // Signals are handles: copy them to write from this `Fn`.
                 let (mut maximized, mut tiled) = (maximized, tiled);
                 runtime.in_scope(scope, || {
@@ -204,6 +205,7 @@ pub fn CsdRoot() -> Element {
             close: on(|d| d.close()),
             start_drag: on(|d| d.drag()),
             start_resize: Callback::new(move |edge: ResizeEdge| {
+                tracing::debug!(?edge, "start resize");
                 if let Some(d) = w.upgrade()
                     && let Err(e) = d.drag_resize_window(direction(edge))
                 {

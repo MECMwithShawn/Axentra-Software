@@ -316,6 +316,7 @@ fn ImportDialog() -> Element {
         Dialog {
             title: "Import contacts",
             width: 560,
+            resize_key: "import-contacts", min_width: 420, min_height: 200,
             on_close: move |_| ctx.close_dialog(),
             actions: rsx! {
                 button {
@@ -500,6 +501,7 @@ fn ShortcutsDialog() -> Element {
         Dialog {
             title: "Keyboard shortcuts",
             width: 560,
+            resize_key: "shortcuts", min_width: 420, min_height: 320,
             on_close: move |_| ctx.close_dialog(),
             div { class: "ax-people-shortcuts",
                 div { class: "ax-people-io-text",

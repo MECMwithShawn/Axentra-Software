@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.3 (pre-release, 2026-10-20)
+
+- **Resizable dialogs:** Settings and the other dialogs with real content (Add account, Restore from backup,
+  Keyboard shortcuts, What's new, Customize ribbon, the move/copy folder picker, Sweep, Message details,
+  Categories, Help, attachment preview, address book, drawing, Add calendar, Cancel meeting, the People
+  new contact, contact list and import dialogs, To Do settings) resize from any edge or corner. Each has a
+  minimum size and stays inside the window, below the title bar. Sizes are remembered per dialog and included
+  in backups; double-click an edge to go back to the default size. Small confirmations and short forms keep a
+  fixed size.
+- **Movable pop-outs:** the compose pop-out and the read window (**Open in new window**) move by their title
+  bar and remember their position and size. The read window has a slim title bar with its Close button.
+- Contents follow the size: Settings' page area grows and its rows put the control under the label when
+  narrow; lists, previews and the drawing canvas use the extra height; a width-only drag keeps short dialogs
+  content-high.
+- Fixed: the compose pop-out opened off-centre and partly cut off; the read window's menus could appear in the
+  wrong place; attachment preview images keep their aspect ratio; Help dialog buttons no longer spill over; the
+  IMAP server row in Add account no longer scrolls sideways; releasing a resize drag over the dimmed
+  background never closes the dialog.
+
+Source: [`source/`](source/) (snapshot of commit `fc2520f`). See [release notes](releases/0.1.3.md).
+
 ## 0.1.2 (pre-release, 2026-10-20)
 
 - **Merged title bar:** the blue header is now the window's title bar, like the new Outlook for Windows. Minimize,

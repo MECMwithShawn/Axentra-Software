@@ -1,6 +1,6 @@
 <img src="logo.png" alt="Axentra Outlook logo" width="96" align="right">
 
-**Linux pre-release (0.1.2, built 2026-10-20):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+**Linux pre-release (0.1.3, built 2026-10-20):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
 # Axentra Outlook
 
@@ -16,8 +16,8 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ![Axentra Outlook mail with the merged title bar](screenshots/linux-2026-10-20-titlebar-light.png)
 
-**Latest version: 0.1.2 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.2) ·
-[Release notes](releases/0.1.2.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
+**Latest version: 0.1.3 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.3) ·
+[Release notes](releases/0.1.3.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
 
 ## Features
 
@@ -29,7 +29,7 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 | **Calendar** | Day, work week, week and month views, mini month, calendar list with colours, drag to create / move / resize, side-by-side overlaps, current-time line, quick create, peek card with RSVP and Join, full editor with recurrence, reminders |
 | **People** | Contacts and contact lists, favorites, alphabetical index, full contact form, vCard and CSV import/export |
 | **To Do** | My Day, Important, Planned, Assigned to me, Flagged email and Tasks, custom lists in groups, steps, due dates, reminders, repeating tasks, notes |
-| **Look and feel** | The blue header is the window's title bar, with minimize / maximize / close following your desktop's button layout, drag and double-click to maximize, edge resizing and rounded corners (or the system title bar, if you prefer); Fluent 2 light and dark themes (or follow the system), colour themes, Roomy / Cozy / Compact density, Simplified or Classic ribbon with Customize, My Day pane, notifications pane, settings with search, high contrast and reduced motion |
+| **Look and feel** | The blue header is the window's title bar, with minimize / maximize / close following your desktop's button layout, drag and double-click to maximize, edge resizing and rounded corners (or the system title bar, if you prefer); Settings and other larger dialogs resize from any edge or corner and remember their size, and the compose and read pop-out windows move and resize too; Fluent 2 light and dark themes (or follow the system), colour themes, Roomy / Cozy / Compact density, Simplified or Classic ribbon with Customize, My Day pane, notifications pane, settings with search, high contrast and reduced motion |
 | **Keyboard** | The new Outlook's shortcut set (Ctrl+1/2/4/5 modules, Ctrl+N, Ctrl+R, Ctrl+Shift+R, Delete, Insert, Ctrl+Q/U, F6 region cycling, `?` for the full list) |
 | **Accounts** | Microsoft 365 / Outlook.com via Microsoft Graph (mail, calendar, contacts, To Do), IMAP + SMTP for Gmail (app password), iCloud, Yahoo and other providers; passwords and tokens stay in your desktop keyring (Secret Service) |
 | **Backup** | Settings › Accounts › Backup: password-encrypted backups of your account setups, settings and everything that exists only on this PC, saved to your OneDrive folder (synced by Axentra OneDrive) every month and on demand, with a restore preview that merges without duplicates. Passwords and sign-in tokens are never included |
@@ -46,12 +46,12 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ## Installation
 
-Download `axentra-outlook_0.1.2-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.2),
-check its SHA-256 against the [release notes](releases/0.1.2.md), then:
+Download `axentra-outlook_0.1.3-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.3),
+check its SHA-256 against the [release notes](releases/0.1.3.md), then:
 
 ```bash
-sha256sum axentra-outlook_0.1.2-1_amd64.deb
-sudo apt install ./axentra-outlook_0.1.2-1_amd64.deb
+sha256sum axentra-outlook_0.1.3-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.3-1_amd64.deb
 ```
 
 Open **Axentra Outlook** from the application menu. The first start creates a demo account (Alex Morgan, all
