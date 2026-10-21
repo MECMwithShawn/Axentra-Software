@@ -2,6 +2,8 @@
 //! needs no installed icon theme. Blue cloud when connected, grey when
 //! paused or signed out, with a badge for syncing, paused and problems.
 
+use std::sync::Mutex;
+
 use ksni::menu::{StandardItem, SubMenu};
 use ksni::{Icon, MenuItem, ToolTip};
 use tokio::sync::mpsc::UnboundedSender;
@@ -32,10 +34,21 @@ impl ksni::Tray for AxentraOneDriveTray {
     }
 
     fn icon_pixmap(&self) -> Vec<Icon> {
-        [22, 32, 48, 64]
+        // ksni asks on every update to see whether the icon changed, and
+        // rendering is supersampled, so keep each one drawn.
+        type Drawn = Vec<((String, [u8; 3]), Vec<Icon>)>;
+        static DRAWN: Mutex<Drawn> = Mutex::new(Vec::new());
+        let key = (self.state.clone(), self.accent);
+        let mut drawn = DRAWN.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, icons)) = drawn.iter().find(|(k, _)| *k == key) {
+            return icons.clone();
+        }
+        let icons: Vec<Icon> = [22, 32, 48, 64]
             .iter()
             .map(|&s| render(&self.state, s, self.accent))
-            .collect()
+            .collect();
+        drawn.push((key, icons.clone()));
+        icons
     }
 
     fn tool_tip(&self) -> ToolTip {
@@ -71,6 +84,8 @@ impl ksni::Tray for AxentraOneDriveTray {
         };
         let pause_menu: MenuItem<Self> = if self.state == "paused" {
             item("Resume syncing", || Cmd::Resume)
+        } else if self.state == "stopped" {
+            item("Start Axentra OneDrive", || Cmd::StartService)
         } else {
             SubMenu {
                 label: "Pause syncing".into(),
@@ -137,7 +152,7 @@ fn seg_dist(px: f32, py: f32, (ax, ay): (f32, f32), (bx, by): (f32, f32)) -> f32
 
 /// Sample the icon at (x, y) in the 24-unit design grid.
 fn sample(state: &str, accent: [u8; 3], x: f32, y: f32) -> Rgba {
-    let grey = matches!(state, "paused" | "offline" | "signed_out");
+    let grey = matches!(state, "paused" | "offline" | "signed_out" | "stopped");
     let (top, bottom) = if grey {
         (hex(0xB9C0C8), hex(0x7C858F))
     } else {

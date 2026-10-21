@@ -16,14 +16,14 @@ use std::os::unix::fs::FileExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::Result;
 use fuser::{
     BsdFileFlags, Errno, FileAttr, FileHandle, FileType, Filesystem, FopenFlags, Generation,
-    INodeNo, LockOwner, MountOption, OpenAccMode, OpenFlags, RenameFlags, ReplyAttr, ReplyCreate,
-    ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite,
-    ReplyXattr, Request, TimeOrNow, WriteFlags,
+    INodeNo, InitFlags, KernelConfig, LockOwner, MountOption, OpenAccMode, OpenFlags, RenameFlags,
+    ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyOpen,
+    ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow, WriteFlags,
 };
 use parking_lot::Mutex;
 
@@ -35,13 +35,18 @@ use crate::thumbs::{self, Bucket};
 const TTL: Duration = Duration::from_secs(1);
 /// How long a thumbnailer or the portal waits for OneDrive's thumbnail.
 const THUMBNAIL_WAIT: Duration = Duration::from_secs(10);
-const XATTRS: [&str; 5] = [
+const PINNED_XATTR: &str = "user.axentra.onedrive.pinned";
+/// What `listxattr` offers. "pinned" is readable and settable by name but not
+/// listed: copy tools (`cp -a`, `rsync -X`) would carry it to their copies,
+/// and setting it on a copy back in here pins it or frees up its space.
+const LISTED_XATTRS: [&str; 4] = [
     "user.axentra.onedrive.status",
-    "user.axentra.onedrive.pinned",
     "user.axentra.onedrive.shared",
     "user.axentra.onedrive.url",
     "user.axentra.onedrive.error",
 ];
+/// Folder entries read from the database at a time while listing.
+const LISTING_PAGE: u32 = 512;
 
 struct Handle {
     ino: u64,
@@ -151,9 +156,21 @@ impl Inner {
         base.into()
     }
 
-    /// Whether a new name in `parent` is synced, and why not.
-    fn classify(&self, parent: &Item, name: &str) -> (bool, Option<String>) {
-        if parent.local_only {
+    /// The value of one of our extended attributes, if `it` has one.
+    fn xattr(&self, it: &Item, name: &str) -> Option<String> {
+        match name {
+            "user.axentra.onedrive.status" => Some(self.status(it)),
+            PINNED_XATTR => Some(if it.pinned { "1" } else { "0" }.to_string()),
+            "user.axentra.onedrive.shared" => it.shared.then(|| "1".to_string()),
+            "user.axentra.onedrive.url" => it.web_url.clone(),
+            "user.axentra.onedrive.error" => it.error.clone(),
+            _ => None,
+        }
+    }
+
+    /// Whether a new name in a folder is synced, and why not.
+    fn classify(&self, in_local_only: bool, name: &str) -> (bool, Option<String>) {
+        if in_local_only {
             return (true, None);
         }
         if self.engine.is_ignored(name) {
@@ -165,15 +182,28 @@ impl Inner {
         }
     }
 
-    fn open_handle(&self, ino: u64, write: bool, truncate: bool) -> std::io::Result<u64> {
-        let file = File::options()
-            .read(true)
-            .write(write)
-            .open(self.engine.cache_path(ino))?;
-        if truncate {
-            file.set_len(0)?;
-        }
-        let wrote = truncate;
+    /// Open the local copy. `truncate` empties it, creating it if the file
+    /// is online-only.
+    fn open_handle(&self, ino: u64, write: bool, truncate: bool) -> Result<u64, Errno> {
+        // Counted as open before the content changes, so a pull never takes
+        // the file for unmodified and closed in between.
+        self.engine.opened(ino, write);
+        let file = if truncate {
+            self.overwrite(ino)
+        } else {
+            File::options()
+                .read(true)
+                .write(write)
+                .open(self.engine.cache_path(ino))
+                .map_err(eio)
+        };
+        let file = match file {
+            Ok(f) => f,
+            Err(e) => {
+                self.engine.closed(ino, write);
+                return Err(e);
+            }
+        };
         let fh = self.next_fh.fetch_add(1, Ordering::Relaxed);
         self.handles.lock().insert(
             fh,
@@ -181,11 +211,26 @@ impl Inner {
                 ino,
                 file: Arc::new(file),
                 write,
-                wrote,
+                wrote: truncate,
             },
         );
-        self.engine.opened(ino, write);
         Ok(fh)
+    }
+
+    /// The first change through a handle queues the file for upload right
+    /// away rather than at close, so it isn't lost if the service stops
+    /// while the file is still open. Uploads wait for the file to close.
+    fn mark_written(&self, fh: u64) {
+        let ino = match self.handles.lock().get_mut(&fh) {
+            Some(h) if !h.wrote => {
+                h.wrote = true;
+                h.ino
+            }
+            _ => return,
+        };
+        if let Err(e) = self.engine.local_content_changed(ino) {
+            tracing::warn!("couldn't record change to {ino}: {e:#}");
+        }
     }
 
     fn handle_file(&self, fh: u64) -> Option<(Arc<File>, bool)> {
@@ -195,17 +240,36 @@ impl Inner {
             .map(|h| (h.file.clone(), h.write))
     }
 
-    /// Create an empty local copy without downloading (the file is about to
-    /// be overwritten anyway).
-    fn make_empty(&self, ino: u64) -> Result<(), Errno> {
-        File::create(self.engine.cache_path(ino)).map_err(eio)?;
-        self.db(|s| {
-            if let Some(mut it) = s.get(ino)? {
-                it.cached = true;
-                s.update(&it)?;
-            }
-            Ok(())
-        })
+    /// Empty the local copy, creating it if the file is online-only: it's
+    /// being overwritten, so nothing is downloaded. The file is marked as
+    /// changed here and then made under the database lock, so a download or
+    /// "Free up space" finishing meanwhile leaves the new copy alone; if it
+    /// can't be made (disk full, out of file handles) the mark is undone.
+    fn overwrite(&self, ino: u64) -> Result<File, Errno> {
+        let file = self.db(|s| {
+            let was = s.get(ino)?.ok_or(FsErr(Errno::ENOENT))?;
+            s.update(&Item {
+                cached: true,
+                dirty: true,
+                gen: was.gen + 1,
+                ..was.clone()
+            })?;
+            let file = File::options()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(self.engine.cache_path(ino));
+            file.or_else(|e| {
+                s.update(&was)?;
+                Err(e.into())
+            })
+        })?;
+        // Then its size, thumbnail and upload.
+        if let Err(e) = self.engine.local_content_changed(ino) {
+            tracing::warn!("couldn't record change to {ino}: {e:#}");
+        }
+        Ok(file)
     }
 
     /// Run `then` once the file's content is local, downloading if needed.
@@ -242,7 +306,7 @@ impl Inner {
             }
             match inner.open_handle(ino, write, trunc) {
                 Ok(fh) => reply.opened(FileHandle(fh), FopenFlags::empty()),
-                Err(e) => reply.error(eio(e)),
+                Err(e) => reply.error(e),
             }
         });
     }
@@ -263,20 +327,31 @@ impl Inner {
         Ok(())
     }
 
+    /// Make `ino` local-only (or synced), and everything inside it whatever
+    /// it would be if created there now: in a synced folder, ignored and
+    /// invalid names still stay on this device.
     fn set_local_only(
+        &self,
         s: &Store<'_>,
         ino: u64,
         local_only: bool,
         error: Option<&str>,
     ) -> Result<()> {
+        let mut settled = HashMap::new();
+        // Parents come before their children.
         for (i, mut it) in s.subtree(ino)?.into_iter().enumerate() {
-            it.local_only = local_only;
-            if i == 0 {
-                it.error = error.map(str::to_string);
-            }
-            if !local_only {
+            let (stays, reason) = if i == 0 {
+                (local_only, error.map(str::to_string))
+            } else {
+                let in_local_only = settled.get(&it.parent).copied().unwrap_or(true);
+                self.classify(in_local_only, &it.name)
+            };
+            settled.insert(it.ino, stays);
+            if !stays && it.local_only {
                 it.dirty = !it.is_dir;
             }
+            it.local_only = stays;
+            it.error = reason;
             s.update(&it)?;
         }
         Ok(())
@@ -300,12 +375,26 @@ fn utf8(name: &OsStr) -> Result<&str, Errno> {
 }
 
 impl Filesystem for AxentraOneDriveFs {
+    fn init(&mut self, _req: &Request, config: &mut KernelConfig) -> std::io::Result<()> {
+        // Without this the kernel drops O_TRUNC from open() and truncates
+        // afterwards, so overwriting an online-only file would download it
+        // first (and fail offline).
+        if let Err(missing) = config.add_capabilities(InitFlags::FUSE_ATOMIC_O_TRUNC) {
+            tracing::debug!("kernel lacks {missing:?}");
+        }
+        Ok(())
+    }
+
     fn lookup(&self, _req: &Request, parent: INodeNo, name: &OsStr, reply: ReplyEntry) {
         let fs = &self.0;
         let Ok(name) = utf8(name) else {
             return reply.error(Errno::ENOENT);
         };
-        match fs.db(|s| s.child(parent.0, name)) {
+        // Names are unique ignoring case (create, mkdir and rename refuse a
+        // second "readme.md"), but only the exact name is found: otherwise
+        // the kernel takes "Report.pdf" for the "report.pdf" being renamed
+        // to it and never sends the rename.
+        match fs.db(|s| Ok(s.child(parent.0, name)?.filter(|it| it.name == name))) {
             Ok(Some(it)) => reply.entry(&TTL, &fs.attr(&it), Generation(0)),
             Ok(None) => reply.error(Errno::ENOENT),
             Err(e) => reply.error(e),
@@ -346,7 +435,7 @@ impl Filesystem for AxentraOneDriveFs {
             return reply.error(Errno::EISDIR);
         }
         if size == Some(0) && !it.cached {
-            if let Err(e) = fs.make_empty(it.ino) {
+            if let Err(e) = fs.overwrite(it.ino) {
                 return reply.error(e);
             }
         }
@@ -438,7 +527,7 @@ impl Filesystem for AxentraOneDriveFs {
             if s.child(p.ino, name)?.is_some() {
                 return fail(Errno::EEXIST);
             }
-            let (local_only, error) = fs.classify(&p, name);
+            let (local_only, error) = fs.classify(p.local_only, name);
             let mut it = Item {
                 parent: p.ino,
                 name: name.to_string(),
@@ -479,6 +568,8 @@ impl Filesystem for AxentraOneDriveFs {
         match result {
             Ok((ino, stale)) => {
                 fs.remove_thumbnails(&stale);
+                // Not left fetching what nobody can open any more.
+                fs.engine.stop_download(ino);
                 // Open handles keep the unlinked content readable.
                 let _ = std::fs::remove_file(fs.engine.cache_path(ino));
                 fs.engine.wake();
@@ -562,6 +653,7 @@ impl Filesystem for AxentraOneDriveFs {
         }
         let mut drop_cache = Vec::new();
         let mut stale_thumbs = Vec::new();
+        let mut pin = None;
         let result = fs.tx(|s| {
             let mut src = s.child(parent.0, name)?.ok_or(FsErr(Errno::ENOENT))?;
             // Thumbnails are named after the path, which is about to change.
@@ -573,10 +665,13 @@ impl Filesystem for AxentraOneDriveFs {
             if src.is_dir && s.is_inside(np.ino, src.ino)? {
                 return fail(Errno::EINVAL);
             }
-            let (local_only, error) = fs.classify(&np, newname);
+            let (local_only, error) = fs.classify(np.local_only, newname);
             let mut keep_moved = src.moved || src.id.is_some();
             if let Some(dest) = s.child(np.ino, newname)?.filter(|d| d.ino != src.ino) {
-                if flags.contains(RenameFlags::RENAME_NOREPLACE) {
+                // Another item whose name differs only in case can't be
+                // there too, but isn't replaced: lookup doesn't find it, so
+                // programs that ask before replacing a file never see it.
+                if flags.contains(RenameFlags::RENAME_NOREPLACE) || dest.name != newname {
                     return fail(Errno::EEXIST);
                 }
                 if dest.is_dir != src.is_dir {
@@ -611,7 +706,7 @@ impl Filesystem for AxentraOneDriveFs {
                     src.pinned |= dest.pinned;
                     src.dirty = true;
                     src.gen += 1;
-                    keep_moved = dest.name != newname;
+                    keep_moved = false;
                 } else {
                     fs.tombstone(s, &dest)?;
                 }
@@ -623,8 +718,9 @@ impl Filesystem for AxentraOneDriveFs {
             src.parent = np.ino;
             src.name = newname.to_string();
             src.moved = keep_moved && src.id.is_some();
-            if np.pinned {
+            if np.pinned && !src.pinned {
                 src.pinned = true;
+                pin = Some(src.ino);
             }
             if local_only && !src.local_only {
                 if src.id.is_some() && !src.is_dir && src.cached {
@@ -633,10 +729,10 @@ impl Filesystem for AxentraOneDriveFs {
                     src.id = None;
                     src.moved = false;
                     s.update(&src)?;
-                    Inner::set_local_only(s, src.ino, true, error.as_deref())?;
+                    fs.set_local_only(s, src.ino, true, error.as_deref())?;
                 } else if src.id.is_none() {
                     s.update(&src)?;
-                    Inner::set_local_only(s, src.ino, true, error.as_deref())?;
+                    fs.set_local_only(s, src.ino, true, error.as_deref())?;
                 } else {
                     // Can't drop a synced folder or online-only file locally;
                     // report the problem instead.
@@ -645,7 +741,7 @@ impl Filesystem for AxentraOneDriveFs {
                 }
             } else if !local_only && src.local_only {
                 s.update(&src)?;
-                Inner::set_local_only(s, src.ino, false, None)?;
+                fs.set_local_only(s, src.ino, false, None)?;
             } else {
                 if !local_only {
                     src.error = None;
@@ -658,7 +754,15 @@ impl Filesystem for AxentraOneDriveFs {
             Ok(()) => {
                 fs.remove_thumbnails(&stale_thumbs);
                 for ino in drop_cache {
+                    fs.engine.stop_download(ino);
                     let _ = std::fs::remove_file(fs.engine.cache_path(ino));
+                }
+                if let Some(ino) = pin {
+                    // Moved into an "Always keep on this device" folder: so is
+                    // everything inside it, and it all downloads now. Queued
+                    // before replying, so what's asked for after the move
+                    // comes after it too.
+                    fs.engine.pin_moved_in(ino);
                 }
                 fs.engine.wake();
                 fs.engine.changed();
@@ -677,15 +781,13 @@ impl Filesystem for AxentraOneDriveFs {
         if it.is_dir {
             return reply.error(Errno::EISDIR);
         }
-        let write = flags.acc_mode() != OpenAccMode::O_RDONLY;
-        let trunc = write && flags.0 & libc::O_TRUNC != 0;
-        if !it.cached {
+        // With FUSE_ATOMIC_O_TRUNC truncating is ours to do, even for O_RDONLY.
+        let trunc = flags.0 & libc::O_TRUNC != 0;
+        let write = trunc || flags.acc_mode() != OpenAccMode::O_RDONLY;
+        // A file being overwritten needs nothing downloaded.
+        if !it.cached && !trunc {
             let pid = req.pid();
-            if trunc {
-                if let Err(e) = fs.make_empty(it.ino) {
-                    return reply.error(e);
-                }
-            } else if thumbs::is_background_reader(pid) {
+            if thumbs::is_background_reader(pid) {
                 if thumbs::is_thumbnailer_pid(pid) && fs.engine.may_fetch_thumbnail(&it) {
                     // Save OneDrive's thumbnail where the thumbnailer would
                     // have, then turn it away: file managers look for the
@@ -791,9 +893,7 @@ impl Filesystem for AxentraOneDriveFs {
         }
         match file.write_all_at(data, offset) {
             Ok(()) => {
-                if let Some(h) = self.0.handles.lock().get_mut(&fh.0) {
-                    h.wrote = true;
-                }
+                self.0.mark_written(fh.0);
                 reply.written(data.len() as u32);
             }
             Err(e) => reply.error(eio(e)),
@@ -825,12 +925,16 @@ impl Filesystem for AxentraOneDriveFs {
         let Some(h) = fs.handles.lock().remove(&fh.0) else {
             return reply.ok();
         };
-        fs.engine.closed(h.ino, h.write);
+        // Size and time are final now. Recorded before the handle stops
+        // counting as a writer, so a pull never sees the file unmodified and
+        // closed in between and drops the new content.
         if h.wrote {
             if let Err(e) = fs.engine.local_content_changed(h.ino) {
                 tracing::warn!("couldn't record change to {}: {e:#}", h.ino);
             }
-        } else if h.write {
+        }
+        fs.engine.closed(h.ino, h.write);
+        if !h.wrote && h.write {
             // A new file closed without writes (e.g. `touch`) still uploads.
             fs.engine.wake();
         }
@@ -867,38 +971,47 @@ impl Filesystem for AxentraOneDriveFs {
         offset: u64,
         mut reply: ReplyDirectory,
     ) {
+        let came = Instant::now();
         let fs = &self.0;
         let dir = match fs.item(ino.0) {
             Ok(d) if d.is_dir => d,
             Ok(_) => return reply.error(Errno::ENOTDIR),
             Err(e) => return reply.error(e),
         };
-        let children = match fs.db(|s| s.children(dir.ino)) {
-            Ok(c) => c,
-            Err(e) => return reply.error(e),
-        };
+        // Offsets are 1 for ".", 2 for ".." and inode + 1 for a child (their
+        // inodes start at 2), so each call reads only the page it returns and
+        // a listing continues after its last entry even if others came or
+        // went meanwhile.
         let parent = if dir.ino == ROOT { ROOT } else { dir.parent };
-        let mut entries: Vec<(u64, FileType, String)> = vec![
-            (dir.ino, FileType::Directory, ".".into()),
-            (parent, FileType::Directory, "..".into()),
-        ];
-        entries.extend(children.into_iter().map(|c| {
-            let kind = if c.is_dir {
-                FileType::Directory
-            } else {
-                FileType::RegularFile
+        let mut full = (offset < 1 && reply.add(INodeNo(dir.ino), 1, FileType::Directory, "."))
+            || (offset < 2 && reply.add(INodeNo(parent), 2, FileType::Directory, ".."));
+        let mut after = offset.saturating_sub(1);
+        while !full {
+            let page = match fs.db(|s| s.listing(dir.ino, after, LISTING_PAGE)) {
+                Ok(p) => p,
+                Err(e) => return reply.error(e),
             };
-            (c.ino, kind, c.name)
-        }));
-        for (i, (ino, kind, name)) in entries.into_iter().enumerate().skip(offset as usize) {
-            if reply.add(INodeNo(ino), (i + 1) as u64, kind, &name) {
+            for (child, is_dir, name) in &page {
+                let kind = if *is_dir {
+                    FileType::Directory
+                } else {
+                    FileType::RegularFile
+                };
+                full = reply.add(INodeNo(*child), child + 1, kind, name);
+                if full {
+                    break;
+                }
+                after = *child;
+            }
+            if page.len() < LISTING_PAGE as usize {
                 break;
             }
         }
+        // Before the reply, while the caller waits for it: see
+        // `CloudThumbs::folder_listed`.
+        fs.engine
+            .folder_listed(&dir, req.pid(), offset, came.elapsed());
         reply.ok();
-        if offset == 0 && thumbs::lists_for_display(req.pid()) {
-            fs.engine.folder_listed(dir.ino);
-        }
     }
 
     fn statfs(&self, _req: &Request, _ino: INodeNo, reply: ReplyStatfs) {
@@ -934,7 +1047,7 @@ impl Filesystem for AxentraOneDriveFs {
         if name == thumbs::NUDGE_XATTR {
             return reply.ok(); // the change notification is the point
         }
-        if name != "user.axentra.onedrive.pinned" {
+        if name != PINNED_XATTR {
             return reply.error(Errno::EOPNOTSUPP);
         }
         let engine = &self.0.engine;
@@ -955,15 +1068,7 @@ impl Filesystem for AxentraOneDriveFs {
             Ok(it) => it,
             Err(e) => return reply.error(e),
         };
-        let value = match name.to_str().unwrap_or("") {
-            "user.axentra.onedrive.status" => Some(fs.status(&it)),
-            "user.axentra.onedrive.pinned" => Some(if it.pinned { "1" } else { "0" }.to_string()),
-            "user.axentra.onedrive.shared" => it.shared.then(|| "1".to_string()),
-            "user.axentra.onedrive.url" => it.web_url.clone(),
-            "user.axentra.onedrive.error" => it.error.clone(),
-            _ => None,
-        };
-        let Some(value) = value else {
+        let Some(value) = fs.xattr(&it, name.to_str().unwrap_or("")) else {
             return reply.error(Errno::NO_XATTR);
         };
         let bytes = value.as_bytes();
@@ -976,11 +1081,19 @@ impl Filesystem for AxentraOneDriveFs {
         }
     }
 
-    fn listxattr(&self, _req: &Request, _ino: INodeNo, size: u32, reply: ReplyXattr) {
+    fn listxattr(&self, _req: &Request, ino: INodeNo, size: u32, reply: ReplyXattr) {
+        let fs = &self.0;
+        let it = match fs.item(ino.0) {
+            Ok(it) => it,
+            Err(e) => return reply.error(e),
+        };
+        // Only names that have a value: `rsync -X` fails on any it can't read.
         let mut buf = Vec::new();
-        for n in XATTRS {
-            buf.extend_from_slice(n.as_bytes());
-            buf.push(0);
+        for n in LISTED_XATTRS {
+            if fs.xattr(&it, n).is_some() {
+                buf.extend_from_slice(n.as_bytes());
+                buf.push(0);
+            }
         }
         if size == 0 {
             reply.size(buf.len() as u32);
@@ -1021,7 +1134,7 @@ impl Filesystem for AxentraOneDriveFs {
             if s.child(p.ino, name)?.is_some() {
                 return fail(Errno::EEXIST);
             }
-            let (local_only, error) = fs.classify(&p, name);
+            let (local_only, error) = fs.classify(p.local_only, name);
             let mut it = Item {
                 parent: p.ino,
                 name: name.to_string(),
@@ -1052,7 +1165,7 @@ impl Filesystem for AxentraOneDriveFs {
                     FopenFlags::empty(),
                 );
             }
-            Err(e) => reply.error(eio(e)),
+            Err(e) => reply.error(e),
         }
     }
 }
@@ -1082,11 +1195,13 @@ fn prepare_mountpoint(mountpoint: &Path) -> Result<()> {
     match std::fs::read_dir(mountpoint) {
         Ok(mut entries) => {
             if entries.next().is_some() {
-                anyhow::bail!(
+                return Err(crate::config::NeedsUser(format!(
                     "{} already has files in it. Move them somewhere else (you can copy them \
-                     back in once Axentra OneDrive is running) or choose another folder in Settings.",
+                     back in once Axentra OneDrive is running), or choose another folder with \
+                     `axentra-onedrive setup --folder`.",
                     mountpoint.display()
-                );
+                ))
+                .into());
             }
             Ok(())
         }

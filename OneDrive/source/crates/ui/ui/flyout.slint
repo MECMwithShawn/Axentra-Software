@@ -3,8 +3,8 @@
 // line of sync status, recent files, and Open folder / View online /
 // Recycle bin along the bottom.
 
-import { ListView } from "std-widgets.slint";
-import { Theme, IconButton, MenuItem, MenuSeparator, MenuSurface, Meter, FluentButton, Hyperlink } from "theme.slint";
+import { ScrollView } from "std-widgets.slint";
+import { Theme, IconButton, MenuItem, MenuSeparator, MenuSurface, Meter, FluentButton, Hyperlink, FocusRing, KeyFocus, Press } from "theme.slint";
 
 export struct ActivityRow {
     name: string,
@@ -91,7 +91,7 @@ component StatusGlyph inherits Rectangle {
             source: root.state == "up_to_date" ? @image-url("icons/check.svg")
                 : root.state == "error" ? @image-url("icons/x.svg")
                 : root.state == "paused" ? @image-url("icons/pause.svg")
-                : root.state == "offline" ? @image-url("icons/cloud-off.svg")
+                : root.state == "offline" || root.state == "stopped" ? @image-url("icons/cloud-off.svg")
                 : @image-url("icons/person.svg");
         }
     }
@@ -99,110 +99,200 @@ component StatusGlyph inherits Rectangle {
 
 component ActivityItem inherits Rectangle {
     in property <ActivityRow> entry;
+    // The list's keyboard position is on this row.
+    in property <bool> current;
+    // Goes up by one when the keyboard asks for the current row's menu.
+    in property <int> menu-ticket;
     callback open(string);
     callback open-folder(string);
     callback reveal(string);
     callback share(string);
     callback online(string);
+    // This row, `height` tall at `top` in the window, should be scrolled into view.
+    callback scroll-to(length, length);
 
-    height: 58px;
+    property <bool> has-menu: !root.entry.gone && !root.entry.problem;
+    property <length> menu-x;
+    property <length> menu-y;
+    // The file the open menu is for, as it was when the menu opened.
+    property <string> menu-path;
+
+    // Conflicts and problems can take a second line.
+    height: max(58px, row.preferred-height);
     border-radius: 4px;
-    background: ta.pressed ? Theme.pressed : (ta.has-hover || more-ta.has-hover) ? Theme.hover : transparent;
+    background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
     accessible-role: list-item;
-    accessible-label: root.entry.name + ", " + root.entry.action + " " + root.entry.folder + ", " + root.entry.time;
+    accessible-label: root.entry.name + ", " + root.entry.action
+        + (root.entry.folder != "" ? " " + root.entry.folder : "")
+        + (root.entry.time != "" ? ", " + root.entry.time : "");
+    accessible-action-default => { root.activate(); }
 
+    function activate() {
+        if (root.entry.problem || root.entry.gone) {
+            root.open-folder(root.entry.folder-path);
+        } else {
+            root.open(root.entry.path);
+        }
+    }
+
+    function show-menu(x: length, y: length) {
+        root.menu-x = x;
+        root.menu-y = y;
+        root.menu-path = root.entry.path;
+        item-menu.show();
+    }
+
+    changed current => {
+        if (root.current) {
+            root.scroll-to(self.absolute-position.y, self.height);
+        }
+    }
+    changed menu-ticket => {
+        if (root.current && root.has-menu) {
+            root.show-menu(root.width - 196px, root.height - 8px);
+        }
+    }
+
+    // Holds the row's contents, so the row stays hovered over the folder
+    // link and the "..." button.
     ta := TouchArea {
-        clicked => {
-            if (root.entry.problem || root.entry.gone) {
-                root.open-folder(root.entry.folder-path);
-            } else {
-                root.open(root.entry.path);
+        clicked => { root.activate(); }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                Theme.keyboard = false;
+            }
+            // Right-click opens the "..." menu at the pointer, as on Windows.
+            if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up && root.has-menu) {
+                root.show-menu(self.mouse-x, self.mouse-y);
+            }
+        }
+
+        row := HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 4px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 12px;
+            VerticalLayout {
+                alignment: center;
+                FileIcon {
+                    kind: root.entry.kind;
+                    is-folder: root.entry.is-folder;
+                    problem: root.entry.problem;
+                    opacity: root.entry.gone ? 0.55 : 1.0;
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 1px;
+                horizontal-stretch: 1;
+                Text {
+                    text: root.entry.name;
+                    font-size: 13px;
+                    color: Theme.text;
+                    overflow: elide;
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Text {
+                        text: root.entry.action;
+                        font-size: 12px;
+                        color: root.entry.problem ? Theme.danger : Theme.text2;
+                        // Without a folder link the action is a whole message
+                        // ("... Kept both copies."), so it may take two lines.
+                        wrap: root.entry.folder == "" ? word-wrap : no-wrap;
+                        max-lines: root.entry.folder == "" ? 2 : 1;
+                        overflow: elide;
+                        horizontal-stretch: root.entry.folder == "" ? 1 : 0;
+                        // With a folder link, the folder gives way, not "Uploaded to".
+                        min-width: root.entry.folder != "" ? self.preferred-width : 0px;
+                    }
+                    if root.entry.folder != "": Hyperlink {
+                        text: root.entry.folder;
+                        overflow: elide;
+                        max-width: self.preferred-width;
+                        tab-stop: false;
+                        clicked => { root.open-folder(root.entry.folder-path); }
+                    }
+                    if root.entry.folder != "": Rectangle {
+                        horizontal-stretch: 1;
+                    }
+                }
+                if root.entry.time != "": Text {
+                    text: root.entry.time;
+                    font-size: 11px;
+                    color: Theme.text3;
+                    overflow: elide;
+                }
+            }
+            Rectangle {
+                width: 32px;
+                visible: (ta.has-hover || root.current) && root.has-menu;
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 4px;
+                    background: more-ta.pressed ? Theme.pressed : more-ta.has-hover ? Theme.hover : transparent;
+                    accessible-role: button;
+                    accessible-label: "More options";
+                    accessible-action-default => { root.show-menu(root.width - 196px, root.height - 8px); }
+                    Image {
+                        source: @image-url("icons/more.svg");
+                        colorize: Theme.text;
+                        width: 16px;
+                        height: 16px;
+                    }
+                    more-ta := Press {
+                        clicked => { root.show-menu(root.width - 196px, root.height - 8px); }
+                    }
+                }
             }
         }
     }
 
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 4px;
-        spacing: 12px;
-        VerticalLayout {
-            alignment: center;
-            FileIcon {
-                kind: root.entry.kind;
-                is-folder: root.entry.is-folder;
-                problem: root.entry.problem;
-                opacity: root.entry.gone ? 0.55 : 1.0;
-            }
-        }
-        VerticalLayout {
-            alignment: center;
-            spacing: 1px;
-            horizontal-stretch: 1;
-            Text {
-                text: root.entry.name;
-                font-size: 13px;
-                color: Theme.text;
-                overflow: elide;
-            }
-            HorizontalLayout {
-                spacing: 4px;
-                Text {
-                    text: root.entry.action;
-                    font-size: 12px;
-                    color: root.entry.problem ? Theme.danger : Theme.text2;
-                    overflow: elide;
-                    horizontal-stretch: root.entry.folder == "" ? 1 : 0;
-                }
-                if root.entry.folder != "": Hyperlink {
-                    text: root.entry.folder;
-                    overflow: elide;
-                    max-width: self.preferred-width;
-                    clicked => { root.open-folder(root.entry.folder-path); }
-                }
-                if root.entry.folder != "": Rectangle {
-                    horizontal-stretch: 1;
-                }
-            }
-            if root.entry.time != "": Text {
-                text: root.entry.time;
-                font-size: 11px;
-                color: Theme.text3;
-                overflow: elide;
-            }
-        }
-        Rectangle {
-            width: 32px;
-            visible: (ta.has-hover || more-ta.has-hover) && !root.entry.gone && !root.entry.problem;
-            Rectangle {
-                width: 28px;
-                height: 28px;
-                border-radius: 4px;
-                background: more-ta.pressed ? Theme.pressed : more-ta.has-hover ? Theme.hover : transparent;
-                Image {
-                    source: @image-url("icons/more.svg");
-                    colorize: Theme.text;
-                    width: 16px;
-                    height: 16px;
-                }
-                more-ta := TouchArea {
-                    clicked => { item-menu.show(); }
-                }
-            }
-        }
-    }
+    if root.current: FocusRing { border-radius: root.border-radius; }
 
     item-menu := PopupWindow {
-        x: root.width - 196px;
-        y: root.height - 8px;
+        x: root.menu-x;
+        y: root.menu-y;
         width: 190px;
+        forward-focus: open-cmd;
         MenuSurface {
             VerticalLayout {
                 padding: 4px;
-                MenuItem { text: "Open"; clicked => { root.open(root.entry.path); } }
-                MenuItem { text: "Open file location"; clicked => { root.reveal(root.entry.path); } }
+                open-cmd := MenuItem {
+                    text: "Open";
+                    clicked => { root.open(root.menu-path); }
+                    close-menu => { item-menu.close(); }
+                    up => { online-cmd.focus(); }
+                    down => { location-cmd.focus(); }
+                }
+                location-cmd := MenuItem {
+                    text: "Open file location";
+                    clicked => { root.reveal(root.menu-path); }
+                    close-menu => { item-menu.close(); }
+                    up => { open-cmd.focus(); }
+                    down => { share-cmd.focus(); }
+                }
                 MenuSeparator { }
-                MenuItem { text: "Share"; has-icon: true; icon: @image-url("icons/link.svg"); clicked => { root.share(root.entry.path); } }
-                MenuItem { text: "View online"; has-icon: true; icon: @image-url("icons/globe.svg"); clicked => { root.online(root.entry.path); } }
+                share-cmd := MenuItem {
+                    text: "Share";
+                    has-icon: true;
+                    icon: @image-url("icons/link.svg");
+                    clicked => { root.share(root.menu-path); }
+                    close-menu => { item-menu.close(); }
+                    up => { location-cmd.focus(); }
+                    down => { online-cmd.focus(); }
+                }
+                online-cmd := MenuItem {
+                    text: "View online";
+                    has-icon: true;
+                    icon: @image-url("icons/globe.svg");
+                    clicked => { root.online(root.menu-path); }
+                    close-menu => { item-menu.close(); }
+                    up => { share-cmd.focus(); }
+                    down => { open-cmd.focus(); }
+                }
             }
         }
     }
@@ -219,6 +309,8 @@ component BarButton inherits Rectangle {
     background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
     accessible-role: button;
     accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     VerticalLayout {
         alignment: center;
@@ -241,10 +333,14 @@ component BarButton inherits Rectangle {
         }
     }
 
-    ta := TouchArea {
+    ta := Press {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
     }
+    kf := KeyFocus {
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
 }
 
 export component Flyout inherits Window {
@@ -257,7 +353,7 @@ export component Flyout inherits Window {
     background: transparent;
     default-font-family: Theme.font;
 
-    // starting, signed_out, up_to_date, syncing, paused, offline, error
+    // starting, stopped, signed_out, up_to_date, syncing, paused, offline, error
     in property <string> state: "up_to_date";
     in property <string> headline: "Your files are synced";
     in property <string> detail;
@@ -271,6 +367,9 @@ export component Flyout inherits Window {
     // False while the window is being placed; showing fades and slides the
     // panel in, as on Windows.
     in property <bool> shown: true;
+    // Where the panel can't close itself when you click elsewhere (Wayland
+    // doesn't give it the focus), it gets a close button.
+    in property <bool> show-close: false;
 
     callback open-folder();
     callback view-online();
@@ -280,6 +379,7 @@ export component Flyout inherits Window {
     callback pause(int);
     callback resume();
     callback sign-in();
+    callback start-service();
     callback quit();
     callback dismiss();
     callback open-item(string);
@@ -290,7 +390,36 @@ export component Flyout inherits Window {
 
     property <bool> paused: root.state == "paused";
     // States that need the user: shown as a card with a button.
-    property <bool> needs-action: root.state == "paused" || root.state == "signed_out";
+    property <bool> needs-action: root.state == "paused" || root.state == "signed_out" || root.state == "stopped";
+    // The keyboard position in the recent files, and a counter the current
+    // row watches to open its menu.
+    property <int> current-row: 0;
+    property <int> menu-ticket: 0;
+    property <int> focus-row: min(root.current-row, root.rows.length - 1);
+
+    function move-row(i: int) {
+        root.current-row = max(0, min(root.rows.length - 1, i));
+    }
+
+    function open-row(i: int) {
+        if (i >= 0 && i < root.rows.length) {
+            if (root.rows[i].problem || root.rows[i].gone) {
+                root.open-path(root.rows[i].folder-path);
+            } else {
+                root.open-item(root.rows[i].path);
+            }
+        }
+    }
+
+    // Scroll the recent files so a row, `h` tall at `top` in the window, shows.
+    function scroll-to(top: length, h: length) {
+        let y = top - list.absolute-position.y;
+        if (y < 0) {
+            list.content-y -= y;
+        } else if (y + h > list.visible-height) {
+            list.content-y -= y + h - list.visible-height;
+        }
+    }
 
     panel := Rectangle {
         opacity: root.shown ? 1 : 0;
@@ -304,6 +433,8 @@ export component Flyout inherits Window {
             clip: true;
 
             keys := FocusScope {
+                // Tab goes straight to the controls.
+                focus-on-tab-navigation: false;
                 key-pressed(event) => {
                     if (event.text == Key.Escape) {
                         root.dismiss();
@@ -348,6 +479,15 @@ export component Flyout inherits Window {
                                     icon-size: 18px;
                                     label: "Help & Settings";
                                     clicked => { gear-menu.show(); }
+                                }
+                            }
+                            if root.show-close: VerticalLayout {
+                                alignment: center;
+                                IconButton {
+                                    icon: @image-url("icons/close.svg");
+                                    icon-size: 16px;
+                                    label: "Close";
+                                    clicked => { root.dismiss(); }
                                 }
                             }
                         }
@@ -421,10 +561,17 @@ export component Flyout inherits Window {
                                     HorizontalLayout {
                                         alignment: start;
                                         FluentButton {
-                                            text: root.paused ? "Resume syncing" : "Sign in";
+                                            text: root.paused ? "Resume syncing"
+                                                : root.state == "stopped" ? "Start Axentra OneDrive" : "Sign in";
                                             primary: true;
                                             clicked => {
-                                                if (root.paused) { root.resume(); } else { root.sign-in(); }
+                                                if (root.paused) {
+                                                    root.resume();
+                                                } else if (root.state == "stopped") {
+                                                    root.start-service();
+                                                } else {
+                                                    root.sign-in();
+                                                }
                                             }
                                         }
                                     }
@@ -434,44 +581,95 @@ export component Flyout inherits Window {
                     }
 
                     // ----- recent files
-                    if root.rows.length > 0: ListView {
+                    Rectangle {
                         vertical-stretch: 1;
-                        for row in root.rows: HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            ActivityItem {
-                                entry: row;
-                                open(p) => { root.open-item(p); }
-                                open-folder(p) => { root.open-path(p); }
-                                reveal(p) => { root.reveal-item(p); }
-                                share(p) => { root.share-item(p); }
-                                online(p) => { root.item-online(p); }
+                        Rectangle {
+                            visible: root.rows.length > 0;
+                            accessible-role: AccessibleRole.list;
+                            accessible-delegate-focus: root.focus-row;
+                            list := ScrollView {
+                                VerticalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    for row[i] in root.rows: ActivityItem {
+                                        entry: row;
+                                        current: list-keys.has-focus && Theme.keyboard && i == root.focus-row;
+                                        menu-ticket: root.menu-ticket;
+                                        open(p) => { root.open-item(p); }
+                                        open-folder(p) => { root.open-path(p); }
+                                        reveal(p) => { root.reveal-item(p); }
+                                        share(p) => { root.share-item(p); }
+                                        online(p) => { root.item-online(p); }
+                                        scroll-to(top, h) => { root.scroll-to(top, h); }
+                                    }
+                                }
+                            }
+                            // One Tab stop for the whole list; the arrow keys move
+                            // within it, as in the Windows panel. It sits outside the
+                            // scrolled rows: Slint drops the focus of an item scrolled
+                            // out of view.
+                            list-keys := FocusScope {
+                                x: 0;
+                                y: 0;
+                                width: 0;
+                                height: 0;
+                                focus-gained(reason) => {
+                                    if (reason == FocusReason.tab-navigation) {
+                                        Theme.keyboard = true;
+                                    }
+                                }
+                                key-pressed(event) => {
+                                    if (event.text == Key.UpArrow || event.text == Key.DownArrow
+                                        || event.text == Key.Home || event.text == Key.End) {
+                                        if (!Theme.keyboard) {
+                                            Theme.keyboard = true;
+                                        } else if (event.text == Key.UpArrow) {
+                                            root.move-row(root.focus-row - 1);
+                                        } else if (event.text == Key.DownArrow) {
+                                            root.move-row(root.focus-row + 1);
+                                        } else if (event.text == Key.Home) {
+                                            root.move-row(0);
+                                        } else {
+                                            root.move-row(root.rows.length - 1);
+                                        }
+                                        return accept;
+                                    }
+                                    if (event.text == Key.Return || event.text == Key.Space) {
+                                        root.open-row(root.focus-row);
+                                        return accept;
+                                    }
+                                    if (event.text == Key.Menu || (event.text == Key.F10 && event.modifiers.shift)) {
+                                        Theme.keyboard = true;
+                                        root.menu-ticket += 1;
+                                        return accept;
+                                    }
+                                    reject
+                                }
                             }
                         }
-                    }
-                    if root.rows.length == 0: VerticalLayout {
-                        vertical-stretch: 1;
-                        alignment: center;
-                        spacing: 6px;
-                        padding: 32px;
-                        Image {
-                            source: @image-url("icons/cloud.svg");
-                            colorize: Theme.text3;
-                            height: 56px;
-                        }
-                        Text {
-                            text: "No recent activity";
-                            font-size: 14px;
-                            font-weight: 600;
-                            color: Theme.text;
-                            horizontal-alignment: center;
-                        }
-                        Text {
-                            text: "Files you add, change or open in your OneDrive folder show up here.";
-                            font-size: 12px;
-                            color: Theme.text2;
-                            horizontal-alignment: center;
-                            wrap: word-wrap;
+                        if root.rows.length == 0: VerticalLayout {
+                            alignment: center;
+                            spacing: 6px;
+                            padding: 32px;
+                            Image {
+                                source: @image-url("icons/cloud.svg");
+                                colorize: Theme.text3;
+                                height: 56px;
+                            }
+                            Text {
+                                text: "No recent activity";
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: Theme.text;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: "Files you add, change or open in your OneDrive folder show up here.";
+                                font-size: 12px;
+                                color: Theme.text2;
+                                horizontal-alignment: center;
+                                wrap: word-wrap;
+                            }
                         }
                     }
 
@@ -480,18 +678,28 @@ export component Flyout inherits Window {
                         padding: 8px;
                         padding-top: 4px;
                         Rectangle {
-                            height: 34px;
+                            min-height: 34px;
                             border-radius: 6px;
                             background: Theme.card;
                             border-width: 1px;
                             border-color: Theme.stroke;
-                            Text {
-                                text: root.toast;
-                                font-size: 12px;
-                                color: Theme.text;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                                overflow: elide;
+                            accessible-role: AccessibleRole.text;
+                            accessible-label: root.toast;
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                Text {
+                                    text: root.toast;
+                                    font-size: 12px;
+                                    color: Theme.text;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    wrap: word-wrap;
+                                    max-lines: 3;
+                                    overflow: elide;
+                                }
                             }
                         }
                     }
@@ -545,14 +753,17 @@ export component Flyout inherits Window {
         x: root.width - 240px;
         y: 44px;
         width: 228px;
+        forward-focus: storage-kf;
         MenuSurface {
             VerticalLayout {
                 padding: 4px;
-                Rectangle {
+                storage-item := Rectangle {
                     border-radius: 4px;
-                    background: storage-ta.has-hover ? Theme.hover : transparent;
+                    background: storage-ta.has-hover || (storage-kf.has-focus && Theme.keyboard) ? Theme.hover : transparent;
                     accessible-role: button;
                     accessible-label: root.storage-text;
+                    accessible-action-default => { root.manage-storage(); }
+                    forward-focus: storage-kf;
                     VerticalLayout {
                         padding: 10px;
                         spacing: 6px;
@@ -567,54 +778,102 @@ export component Flyout inherits Window {
                             fill: root.storage-fraction > 0.9 ? Theme.danger : Theme.accent;
                         }
                     }
-                    storage-ta := TouchArea {
+                    storage-ta := Press {
                         clicked => { root.manage-storage(); }
+                    }
+                    storage-kf := KeyFocus {
+                        arrows: true;
+                        activate => {
+                            root.manage-storage();
+                            gear-menu.close();
+                        }
+                        up => { quit-cmd.focus(); }
+                        down => { settings-cmd.focus(); }
                     }
                 }
                 MenuSeparator { }
-                MenuItem {
+                settings-cmd := MenuItem {
                     text: "Settings";
                     has-icon: true;
                     icon: @image-url("icons/gear.svg");
                     clicked => { root.open-settings(); }
+                    close-menu => { gear-menu.close(); }
+                    up => { storage-kf.focus(); }
+                    down => { pause-cmd.focus(); }
                 }
                 MenuSeparator { }
-                if !root.paused: MenuItem {
-                    text: "Pause syncing for 2 hours";
+                // Resume syncing while paused, otherwise the three pause lengths.
+                pause-cmd := MenuItem {
+                    text: root.paused ? "Resume syncing" : "Pause syncing for 2 hours";
                     has-icon: true;
-                    icon: @image-url("icons/pause.svg");
-                    clicked => { root.pause(2); }
+                    icon: root.paused ? @image-url("icons/play.svg") : @image-url("icons/pause.svg");
+                    clicked => {
+                        if (root.paused) {
+                            root.resume();
+                        } else {
+                            root.pause(2);
+                        }
+                    }
+                    close-menu => { gear-menu.close(); }
+                    up => { settings-cmd.focus(); }
+                    down => {
+                        if (root.paused) {
+                            quit-cmd.focus();
+                        } else {
+                            pause8-cmd.focus();
+                        }
+                    }
                 }
-                if !root.paused: MenuItem {
+                pause8-cmd := MenuItem {
+                    visible: !root.paused;
+                    height: root.paused ? 0 : 34px;
                     text: "Pause syncing for 8 hours";
                     has-icon: true;
                     icon: @image-url("icons/pause.svg");
                     clicked => { root.pause(8); }
+                    close-menu => { gear-menu.close(); }
+                    up => { pause-cmd.focus(); }
+                    down => { pause24-cmd.focus(); }
                 }
-                if !root.paused: MenuItem {
+                pause24-cmd := MenuItem {
+                    visible: !root.paused;
+                    height: root.paused ? 0 : 34px;
                     text: "Pause syncing for 24 hours";
                     has-icon: true;
                     icon: @image-url("icons/pause.svg");
                     clicked => { root.pause(24); }
-                }
-                if root.paused: MenuItem {
-                    text: "Resume syncing";
-                    has-icon: true;
-                    icon: @image-url("icons/play.svg");
-                    clicked => { root.resume(); }
+                    close-menu => { gear-menu.close(); }
+                    up => { pause8-cmd.focus(); }
+                    down => { quit-cmd.focus(); }
                 }
                 MenuSeparator { }
-                MenuItem {
+                quit-cmd := MenuItem {
                     text: "Quit Axentra OneDrive";
                     has-icon: true;
                     icon: @image-url("icons/close.svg");
                     clicked => { root.quit(); }
+                    close-menu => { gear-menu.close(); }
+                    up => {
+                        if (root.paused) {
+                            pause-cmd.focus();
+                        } else {
+                            pause24-cmd.focus();
+                        }
+                    }
+                    down => { storage-kf.focus(); }
                 }
             }
         }
     }
 
     public function show-menu() { gear-menu.show(); }
+
+    // Each time the panel opens: no focus outline until the keyboard is used.
+    public function reset-focus() {
+        Theme.keyboard = false;
+        root.current-row = 0;
+        keys.focus();
+    }
 
     init => { keys.focus(); }
 }

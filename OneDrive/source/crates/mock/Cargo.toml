@@ -19,3 +19,6 @@ tracing.workspace = true
 percent-encoding.workspace = true
 url.workspace = true
 image.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

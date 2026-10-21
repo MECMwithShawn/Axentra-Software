@@ -81,6 +81,15 @@ impl DriveItem {
             .quick_xor_hash
             .as_deref()
     }
+
+    /// Whether `other` holds the same content: the same QuickXorHash, or
+    /// the same cTag where one of them has no hash.
+    pub fn same_content(&self, other: &DriveItem) -> bool {
+        match (self.quick_xor_hash(), other.quick_xor_hash()) {
+            (Some(a), Some(b)) => a == b,
+            _ => self.c_tag == other.c_tag,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -267,4 +276,31 @@ pub(crate) struct Collection<T> {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UploadSession {
     pub upload_url: String,
+    #[serde(default)]
+    pub expiration_date_time: Option<DateTime<Utc>>,
+}
+
+/// What an upload session has received, from a status request or the reply
+/// to a fragment.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UploadStatus {
+    #[serde(default)]
+    pub expiration_date_time: Option<DateTime<Utc>>,
+    /// Byte ranges still missing, such as `["26-"]` or `["0-9", "26-"]`.
+    #[serde(default)]
+    pub next_expected_ranges: Vec<String>,
+}
+
+impl UploadStatus {
+    /// The first range the session is still missing of a `size`-byte file.
+    pub fn next_range(&self, size: u64) -> Option<std::ops::Range<u64>> {
+        let (start, end) = self.next_expected_ranges.first()?.split_once('-')?;
+        let start: u64 = start.trim().parse().ok()?;
+        let end = match end.trim() {
+            "" => size,
+            last => last.parse::<u64>().ok()?.saturating_add(1).min(size),
+        };
+        (start < end).then_some(start..end)
+    }
 }

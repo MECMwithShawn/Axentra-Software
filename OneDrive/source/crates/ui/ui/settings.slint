@@ -2,19 +2,30 @@
 // left, setting cards on the right. Changes apply immediately.
 
 import { Switch, SpinBox, ComboBox, LineEdit, ScrollView, AboutSlint } from "std-widgets.slint";
-import { Theme, Meter, FluentButton, Hyperlink, MenuSurface } from "theme.slint";
+import { Theme, Meter, FluentButton, MenuSurface, FocusRing, KeyFocus, Press, InfoBar } from "theme.slint";
 
+/// A page in the navigation pane. Up and Down call `up` and `down`.
 component NavItem inherits Rectangle {
     in property <string> text;
     in property <image> icon;
     in property <bool> selected;
     callback clicked();
+    callback up();
+    callback down();
 
     height: 36px;
     border-radius: 4px;
-    background: root.selected ? Theme.hover.mix(Theme.layer, 0.6) : ta.has-hover ? Theme.hover : transparent;
+    // As in the Windows NavigationView: the selected page and a hovered one
+    // share a fill, and hovering the selected page lightens it.
+    background: ta.pressed ? Theme.pressed
+        : ta.has-hover ? (root.selected ? Theme.pressed : Theme.hover)
+        : root.selected ? Theme.hover : transparent;
     accessible-role: tab;
     accessible-label: text;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     Rectangle {
         x: 0;
@@ -45,9 +56,18 @@ component NavItem inherits Rectangle {
             horizontal-stretch: 1;
         }
     }
-    ta := TouchArea {
+    ta := Press {
         clicked => { root.clicked(); }
     }
+    kf := KeyFocus {
+        // The pane is one Tab stop, at the selected page; arrows move within it.
+        focus-on-tab-navigation: root.selected;
+        arrows: true;
+        activate => { root.clicked(); }
+        up => { root.up(); }
+        down => { root.down(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
 }
 
 /// A settings row: icon, title and description on the left, control on the right.
@@ -114,13 +134,18 @@ component OptionCard inherits Rectangle {
     in property <bool> selected;
     callback clicked();
 
-    background: ta.has-hover ? Theme.layer.mix(Theme.hover, 0.5) : Theme.layer;
+    background: ta.has-hover ? Theme.card-hover : Theme.layer;
     border-radius: 6px;
     border-width: root.selected ? 2px : 1px;
     border-color: root.selected ? Theme.accent : Theme.stroke;
     min-height: 64px;
-    accessible-role: button;
+    accessible-role: radio-button;
     accessible-label: title;
+    accessible-description: description;
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     HorizontalLayout {
         padding: 14px;
@@ -143,9 +168,13 @@ component OptionCard inherits Rectangle {
             Text { text: root.description; font-size: 12px; color: Theme.text2; wrap: word-wrap; }
         }
     }
-    ta := TouchArea {
+    ta := Press {
         clicked => { root.clicked(); }
     }
+    kf := KeyFocus {
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
 }
 
 /// One selectable app-icon colour on the Appearance page.
@@ -158,12 +187,16 @@ component IconChoice inherits Rectangle {
 
     width: 140px;
     height: 150px;
-    background: ta.has-hover ? Theme.layer.mix(Theme.hover, 0.5) : Theme.layer;
+    background: ta.has-hover ? Theme.card-hover : Theme.layer;
     border-radius: 6px;
     border-width: root.selected ? 2px : 1px;
     border-color: root.selected ? Theme.accent : Theme.stroke;
-    accessible-role: button;
+    accessible-role: radio-button;
     accessible-label: name + " app icon";
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     VerticalLayout {
         padding: 14px;
@@ -182,8 +215,55 @@ component IconChoice inherits Rectangle {
         Text { text: root.name; font-size: 14px; color: Theme.text; horizontal-alignment: center; }
         Text { text: root.note; font-size: 12px; color: Theme.text2; horizontal-alignment: center; }
     }
-    ta := TouchArea {
+    ta := Press {
         clicked => { root.clicked(); }
+    }
+    kf := KeyFocus {
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
+}
+
+/// A Windows-style confirmation over the window: a question, what it means,
+/// and the action next to Cancel, which has the focus.
+component ConfirmPopup inherits PopupWindow {
+    in property <string> title;
+    in property <string> text;
+    in property <string> action;
+    callback accepted();
+
+    width: 420px;
+    close-policy: close-on-click-outside;
+    forward-focus: cancel;
+
+    MenuSurface {
+        VerticalLayout {
+            padding: 24px;
+            spacing: 12px;
+            Text { text: root.title; font-size: 20px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+            Text {
+                text: root.text;
+                font-size: 13px;
+                color: Theme.text2;
+                wrap: word-wrap;
+            }
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                FluentButton {
+                    text: root.action;
+                    primary: true;
+                    clicked => {
+                        root.accepted();
+                        root.close();
+                    }
+                }
+                cancel := FluentButton {
+                    text: "Cancel";
+                    clicked => { root.close(); }
+                }
+            }
+        }
     }
 }
 
@@ -203,7 +283,11 @@ export component SettingsWindow inherits Window {
     in-out property <bool> paused;
     in-out property <bool> files-on-demand: true;
     in property <string> folder-path;
+    // Says where config.toml moves the folder when the sync service restarts; empty if it stays.
+    in property <string> folder-moves;
     in property <string> local-usage;
+    // How much more "Download all files" would download, e.g. "12.4 GB"; empty if unknown.
+    in property <string> download-size;
     // Account
     in property <bool> signed-in;
     in property <string> account-name;
@@ -225,6 +309,9 @@ export component SettingsWindow inherits Window {
     // About
     in property <string> version;
     in property <string> notice;
+    // A result or a problem, shown above the page until closed.
+    in-out property <string> message;
+    in-out property <bool> message-error;
 
     callback changed();
     callback toggle-pause(bool);
@@ -237,6 +324,30 @@ export component SettingsWindow inherits Window {
     callback view-online();
     callback open-source();
     callback set-icon-color(string);
+
+    // Up and Down in the navigation pane go to the page above or below and
+    // select it, as in Windows Settings. `i` counts from the top.
+    function nav(i: int) {
+        if (i <= 0) {
+            root.page = 0;
+            nav0.focus();
+        } else if (i == 1) {
+            root.page = 1;
+            nav1.focus();
+        } else if (i == 2) {
+            root.page = 2;
+            nav2.focus();
+        } else if (i == 3) {
+            root.page = 3;
+            nav3.focus();
+        } else if (i == 4) {
+            root.page = 5;
+            nav4.focus();
+        } else {
+            root.page = 4;
+            nav5.focus();
+        }
+    }
 
     HorizontalLayout {
         // ----- navigation pane
@@ -260,12 +371,12 @@ export component SettingsWindow inherits Window {
                     Text { text: root.signed-in ? root.account-email : "Not signed in"; font-size: 12px; color: Theme.text2; overflow: elide; }
                 }
             }
-            NavItem { text: "Sync and back up"; icon: @image-url("icons/sync.svg"); selected: root.page == 0; clicked => { root.page = 0; } }
-            NavItem { text: "Account"; icon: @image-url("icons/person.svg"); selected: root.page == 1; clicked => { root.page = 1; } }
-            NavItem { text: "Notifications"; icon: @image-url("icons/bell.svg"); selected: root.page == 2; clicked => { root.page = 2; } }
-            NavItem { text: "Network"; icon: @image-url("icons/network.svg"); selected: root.page == 3; clicked => { root.page = 3; } }
-            NavItem { text: "Appearance"; icon: @image-url("icons/palette.svg"); selected: root.page == 5; clicked => { root.page = 5; } }
-            NavItem { text: "About"; icon: @image-url("icons/info.svg"); selected: root.page == 4; clicked => { root.page = 4; } }
+            nav0 := NavItem { text: "Sync and back up"; icon: @image-url("icons/sync.svg"); selected: root.page == 0; clicked => { root.page = 0; } down => { root.nav(1); } }
+            nav1 := NavItem { text: "Account"; icon: @image-url("icons/person.svg"); selected: root.page == 1; clicked => { root.page = 1; } up => { root.nav(0); } down => { root.nav(2); } }
+            nav2 := NavItem { text: "Notifications"; icon: @image-url("icons/bell.svg"); selected: root.page == 2; clicked => { root.page = 2; } up => { root.nav(1); } down => { root.nav(3); } }
+            nav3 := NavItem { text: "Network"; icon: @image-url("icons/network.svg"); selected: root.page == 3; clicked => { root.page = 3; } up => { root.nav(2); } down => { root.nav(4); } }
+            nav4 := NavItem { text: "Appearance"; icon: @image-url("icons/palette.svg"); selected: root.page == 5; clicked => { root.page = 5; } up => { root.nav(3); } down => { root.nav(5); } }
+            nav5 := NavItem { text: "About"; icon: @image-url("icons/info.svg"); selected: root.page == 4; clicked => { root.page = 4; } up => { root.nav(4); } }
             Rectangle { vertical-stretch: 1; }
         }
 
@@ -290,6 +401,12 @@ export component SettingsWindow inherits Window {
                         height: 56px;
                     }
 
+                    if root.message != "": InfoBar {
+                        text: root.message;
+                        error: root.message-error;
+                        closed => { root.message = ""; }
+                    }
+
                     if root.page == 0: VerticalLayout {
                         spacing: 6px;
                         Card {
@@ -305,7 +422,7 @@ export component SettingsWindow inherits Window {
                         Card {
                             icon: @image-url("icons/folder.svg");
                             title: "OneDrive folder";
-                            description: root.folder-path;
+                            description: root.folder-moves == "" ? root.folder-path : root.folder-path + "\n" + root.folder-moves;
                             FluentButton { text: "Open folder"; clicked => { root.open-folder(); } }
                         }
                         SectionTitle { text: "Files On-Demand"; }
@@ -313,19 +430,31 @@ export component SettingsWindow inherits Window {
                             title: "Free up disk space";
                             description: "Files show up in your OneDrive folder but only download when you open them. Recommended.";
                             selected: root.files-on-demand;
-                            clicked => { root.files-on-demand = true; root.set-on-demand(true); }
+                            clicked => {
+                                if (!root.files-on-demand) {
+                                    confirm-free-up.show();
+                                }
+                            }
                         }
                         OptionCard {
                             title: "Download all files";
                             description: "Every file is kept on this device, so it's always available, even offline.";
                             selected: !root.files-on-demand;
-                            clicked => { root.files-on-demand = false; root.set-on-demand(false); }
+                            clicked => {
+                                if (root.files-on-demand) {
+                                    confirm-download.show();
+                                }
+                            }
                         }
                         Card {
                             icon: @image-url("icons/download.svg");
                             title: "Space used on this device";
-                            description: root.local-usage + " of OneDrive content is stored locally. Freeing up space keeps files online only, except those set to always keep on this device.";
-                            FluentButton { text: "Free up space"; clicked => { root.free-up-space(); } }
+                            // With Download all files, every file stays on this device, so
+                            // there's no freeing up space, as in Windows.
+                            description: root.local-usage + " of OneDrive content is stored locally. "
+                                + (root.files-on-demand ? "Freeing up space keeps files online only, except those set to always keep on this device."
+                                    : "To free up space, choose Free up disk space above.");
+                            FluentButton { text: "Free up space"; enabled: root.files-on-demand; clicked => { root.free-up-space(); } }
                         }
                     }
 
@@ -568,29 +697,37 @@ export component SettingsWindow inherits Window {
         }
     }
 
-    confirm-unlink := PopupWindow {
+    confirm-unlink := ConfirmPopup {
         x: (root.width - 420px) / 2;
         y: (root.height - 200px) / 2;
-        width: 420px;
-        close-policy: close-on-click-outside;
-        MenuSurface {
-            VerticalLayout {
-                padding: 24px;
-                spacing: 12px;
-                Text { text: "Unlink this PC?"; font-size: 20px; font-weight: 600; color: Theme.text; }
-                Text {
-                    text: "Files that are only online stay on OneDrive. Local copies are removed from this PC, and changes that haven't uploaded yet are lost.";
-                    font-size: 13px;
-                    color: Theme.text2;
-                    wrap: word-wrap;
-                }
-                HorizontalLayout {
-                    alignment: end;
-                    spacing: 8px;
-                    FluentButton { text: "Unlink account"; primary: true; clicked => { root.unlink(); confirm-unlink.close(); } }
-                    FluentButton { text: "Cancel"; clicked => { confirm-unlink.close(); } }
-                }
-            }
+        title: "Unlink this PC?";
+        text: "Files that are only online stay on OneDrive. Local copies are removed from this PC, and changes that haven't uploaded yet are lost.";
+        action: "Unlink account";
+        accepted => { root.unlink(); }
+    }
+
+    confirm-download := ConfirmPopup {
+        x: (root.width - 420px) / 2;
+        y: (root.height - 200px) / 2;
+        title: "Download all files?";
+        text: "Every file in your OneDrive will be downloaded and kept on this device, so it's available offline."
+            + (root.download-size != "" ? " This uses about " + root.download-size + " more disk space." : "");
+        action: "Download all files";
+        accepted => {
+            root.files-on-demand = false;
+            root.set-on-demand(false);
+        }
+    }
+
+    confirm-free-up := ConfirmPopup {
+        x: (root.width - 420px) / 2;
+        y: (root.height - 200px) / 2;
+        title: "Free up disk space?";
+        text: "Files will stay on OneDrive and download when you open them. Downloaded files are removed from this device, except ones that haven't finished uploading.";
+        action: "Free up disk space";
+        accepted => {
+            root.files-on-demand = true;
+            root.set-on-demand(true);
         }
     }
 }

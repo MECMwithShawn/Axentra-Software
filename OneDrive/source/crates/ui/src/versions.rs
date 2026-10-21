@@ -53,12 +53,20 @@ pub fn run(path: String) -> Result<()> {
     ui.set_file_name(path.rsplit('/').next().unwrap_or(&path).into());
     match rt.block_on(fetch(&path)) {
         Ok(json) => ui.set_versions(ModelRc::new(VecModel::from(rows(&json)))),
-        Err(e) => ui.set_message(format!("Couldn't load the version history: {e}").into()),
+        Err(e) => ui.set_problem(crate::present::error_text(&e).into()),
     }
 
     let weak = ui.as_weak();
     let handle = rt.handle().clone();
     ui.on_restore(move |id| {
+        let Some(ui) = weak.upgrade() else { return };
+        // One restore at a time: each one adds a version.
+        if ui.get_busy() {
+            return;
+        }
+        ui.set_busy(true);
+        ui.set_restoring(id.clone());
+        ui.set_message("".into());
         let (weak, path, id) = (weak.clone(), path.clone(), id.to_string());
         handle.spawn(async move {
             let result = async {
@@ -70,14 +78,24 @@ pub fn run(path: String) -> Result<()> {
                 Ok::<_, anyhow::Error>(p.versions(path).await?)
             }
             .await;
-            let _ = weak.upgrade_in_event_loop(move |ui| match result {
-                Ok(json) => {
-                    ui.set_versions(ModelRc::new(VecModel::from(rows(&json))));
-                    ui.set_message(
-                        "Restored. The version it replaced is still in the list.".into(),
-                    );
+            let _ = weak.upgrade_in_event_loop(move |ui| {
+                ui.set_busy(false);
+                ui.set_restoring("".into());
+                match result {
+                    Ok(json) => {
+                        ui.set_versions(ModelRc::new(VecModel::from(rows(&json))));
+                        ui.set_message(
+                            "Restored. The version it replaced is still in the list.".into(),
+                        );
+                    }
+                    Err(e) => ui.set_message(
+                        format!(
+                            "Couldn't restore that version: {}",
+                            crate::present::error_text(&e)
+                        )
+                        .into(),
+                    ),
                 }
-                Err(e) => ui.set_message(format!("Couldn't restore that version: {e}").into()),
             });
         });
     });

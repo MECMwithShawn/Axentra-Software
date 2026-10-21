@@ -2,7 +2,8 @@
 //! talking to the sync service over D-Bus, and the tray icon.
 
 use std::cell::Cell;
-use std::path::PathBuf;
+use std::future::Future;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -11,6 +12,7 @@ use anyhow::Result;
 use axentra_onedrive_core::config::{Config, Paths};
 use axentra_onedrive_core::db::Activity;
 use axentra_onedrive_core::ipc::{AxentraOneDriveProxy, ChangedStream};
+use axentra_onedrive_core::notify::Notifier;
 use axentra_onedrive_core::status::{Account, Status};
 use futures_util::StreamExt;
 use ksni::TrayMethods;
@@ -21,6 +23,16 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use crate::tray::AxentraOneDriveTray;
 use crate::{present, Flyout, SettingsWindow, Theme};
+
+/// What a refresh fetched from the sync service.
+pub struct Snapshot {
+    status: Status,
+    account: Account,
+    /// Only fetched while the panel is open.
+    activity: Option<Vec<Activity>>,
+    /// Only fetched while Settings is open.
+    local_usage: Option<u64>,
+}
 
 pub enum Cmd {
     /// From a tray click, with where it was clicked if the tray host said.
@@ -45,10 +57,20 @@ pub enum Cmd {
     ItemOnline(String),
     SettingsChanged,
     SetOnDemand(bool),
+    /// Turning Files On-Demand to `.0` didn't download or free up the
+    /// files, so the choice goes back.
+    UndoOnDemand(bool),
     FreeUpSpace,
     Unlink,
-    Reload,
     SetIconColor(String),
+    StartService,
+    /// The service asked to start at `.0` stopped again (or couldn't start).
+    StartFailed(Instant),
+    /// Fetch the service's state again.
+    Refresh,
+    /// A refresh for connection number `.0` is done; `None` if the service
+    /// went away.
+    Refreshed(u64, Option<Box<Snapshot>>),
 }
 
 pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
@@ -104,6 +126,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(flyout.on_pause(h) => Cmd::Pause(h as u32));
     wire!(flyout.on_resume => Cmd::Resume);
     wire!(flyout.on_sign_in => Cmd::SignIn);
+    wire!(flyout.on_start_service => Cmd::StartService);
     wire!(flyout.on_quit => Cmd::Quit);
     wire!(flyout.on_dismiss => Cmd::HideFlyout);
     wire!(flyout.on_open_item(p) => Cmd::OpenItem(p.to_string()));
@@ -124,6 +147,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(settings.on_set_icon_color(c) => Cmd::SetIconColor(c.to_string()));
 
     close_on_focus_loss(&flyout);
+    flyout.set_show_close(!crate::panel::is_x11());
     drop_unshown_windows(flyout.as_weak(), settings.as_weak(), 0);
     if show_panel {
         let _ = tx.send(Cmd::ShowFlyout(None));
@@ -283,6 +307,7 @@ fn x11_id(window: &slint::Window) -> Option<u32> {
 fn show_flyout(ui: &Flyout, click: Option<(i32, i32)>) {
     HAD_FOCUS.with(|h| h.set(false));
     ui.set_shown(false);
+    ui.invoke_reset_focus();
     let window = ui.window();
     let x11 = crate::panel::is_x11();
     let mut spot = None;
@@ -342,16 +367,46 @@ fn finish_show(weak: Weak<Flyout>, spot: Option<(i32, i32)>, x11: bool, tries: u
     });
 }
 
+/// The least time between refreshes that the service's change signal causes.
+const REFRESH_EVERY: Duration = Duration::from_secs(1);
+/// How long after asking the service to start the panel says it's starting.
+const START_GRACE: Duration = Duration::from_secs(30);
+
 struct Backend {
     paths: Paths,
     tx: UnboundedSender<Cmd>,
     flyout: Weak<Flyout>,
     settings: Weak<SettingsWindow>,
+    bus: Option<zbus::Connection>,
     proxy: Option<AxentraOneDriveProxy<'static>>,
     changed: Option<ChangedStream>,
+    /// Counts connections to the service, so a late refresh from an earlier
+    /// one is ignored.
+    generation: u64,
     tray: Option<ksni::Handle<AxentraOneDriveTray>>,
+    /// The tray's state and tooltip, so it's only updated when they change.
+    tray_shows: (String, String),
+    /// As last fetched. Its `mount_point` is empty while not connected.
+    status: Status,
     account: Account,
-    started_daemon: bool,
+    local_usage: Option<u64>,
+    /// config.toml as last read successfully.
+    config: Config,
+    /// Whether the tray app has looked for the service yet. Only that first
+    /// look starts it if it isn't running: a service stopped on purpose
+    /// stays stopped until the Start button, and systemd restarts one that
+    /// crashed.
+    looked: bool,
+    /// When the service was last asked to start.
+    started: Option<Instant>,
+    /// Watches that start for the service stopping again at once.
+    start_watch: Option<tokio::task::AbortHandle>,
+    refreshing: bool,
+    /// The service changed since the last refresh began.
+    stale: bool,
+    /// A command wants the next refresh without the usual wait.
+    urgent: bool,
+    last_refresh: Instant,
 }
 
 async fn next_change(s: &mut Option<ChangedStream>) -> Option<()> {
@@ -378,9 +433,203 @@ fn sibling_binary(name: &str) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from(name))
 }
 
+/// Run `script` with bash in a new terminal window titled `title`.
+fn open_terminal(title: &str, script: &str) -> std::io::Result<()> {
+    Command::new("gnome-terminal")
+        .args(["--title", title, "--", "bash", "-c", script])
+        .spawn()
+        .or_else(|_| {
+            Command::new("x-terminal-emulator")
+                .args(["-e", "bash", "-c", script])
+                .spawn()
+        })
+        .map(|_| ())
+}
+
+/// Where the tray's Sign in went on.
+#[derive(Debug, PartialEq)]
+enum SignIn {
+    /// A terminal, which shows whatever goes wrong.
+    InTerminal,
+    /// Straight to the browser.
+    InBrowser,
+}
+
+/// Sign in the way Windows OneDrive does, by setting it up again: in a
+/// terminal (`terminal(title, script)`), `cli setup` asks for the app
+/// registration, where Enter keeps the one there is, so one pasted wrongly
+/// (Microsoft's sign-in page then never comes back) can be replaced; then
+/// `cli login` opens the browser. With no terminal to open, `login` signs
+/// in with the app registration there is, if it was `registered`.
+fn sign_in<T, L>(cli: &Path, registered: bool, terminal: T, login: L) -> Result<SignIn>
+where
+    T: FnOnce(&str, &str) -> std::io::Result<()>,
+    L: FnOnce(),
+{
+    let script = format!(
+        "{0} setup && {0} login; echo; read -p 'Press Enter to close' _",
+        cli.display()
+    );
+    if terminal("Set up Axentra OneDrive", &script).is_ok() {
+        return Ok(SignIn::InTerminal);
+    }
+    if !registered {
+        anyhow::bail!(
+            "Couldn't open a terminal. Run `axentra-onedrive setup` in one to set up Axentra OneDrive."
+        );
+    }
+    login();
+    Ok(SignIn::InBrowser)
+}
+
+/// The sync service's systemd user unit.
+const SERVICE_UNIT: &str = "axentra-onedrive.service";
+
+/// `systemctl --user <args>`: what it printed, or what it said went wrong.
+async fn systemctl(args: &[&str]) -> Result<String> {
+    let out = tokio::process::Command::new("systemctl")
+        .arg("--user")
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_string();
+    if !out.status.success() {
+        anyhow::bail!("{}", text(&out.stderr));
+    }
+    Ok(text(&out.stdout))
+}
+
+/// Whether a unit's LoadState says it's installed (masked included: then
+/// it's meant not to run).
+fn unit_found(load_state: &str) -> bool {
+    !load_state.is_empty() && load_state != "not-found"
+}
+
+/// How asking the service to start went.
+#[derive(Debug, PartialEq)]
+enum Started {
+    Running,
+    /// It stopped again; the service says why itself, in a notification.
+    Stopped,
+    /// It couldn't be started, for this reason.
+    Refused(String),
+}
+
+/// Start the service: through systemd, or by running it directly
+/// (`run_directly`, which gives what ends when it exits) when its unit
+/// isn't installed or there's no systemd to ask. `asked`: the user clicked
+/// Start, so an earlier failure is cleared first, as `axentra-onedrive`
+/// advises; systemd's start limit counts failed starts too and would refuse
+/// it. `systemctl` runs `systemctl --user` (tests stand in for it).
+async fn start<S, F, D, E>(asked: bool, at: Instant, systemctl: S, run_directly: D) -> Started
+where
+    S: Fn(&'static [&'static str]) -> F,
+    F: Future<Output = Result<String>>,
+    D: FnOnce() -> std::io::Result<E>,
+    E: Future<Output = ()>,
+{
+    if asked {
+        let _ = systemctl(&["reset-failed", SERVICE_UNIT]).await;
+    }
+    let refused = match systemctl(&["start", SERVICE_UNIT]).await {
+        Ok(_) if stops_soon(at, &systemctl).await => return Started::Stopped,
+        Ok(_) => return Started::Running,
+        Err(e) => e,
+    };
+    // Installed but refused (masked, say): it isn't to be run another way.
+    let load_state = systemctl(&["show", "--property=LoadState", "--value", SERVICE_UNIT]).await;
+    if load_state.is_ok_and(|s| unit_found(&s)) {
+        return Started::Refused(refused.to_string());
+    }
+    match run_directly() {
+        Ok(exited) => match tokio::time::timeout(START_GRACE, exited).await {
+            Ok(()) => Started::Stopped,
+            Err(_) => Started::Running,
+        },
+        Err(e) => Started::Refused(e.to_string()),
+    }
+}
+
+/// Whether the unit, started at `at`, stops again within `START_GRACE`.
+/// It counts as started once it runs (Type=simple), and one with a problem
+/// only the user can fix exits at once, saying why in a notification.
+async fn stops_soon<S, F>(at: Instant, systemctl: &S) -> bool
+where
+    S: Fn(&'static [&'static str]) -> F,
+    F: Future<Output = Result<String>>,
+{
+    while at.elapsed() < START_GRACE {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let state = systemctl(&["show", "--property=ActiveState", "--value", SERVICE_UNIT]).await;
+        if matches!(state.as_deref(), Ok("failed" | "inactive")) {
+            return true;
+        }
+    }
+    false
+}
+
 fn clipboard() -> &'static Mutex<Option<arboard::Clipboard>> {
     static CB: OnceLock<Mutex<Option<arboard::Clipboard>>> = OnceLock::new();
     CB.get_or_init(|| Mutex::new(arboard::Clipboard::new().ok()))
+}
+
+fn notifier() -> &'static Notifier {
+    static N: OnceLock<Notifier> = OnceLock::new();
+    N.get_or_init(|| Notifier::new(true))
+}
+
+async fn show_in_file_manager(path: String) -> Result<()> {
+    let uri = url::Url::from_file_path(&path)
+        .map(|u| u.to_string())
+        .unwrap_or(path);
+    let conn = zbus::Connection::session().await?;
+    conn.call_method(
+        Some("org.freedesktop.FileManager1"),
+        "/org/freedesktop/FileManager1",
+        Some("org.freedesktop.FileManager1"),
+        "ShowItems",
+        &(vec![uri], ""),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Shows what came of a command where the user is looking: in the panel if
+/// it's open, else in Settings if that is, else as a desktop notification.
+#[derive(Clone)]
+struct Reporter {
+    flyout: Weak<Flyout>,
+    settings: Weak<SettingsWindow>,
+}
+
+impl Reporter {
+    fn show(&self, text: String, error: bool) {
+        let (flyout, settings) = (self.flyout.clone(), self.settings.clone());
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(ui) = flyout.upgrade().filter(|ui| ui.window().is_visible()) {
+                ui.set_toast(text.clone().into());
+                let weak = ui.as_weak();
+                slint::Timer::single_shot(Duration::from_secs(4), move || {
+                    if let Some(ui) = weak.upgrade() {
+                        if ui.get_toast() == text.as_str() {
+                            ui.set_toast("".into());
+                        }
+                    }
+                });
+            } else if let Some(ui) = settings.upgrade().filter(|ui| ui.window().is_visible()) {
+                ui.set_message(text.into());
+                ui.set_message_error(error);
+            } else {
+                tokio::spawn(async move { notifier().send(&text, "").await });
+            }
+        });
+    }
+
+    fn error(&self, e: &anyhow::Error) {
+        tracing::warn!("{e:#}");
+        self.show(present::error_text(e), true);
+    }
 }
 
 impl Backend {
@@ -390,11 +639,30 @@ impl Backend {
             tx,
             flyout,
             settings,
+            bus: None,
             proxy: None,
             changed: None,
+            generation: 0,
             tray: None,
+            tray_shows: Default::default(),
+            status: Status::default(),
             account: Account::default(),
-            started_daemon: false,
+            local_usage: None,
+            config: Config::default(),
+            looked: false,
+            started: None,
+            start_watch: None,
+            refreshing: false,
+            stale: false,
+            urgent: false,
+            last_refresh: Instant::now(),
+        }
+    }
+
+    fn reporter(&self) -> Reporter {
+        Reporter {
+            flyout: self.flyout.clone(),
+            settings: self.settings.clone(),
         }
     }
 
@@ -412,14 +680,37 @@ impl Backend {
             let accent = axentra_onedrive_core::config::icon_accent(color);
             tray.update(move |t| t.accent = accent).await;
         }
+        // Writing the icon theme takes a moment; nothing waits for it.
         let c = color.to_string();
-        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || crate::icons::apply(&c)).await {
-            tracing::warn!("couldn't update the desktop icon: {e}");
-        }
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = crate::icons::apply(&c) {
+                tracing::warn!("couldn't update the desktop icon: {e}");
+            }
+        });
     }
 
-    fn config(&self) -> Config {
-        Config::load(&self.paths.config_file).unwrap_or_default()
+    /// Read config.toml, remembering it if it could be read.
+    fn load_config(&mut self) -> Result<Config> {
+        let cfg = Config::load(&self.paths.config_file)?;
+        self.config = cfg.clone();
+        Ok(cfg)
+    }
+
+    /// config.toml, or the last version of it that could be read: a hand
+    /// edit with a mistake in it mustn't move the OneDrive folder.
+    fn config(&mut self) -> Config {
+        self.load_config().unwrap_or_else(|e| {
+            tracing::warn!("{e:#}");
+            self.config.clone()
+        })
+    }
+
+    /// config.toml, to change and save. Writing defaults over a file that
+    /// couldn't be read would lose the app registration, folder and ignore
+    /// list in it, so that's an error to show instead.
+    fn config_to_change(&mut self) -> Result<Config> {
+        self.load_config()
+            .map_err(|e| anyhow::anyhow!(present::config_problem(&e)))
     }
 
     async fn run(mut self, mut rx: UnboundedReceiver<Cmd>, start_with_settings: bool) {
@@ -443,158 +734,344 @@ impl Backend {
         if start_with_settings {
             let _ = self.tx.send(Cmd::ShowSettings);
         }
+        // Every command is quick here: calls to the service that can take a
+        // while run in tasks of their own, so the tray and the windows never
+        // wait behind them.
         let mut tick = tokio::time::interval(Duration::from_secs(5));
         loop {
             if self.proxy.is_none() {
                 self.connect().await;
             }
+            let due = self.stale && !self.refreshing && self.proxy.is_some();
+            let at = if self.urgent {
+                Instant::now()
+            } else {
+                self.last_refresh + REFRESH_EVERY
+            };
+            // Look for the service often while it's starting.
+            let starting =
+                self.proxy.is_none() && self.started.is_some_and(|t| t.elapsed() < START_GRACE);
             tokio::select! {
                 cmd = rx.recv() => match cmd {
                     Some(cmd) => {
                         if let Err(e) = self.handle(cmd).await {
-                            tracing::warn!("{e:#}");
-                            self.toast(format!("{e}"));
+                            self.reporter().error(&e);
                         }
                     }
                     None => break,
                 },
-                Some(()) = next_change(&mut self.changed) => self.refresh().await,
-                _ = tick.tick() => self.refresh().await,
+                Some(()) = next_change(&mut self.changed) => self.stale = true,
+                _ = tick.tick() => self.stale = true,
+                _ = tokio::time::sleep_until(at.into()), if due => self.start_refresh(),
+                _ = tokio::time::sleep(Duration::from_millis(500)), if starting => {}
             }
         }
     }
 
     async fn connect(&mut self) {
-        let Ok(conn) = zbus::Connection::session().await else {
+        if self.bus.is_none() {
+            self.bus = zbus::Connection::session().await.ok();
+        }
+        let Some(bus) = self.bus.clone() else { return };
+        let found = match AxentraOneDriveProxy::new(&bus).await {
+            Ok(p) if p.status().await.is_ok() => Some(p),
+            _ => None,
+        };
+        if self.should_auto_start(found.is_some()) {
+            self.start_service(false);
+        }
+        let Some(p) = found else {
+            self.show_disconnected().await;
             return;
         };
-        if let Ok(p) = AxentraOneDriveProxy::new(&conn).await {
-            if p.status().await.is_ok() {
-                self.changed = p.receive_changed().await.ok();
-                self.proxy = Some(p);
-                self.refresh().await;
-                return;
-            }
+        self.changed = p.receive_changed().await.ok();
+        self.proxy = Some(p);
+        self.generation += 1;
+        self.started = None;
+        if let Some(watch) = self.start_watch.take() {
+            watch.abort();
         }
-        self.show_disconnected();
-        if !self.started_daemon {
-            self.started_daemon = true;
-            let unit_ok = Command::new("systemctl")
-                .args(["--user", "start", "axentra-onedrive.service"])
-                .stderr(Stdio::null())
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
-            if !unit_ok {
-                let _ = Command::new(sibling_binary("axentra-onedrive"))
+        self.refreshing = false;
+        self.start_refresh();
+    }
+
+    /// Whether to start the service, given whether it was `found` running:
+    /// only at the tray app's first look for it, whatever that finds.
+    fn should_auto_start(&mut self, found: bool) -> bool {
+        !std::mem::replace(&mut self.looked, true) && !found
+    }
+
+    /// Start the service (see [`start`]); `asked`: the user clicked Start.
+    fn start_service(&mut self, asked: bool) {
+        let at = Instant::now();
+        self.started = Some(at);
+        let (tx, report) = (self.tx.clone(), self.reporter());
+        let watch = tokio::spawn(async move {
+            // Without the unit (or systemd), it runs here: its log goes
+            // where the tray app's does, and the runtime reaps it.
+            let run_directly = || {
+                let mut daemon = tokio::process::Command::new(sibling_binary("axentra-onedrive"))
                     .arg("daemon")
                     .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn();
+                    .spawn()?;
+                Ok(async move {
+                    let _ = daemon.wait().await;
+                })
+            };
+            let started = start(asked, at, systemctl, run_directly).await;
+            if let (true, Started::Refused(why)) = (asked, &started) {
+                report.error(&anyhow::anyhow!("Couldn't start Axentra OneDrive: {why}"));
             }
+            if started != Started::Running {
+                let _ = tx.send(Cmd::StartFailed(at));
+            }
+        });
+        if let Some(old) = self.start_watch.replace(watch.abort_handle()) {
+            old.abort();
         }
     }
 
-    fn show_disconnected(&self) {
-        let st = Status {
-            state: "starting".into(),
-            message: "Starting Axentra OneDrive".into(),
-            detail: "Waiting for the sync service to start".into(),
-            ..Default::default()
+    /// No service: "Starting" just after asking it to start, otherwise that
+    /// it isn't running, with a button to start it.
+    async fn show_disconnected(&mut self) {
+        let starting = self.started.is_some_and(|t| t.elapsed() < START_GRACE);
+        let st = if starting {
+            Status {
+                state: "starting".into(),
+                message: "Starting Axentra OneDrive".into(),
+                detail: "Waiting for the sync service to start".into(),
+                ..Default::default()
+            }
+        } else {
+            Status {
+                state: "stopped".into(),
+                message: present::NOT_RUNNING.into(),
+                detail: "Your files aren't syncing until you start it again.".into(),
+                ..Default::default()
+            }
         };
+        self.update_tray(&st.state, st.message.clone()).await;
+        self.status = st.clone();
         let acct = self.account.clone();
         let _ = self
             .flyout
-            .upgrade_in_event_loop(move |ui| present::apply_flyout(&ui, &st, &acct, &[]));
+            .upgrade_in_event_loop(move |ui| present::apply_flyout(&ui, &st, &acct, Some(&[])));
+    }
+
+    async fn update_tray(&mut self, state: &str, tooltip: String) {
+        if self.tray_shows.0 == state && self.tray_shows.1 == tooltip {
+            return;
+        }
+        self.tray_shows = (state.to_string(), tooltip.clone());
+        if let Some(tray) = &self.tray {
+            let state = state.to_string();
+            tray.update(move |t| {
+                t.state = state;
+                t.tooltip = tooltip;
+            })
+            .await;
+        }
     }
 
     fn proxy(&self) -> Result<&AxentraOneDriveProxy<'static>> {
         self.proxy
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Axentra OneDrive isn't running yet"))
+            .ok_or_else(|| anyhow::anyhow!(present::NOT_RUNNING))
     }
 
-    async fn refresh(&mut self) {
+    /// Whether the panel and Settings are open, asked on the UI thread.
+    fn open_windows(&self) -> impl Future<Output = (bool, bool)> + Send + 'static {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (flyout, settings) = (self.flyout.clone(), self.settings.clone());
+        let _ = slint::invoke_from_event_loop(move || {
+            let _ = tx.send((
+                flyout.upgrade().is_some_and(|ui| ui.window().is_visible()),
+                settings
+                    .upgrade()
+                    .is_some_and(|ui| ui.window().is_visible()),
+            ));
+        });
+        async move { rx.await.unwrap_or((true, true)) }
+    }
+
+    /// Refresh now, or right after the refresh that is running.
+    fn refresh(&mut self) {
+        if self.refreshing {
+            self.stale = true;
+            self.urgent = true;
+        } else {
+            self.start_refresh();
+        }
+    }
+
+    /// Fetch the service's state in a task of its own; `Cmd::Refreshed`
+    /// brings it back. Each fetch costs the service scans of its database,
+    /// so the recent files are only fetched while the panel is open and the
+    /// space used on this device while Settings is.
+    fn start_refresh(&mut self) {
         let Some(p) = self.proxy.clone() else { return };
-        let fetched = async {
-            let st: Status = serde_json::from_str(&p.status().await?).unwrap_or_default();
-            let acct: Account = serde_json::from_str(&p.account().await?).unwrap_or_default();
-            let act: Vec<Activity> =
-                serde_json::from_str(&p.activity(40).await?).unwrap_or_default();
-            let usage = p.local_usage().await.unwrap_or(0);
-            Ok::<_, zbus::Error>((st, acct, act, usage))
-        }
-        .await;
-        let Ok((st, acct, act, usage)) = fetched else {
-            // The service went away; reconnect on the next pass.
-            self.proxy = None;
-            self.changed = None;
-            self.started_daemon = false;
-            self.show_disconnected();
-            return;
-        };
-        self.account = acct.clone();
-        if let Some(tray) = &self.tray {
-            let (state, tip) = (
-                st.state.clone(),
-                if st.detail.is_empty() {
-                    st.message.clone()
-                } else {
-                    format!("{}\n{}", st.message, st.detail)
-                },
-            );
-            tray.update(move |t| {
-                t.state = state;
-                t.tooltip = tip;
-            })
+        self.refreshing = true;
+        self.stale = false;
+        self.urgent = false;
+        self.last_refresh = Instant::now();
+        let (generation, tx, open) = (self.generation, self.tx.clone(), self.open_windows());
+        tokio::spawn(async move {
+            let (panel, settings) = open.await;
+            let fetched = async {
+                let status: Status = serde_json::from_str(&p.status().await?).unwrap_or_default();
+                let account: Account =
+                    serde_json::from_str(&p.account().await?).unwrap_or_default();
+                let activity = match panel {
+                    true => Some(serde_json::from_str(&p.activity(40).await?).unwrap_or_default()),
+                    false => None,
+                };
+                let local_usage = match settings {
+                    true => Some(p.local_usage().await?),
+                    false => None,
+                };
+                Ok::<_, zbus::Error>(Snapshot {
+                    status,
+                    account,
+                    activity,
+                    local_usage,
+                })
+            }
             .await;
-        }
-        let cfg = self.config();
-        let (st2, acct2) = (st.clone(), acct.clone());
-        let _ = self
-            .flyout
-            .upgrade_in_event_loop(move |ui| present::apply_flyout(&ui, &st, &acct, &act));
-        let _ = self.settings.upgrade_in_event_loop(move |ui| {
-            // Live values only; editable fields are loaded when the window opens.
-            let keep = (
-                ui.get_notify_deletes(),
-                ui.get_notify_conflicts(),
-                ui.get_notify_errors(),
-                ui.get_upload_mode(),
-                ui.get_upload_kbps(),
-                ui.get_download_mode(),
-                ui.get_download_kbps(),
-                ui.get_poll_index(),
-                ui.get_files_on_demand(),
-            );
-            present::apply_settings(&ui, &cfg, &st2, &acct2, usage);
-            ui.set_notify_deletes(keep.0);
-            ui.set_notify_conflicts(keep.1);
-            ui.set_notify_errors(keep.2);
-            ui.set_upload_mode(keep.3);
-            ui.set_upload_kbps(keep.4);
-            ui.set_download_mode(keep.5);
-            ui.set_download_kbps(keep.6);
-            ui.set_poll_index(keep.7);
-            ui.set_files_on_demand(keep.8);
+            let _ = tx.send(Cmd::Refreshed(generation, fetched.ok().map(Box::new)));
         });
     }
 
-    fn toast(&self, text: String) {
-        let _ = self.flyout.upgrade_in_event_loop({
-            let text = text.clone();
-            move |ui| ui.set_toast(text.into())
+    async fn show(&mut self, s: Snapshot) {
+        let tip = if s.status.detail.is_empty() {
+            s.status.message.clone()
+        } else {
+            format!("{}\n{}", s.status.message, s.status.detail)
+        };
+        self.update_tray(&s.status.state, tip).await;
+        self.status = s.status.clone();
+        self.account = s.account.clone();
+        let (st, acct, activity) = (s.status.clone(), s.account.clone(), s.activity);
+        let _ = self.flyout.upgrade_in_event_loop(move |ui| {
+            present::apply_flyout(&ui, &st, &acct, activity.as_deref())
         });
-        let flyout = self.flyout.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(4)).await;
-            let _ = flyout.upgrade_in_event_loop(move |ui| {
-                if ui.get_toast() == text.as_str() {
-                    ui.set_toast("".into());
-                }
+        if let Some(usage) = s.local_usage {
+            self.local_usage = Some(usage);
+            // Read again, quietly keeping the last good copy: `setup --folder`
+            // may have moved the folder while Settings is open, and the
+            // service restarted into it since.
+            let cfg = self.load_config().unwrap_or_else(|_| self.config.clone());
+            let (st, acct) = (s.status, s.account);
+            let _ = self.settings.upgrade_in_event_loop(move |ui| {
+                present::apply_live(&ui, &cfg, &st, &acct, Some(usage))
             });
+        }
+    }
+
+    /// Run a call to the service in a task of its own, then show what came
+    /// of it (a message on success, if `call` has one) and refresh.
+    fn spawn_call<F, Fut>(&self, call: F) -> Result<()>
+    where
+        F: FnOnce(AxentraOneDriveProxy<'static>) -> Fut,
+        Fut: Future<Output = Result<Option<String>>> + Send + 'static,
+    {
+        let done = call(self.proxy()?.clone());
+        let (report, tx) = (self.reporter(), self.tx.clone());
+        tokio::spawn(async move {
+            match done.await {
+                Ok(Some(text)) => report.show(text, false),
+                Ok(None) => {}
+                Err(e) => report.error(&e),
+            }
+            let _ = tx.send(Cmd::Refresh);
         });
+        Ok(())
+    }
+
+    /// Run `f` on Settings on the UI thread and wait for what it returns.
+    async fn with_settings<R: Send + 'static>(
+        &self,
+        f: impl FnOnce(&SettingsWindow) -> R + Send + 'static,
+    ) -> Result<R> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.settings.upgrade_in_event_loop(move |ui| {
+            let _ = tx.send(f(&ui));
+        })?;
+        Ok(rx.await?)
+    }
+
+    /// Show `cfg` in Settings, with the live values known so far.
+    fn show_settings_from(&self, cfg: Config) {
+        let (st, acct, usage) = (self.status.clone(), self.account.clone(), self.local_usage);
+        let _ = self
+            .settings
+            .upgrade_in_event_loop(move |ui| present::apply_settings(&ui, &cfg, &st, &acct, usage));
+    }
+
+    /// Save what Settings shows to config.toml and have the service apply
+    /// it. Turning Files On-Demand off downloads every file; turning it back
+    /// on frees up the space they take.
+    async fn save_settings(&mut self, on_demand: Option<bool>) -> Result<()> {
+        let mut cfg = match self.config_to_change() {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                // Nothing was saved, so put the controls back.
+                self.show_settings_from(self.config.clone());
+                return Err(e);
+            }
+        };
+        // Saving the choice without the service to download or free up the
+        // files would leave Settings showing what didn't happen.
+        if on_demand.is_some() {
+            if let Err(e) = self.proxy() {
+                self.show_settings_from(self.config.clone());
+                return Err(e);
+            }
+        }
+        let cfg = self
+            .with_settings(move |ui| {
+                present::read_settings(ui, &mut cfg);
+                cfg
+            })
+            .await?;
+        cfg.save(&self.paths.config_file)?;
+        self.config = cfg;
+        let (mount, tx) = (self.mount(), self.tx.clone());
+        self.spawn_call(move |p| async move {
+            let applied = async {
+                p.reload().await?;
+                Ok::<_, zbus::Error>(match on_demand {
+                    Some(false) => {
+                        p.pin(vec![mount]).await?;
+                        None
+                    }
+                    Some(true) => present::kept_note(p.free_up_space(vec![mount]).await?),
+                    None => None,
+                })
+            }
+            .await;
+            if let (Err(_), Some(on)) = (&applied, on_demand) {
+                let _ = tx.send(Cmd::UndoOnDemand(on));
+            }
+            Ok(applied?)
+        })
+    }
+
+    /// Put Files On-Demand back as it was before turning it to `on` failed,
+    /// unless it has been changed again since.
+    fn undo_on_demand(&mut self, on: bool) -> Result<()> {
+        let mut cfg = self.config_to_change()?;
+        if cfg.files_on_demand == on {
+            cfg.files_on_demand = !on;
+            cfg.save(&self.paths.config_file)?;
+            self.config = cfg.clone();
+            if let Some(p) = self.proxy.clone() {
+                tokio::spawn(async move {
+                    let _ = p.reload().await;
+                });
+            }
+        }
+        self.show_settings_from(cfg);
+        Ok(())
     }
 
     fn hide_flyout(&self) {
@@ -603,7 +1080,13 @@ impl Backend {
         });
     }
 
-    fn mount(&self) -> String {
+    /// The OneDrive folder. A new location in config.toml only takes effect
+    /// when the service restarts, so while it runs it's where the service
+    /// has it, and otherwise where config.toml puts it.
+    fn mount(&mut self) -> String {
+        if !self.status.mount_point.is_empty() {
+            return self.status.mount_point.clone();
+        }
         self.config().mount_path().display().to_string()
     }
 
@@ -634,36 +1117,52 @@ impl Backend {
                         show_flyout(&ui, click);
                     }
                 });
-                self.refresh().await;
+                self.refresh();
             }
-            Cmd::HideFlyout => {
-                let _ = self.flyout.upgrade_in_event_loop(|ui| {
-                    let _ = ui.hide();
-                });
-            }
+            Cmd::HideFlyout => self.hide_flyout(),
             Cmd::ShowSettings => {
-                let cfg = self.config();
-                let _ = self.flyout.upgrade_in_event_loop(|ui| {
-                    let _ = ui.hide();
-                });
-                let acct = self.account.clone();
+                let loaded = self.load_config();
+                let problem = loaded.as_ref().err().map(present::config_problem);
+                let cfg = loaded.unwrap_or_else(|_| self.config.clone());
+                self.hide_flyout();
+                let (st, acct, usage) =
+                    (self.status.clone(), self.account.clone(), self.local_usage);
                 let _ = self.settings.upgrade_in_event_loop(move |ui| {
-                    present::apply_settings(&ui, &cfg, &Status::default(), &acct, 0);
+                    let window = ui.window();
+                    // Already open, perhaps behind other windows: bring it to
+                    // the front. Wayland only gives the focus to a new window.
+                    let raise = window.is_visible();
+                    let x11 = crate::panel::is_x11();
+                    if raise && !x11 {
+                        let _ = window.hide();
+                    }
+                    present::apply_settings(&ui, &cfg, &st, &acct, usage);
+                    ui.set_message(problem.unwrap_or_default().into());
+                    ui.set_message_error(true);
                     let _ = ui.show();
+                    if raise && x11 {
+                        window.with_winit_window(|w| w.set_minimized(false));
+                        if let Some(id) = x11_id(window) {
+                            crate::panel::activate(id);
+                        }
+                    }
                 });
-                self.refresh().await;
+                self.refresh();
             }
             Cmd::OpenFolder => {
                 self.hide_flyout();
                 open(&self.mount());
             }
             Cmd::ViewOnline => {
-                let url = match self.proxy() {
-                    Ok(p) => p.web_url(self.mount()).await.ok(),
-                    Err(_) => None,
-                };
                 self.hide_flyout();
-                open(&url.unwrap_or_else(|| "https://onedrive.live.com/my".into()));
+                let (mount, proxy) = (self.mount(), self.proxy.clone());
+                tokio::spawn(async move {
+                    let url = match proxy {
+                        Some(p) => p.web_url(mount).await.ok(),
+                        None => None,
+                    };
+                    open(&url.unwrap_or_else(|| "https://onedrive.live.com/my".into()));
+                });
             }
             Cmd::OpenSource => {
                 open("https://github.com/MECMwithShawn/Axentra-Software/tree/main/OneDrive")
@@ -680,52 +1179,31 @@ impl Backend {
                     "https://onedrive.live.com/?v=managestorage"
                 });
             }
-            Cmd::Pause(h) => {
-                self.proxy()?.pause(h * 3600).await?;
-                self.refresh().await;
-            }
-            Cmd::Resume => {
-                self.proxy()?.resume().await?;
-                self.refresh().await;
-            }
-            Cmd::TogglePause(on) => {
-                if on {
-                    self.proxy()?.pause(2 * 3600).await?;
-                } else {
-                    self.proxy()?.resume().await?;
-                }
-                self.refresh().await;
-            }
+            Cmd::Pause(h) => self.spawn_call(move |p| async move {
+                p.pause(h * 3600).await?;
+                Ok(None)
+            })?,
+            Cmd::Resume | Cmd::TogglePause(false) => self.spawn_call(|p| async move {
+                p.resume().await?;
+                Ok(None)
+            })?,
+            Cmd::TogglePause(true) => self.spawn_call(|p| async move {
+                p.pause(2 * 3600).await?;
+                Ok(None)
+            })?,
             Cmd::SignIn => {
                 let cli = sibling_binary("axentra-onedrive");
-                if self.config().client_id.is_empty() {
-                    // First run: the app registration has to be entered once.
-                    let script = format!(
-                        "{0} setup && {0} login; echo; read -p 'Press Enter to close' _",
-                        cli.display()
-                    );
-                    let _ = Command::new("gnome-terminal")
-                        .args([
-                            "--title",
-                            "Set up Axentra OneDrive",
-                            "--",
-                            "bash",
-                            "-c",
-                            &script,
-                        ])
-                        .spawn()
-                        .or_else(|_| {
-                            Command::new("x-terminal-emulator")
-                                .args(["-e", "bash", "-c", &script])
-                                .spawn()
-                        });
-                } else {
-                    let _ = Command::new(cli)
+                let registered = !self.config().client_id.is_empty();
+                let login = || {
+                    let _ = Command::new(&cli)
                         .arg("login")
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .spawn();
-                    self.toast("Finish signing in in your browser".into());
+                };
+                if sign_in(&cli, registered, open_terminal, login)? == SignIn::InBrowser {
+                    self.reporter()
+                        .show("Continue in your browser to sign in".into(), false);
                 }
             }
             Cmd::Quit => {
@@ -745,75 +1223,359 @@ impl Backend {
             }
             Cmd::RevealItem(path) => {
                 self.hide_flyout();
-                let uri = url::Url::from_file_path(&path)
-                    .map(|u| u.to_string())
-                    .unwrap_or(path);
-                let conn = zbus::Connection::session().await?;
-                conn.call_method(
-                    Some("org.freedesktop.FileManager1"),
-                    "/org/freedesktop/FileManager1",
-                    Some("org.freedesktop.FileManager1"),
-                    "ShowItems",
-                    &(vec![uri], ""),
-                )
-                .await?;
+                let report = self.reporter();
+                tokio::spawn(async move {
+                    if let Err(e) = show_in_file_manager(path).await {
+                        report.error(&e);
+                    }
+                });
             }
-            Cmd::ShareItem(path) => {
-                let link = self.proxy()?.share_link(path, false).await?;
+            Cmd::ShareItem(path) => self.spawn_call(move |p| async move {
+                let link = p.share_link(path, false).await?;
                 let copied = clipboard()
                     .lock()
                     .ok()
                     .and_then(|mut c| c.as_mut().map(|c| c.set_text(link.clone()).is_ok()))
                     .unwrap_or(false);
-                self.toast(if copied {
+                Ok(Some(if copied {
                     "Link copied. Anyone with the link can view.".into()
                 } else {
                     link
-                });
-            }
+                }))
+            })?,
             Cmd::ItemOnline(path) => {
                 self.hide_flyout();
-                let url = self.proxy()?.web_url(path).await?;
-                open(&url);
+                self.spawn_call(move |p| async move {
+                    open(&p.web_url(path).await?);
+                    Ok(None)
+                })?;
             }
-            Cmd::SettingsChanged | Cmd::SetOnDemand(_) => {
-                let pin_all = matches!(cmd, Cmd::SetOnDemand(false));
-                let path = self.paths.config_file.clone();
-                let tx = self.tx.clone();
-                let _ = self.settings.upgrade_in_event_loop(move |ui| {
-                    let mut cfg = Config::load(&path).unwrap_or_default();
-                    present::read_settings(&ui, &mut cfg);
-                    if let Err(e) = cfg.save(&path) {
-                        tracing::warn!("couldn't save settings: {e:#}");
-                    }
-                    let _ = tx.send(Cmd::Reload);
-                });
-                if pin_all {
-                    self.proxy()?.pin(vec![self.mount()]).await?;
-                }
-            }
+            Cmd::SettingsChanged => self.save_settings(None).await?,
+            Cmd::SetOnDemand(on) => self.save_settings(Some(on)).await?,
+            Cmd::UndoOnDemand(on) => self.undo_on_demand(on)?,
             Cmd::SetIconColor(color) => {
                 if !axentra_onedrive_core::config::ICON_COLORS.contains(&color.as_str()) {
                     anyhow::bail!("unknown icon colour {color}");
                 }
-                let mut cfg = self.config();
+                let mut cfg = self.config_to_change()?;
                 cfg.icon_color = color.clone();
                 cfg.save(&self.paths.config_file)?;
+                self.config = cfg;
                 self.show_icon_color(&color).await;
             }
-            Cmd::Reload => {
-                self.proxy()?.reload().await?;
-                self.refresh().await;
-            }
             Cmd::FreeUpSpace => {
-                self.proxy()?.free_up_space(vec![self.mount()]).await?;
-                self.refresh().await;
+                let mount = self.mount();
+                self.spawn_call(move |p| async move {
+                    Ok(present::kept_note(p.free_up_space(vec![mount]).await?))
+                })?;
             }
-            Cmd::Unlink => {
-                self.proxy()?.sign_out().await?;
-                self.refresh().await;
+            Cmd::Unlink => self.spawn_call(|p| async move {
+                p.sign_out().await?;
+                Ok(None)
+            })?,
+            Cmd::StartService => {
+                self.start_service(true);
+                self.show_disconnected().await;
+            }
+            Cmd::StartFailed(at) => {
+                // Not "Starting" any more: it isn't running, and says why.
+                if self.proxy.is_none() && self.started == Some(at) {
+                    self.started = None;
+                    self.show_disconnected().await;
+                }
+            }
+            Cmd::Refresh => self.refresh(),
+            Cmd::Refreshed(generation, snapshot) => {
+                if generation != self.generation {
+                    return Ok(());
+                }
+                self.refreshing = false;
+                match snapshot {
+                    Some(s) => self.show(*s).await,
+                    None => {
+                        // The service went away. It isn't started again
+                        // here: it was stopped on purpose, or it crashed
+                        // and systemd restarts it.
+                        self.proxy = None;
+                        self.changed = None;
+                        self.show_disconnected().await;
+                    }
+                }
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn backend(paths: Paths) -> Backend {
+        crate::shot::headless();
+        let (tx, _rx) = unbounded_channel();
+        let mut backend = Backend::new(tx, Weak::default(), Weak::default());
+        backend.paths = paths;
+        backend
+    }
+
+    fn block_on<T>(f: impl Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(f)
+    }
+
+    #[test]
+    fn a_config_with_a_mistake_is_left_alone() {
+        let dir = std::env::temp_dir().join(format!("axentra-ui-app-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::under(&dir);
+        let text = "client_id = \"my-app\"\nmount_point = \"/data/OneDrive\"\nignore = \"*.tmp\"\n";
+        std::fs::write(&paths.config_file, text).unwrap();
+        let mut backend = backend(paths.clone());
+        for cmd in [
+            Cmd::SettingsChanged,
+            Cmd::SetOnDemand(false),
+            Cmd::SetIconColor("azure".into()),
+        ] {
+            let e = block_on(backend.handle(cmd)).unwrap_err();
+            assert!(e.to_string().contains("mistake on line 3"), "{e}");
+        }
+        assert_eq!(std::fs::read_to_string(&paths.config_file).unwrap(), text);
+        // What the app goes on using is the last config it could read.
+        assert_eq!(backend.config().client_id, "");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn files_on_demand_waits_for_the_service() {
+        let dir = std::env::temp_dir().join(format!("axentra-ui-fod-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::under(&dir);
+        let text = "client_id = \"my-app\"\nfiles_on_demand = false\n";
+        std::fs::write(&paths.config_file, text).unwrap();
+        let mut backend = backend(paths.clone());
+        // Nothing could be freed up without the service, so nothing is saved.
+        for on in [true, false] {
+            let e = block_on(backend.handle(Cmd::SetOnDemand(on))).unwrap_err();
+            assert_eq!(e.to_string(), present::NOT_RUNNING);
+        }
+        assert_eq!(std::fs::read_to_string(&paths.config_file).unwrap(), text);
+        assert!(!backend.config.files_on_demand);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_stopped_service_stays_stopped() {
+        for running_at_first in [true, false] {
+            let mut backend = backend(Paths::under(&std::env::temp_dir()));
+            // The tray app's first look: started only if it wasn't running.
+            assert_eq!(
+                backend.should_auto_start(running_at_first),
+                !running_at_first
+            );
+            // Then stopped by the user.
+            let generation = backend.generation;
+            block_on(backend.handle(Cmd::Refreshed(generation, None))).unwrap();
+            assert!(backend.proxy.is_none());
+            assert!(backend.started.is_none());
+            assert_eq!(backend.status.state, "stopped");
+            assert_eq!(backend.status.message, present::NOT_RUNNING);
+            // Looking for it again doesn't start it.
+            assert!(!backend.should_auto_start(false));
+        }
+    }
+
+    #[test]
+    fn a_start_that_fails_stops_saying_starting() {
+        let mut backend = backend(Paths::under(&std::env::temp_dir()));
+        let at = Instant::now();
+        backend.started = Some(at);
+        block_on(backend.show_disconnected());
+        assert_eq!(backend.status.state, "starting");
+        // About a start asked for before this one: nothing changes.
+        let earlier = at - Duration::from_secs(1);
+        block_on(backend.handle(Cmd::StartFailed(earlier))).unwrap();
+        assert_eq!(backend.status.state, "starting");
+        block_on(backend.handle(Cmd::StartFailed(at))).unwrap();
+        assert!(backend.started.is_none());
+        assert_eq!(backend.status.state, "stopped");
+    }
+
+    /// `start` with systemctl answering each command from `answers` (by an
+    /// argument in it; the rest succeed, saying nothing): how it went, the
+    /// commands it ran, and whether it ran the service directly.
+    fn start_with(
+        asked: bool,
+        answers: &[(&str, Result<&str, &str>)],
+    ) -> (Started, Vec<String>, bool) {
+        let ran = std::cell::RefCell::new(Vec::new());
+        let systemctl = |args: &'static [&'static str]| {
+            ran.borrow_mut().push(args.join(" "));
+            let answer = answers
+                .iter()
+                .find(|(arg, _)| args.contains(arg))
+                .map_or(Ok(""), |(_, a)| *a);
+            async move {
+                answer
+                    .map(str::to_string)
+                    .map_err(|e| anyhow::anyhow!("{e}"))
+            }
+        };
+        let directly = Cell::new(false);
+        let run_directly = || {
+            directly.set(true);
+            Ok(std::future::ready(()))
+        };
+        let started = block_on(start(asked, Instant::now(), systemctl, run_directly));
+        (started, ran.into_inner(), directly.get())
+    }
+
+    #[test]
+    fn the_service_is_run_directly_only_without_its_unit() {
+        const RESET: &str = "reset-failed axentra-onedrive.service";
+        const START: &str = "start axentra-onedrive.service";
+        const LOAD_STATE: &str = "show --property=LoadState --value axentra-onedrive.service";
+        const REFUSED: Result<&str, &str> = Err("Unit axentra-onedrive.service is masked.");
+        for (asked, load_state) in [(true, "masked"), (false, "loaded")] {
+            let answers = [("start", REFUSED), ("--property=LoadState", Ok(load_state))];
+            let (started, ran, directly) = start_with(asked, &answers);
+            // Clicking Start clears an earlier failure first.
+            let expected = if asked {
+                vec![RESET, START, LOAD_STATE]
+            } else {
+                vec![START, LOAD_STATE]
+            };
+            assert_eq!(ran, expected);
+            // Installed but refused: said why, not run another way.
+            assert_eq!(
+                started,
+                Started::Refused("Unit axentra-onedrive.service is masked.".into())
+            );
+            assert!(!directly);
+        }
+        // Not installed, or no systemd to ask: run here.
+        for load_state in [Ok("not-found"), Ok(""), Err("Failed to connect to bus")] {
+            let answers = [("start", REFUSED), ("--property=LoadState", load_state)];
+            let (started, _, directly) = start_with(true, &answers);
+            assert!(directly);
+            // It exited at once.
+            assert_eq!(started, Started::Stopped);
+        }
+        // Started by systemd, then stopped again.
+        let answers = [("--property=ActiveState", Ok("failed"))];
+        let (started, ran, directly) = start_with(false, &answers);
+        assert_eq!(started, Started::Stopped);
+        assert_eq!(ran[0], START);
+        assert!(!directly);
+    }
+
+    #[test]
+    fn the_folder_is_where_the_service_has_it() {
+        let dir = std::env::temp_dir().join(format!("axentra-ui-mount-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::under(&dir);
+        // Moved in config.toml; the service keeps the old one until it restarts.
+        std::fs::write(&paths.config_file, "mount_point = \"/data/New\"\n").unwrap();
+        let mut backend = backend(paths);
+        backend.status.mount_point = "/data/Old".into();
+        assert_eq!(backend.mount(), "/data/Old");
+        // Not running: where it will be.
+        let generation = backend.generation;
+        block_on(backend.handle(Cmd::Refreshed(generation, None))).unwrap();
+        assert_eq!(backend.mount(), "/data/New");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn settings_follow_the_folder_moved_while_open() {
+        let dir = std::env::temp_dir().join(format!("axentra-ui-moved-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::under(&dir);
+        std::fs::write(&paths.config_file, "mount_point = \"/data/Old\"\n").unwrap();
+        let mut backend = backend(paths.clone());
+        // Settings opens.
+        block_on(backend.handle(Cmd::ShowSettings)).unwrap();
+        let refreshed = |mount: &str| {
+            Box::new(Snapshot {
+                status: Status {
+                    mount_point: mount.into(),
+                    ..Default::default()
+                },
+                account: Account::default(),
+                activity: None,
+                local_usage: Some(0),
+            })
+        };
+        // `setup --folder /data/New`, then the service restarts into it.
+        std::fs::write(&paths.config_file, "mount_point = \"/data/New\"\n").unwrap();
+        let generation = backend.generation;
+        block_on(backend.handle(Cmd::Refreshed(generation, Some(refreshed("/data/Old"))))).unwrap();
+        assert_eq!(backend.config.mount_path(), Path::new("/data/New"));
+        block_on(backend.handle(Cmd::Refreshed(generation, Some(refreshed("/data/New"))))).unwrap();
+        assert_eq!(backend.config.mount_path(), Path::new("/data/New"));
+        // A mistake made meanwhile: the last good copy stays.
+        std::fs::write(&paths.config_file, "mount_point = 7\n").unwrap();
+        block_on(backend.handle(Cmd::Refreshed(generation, Some(refreshed("/data/New"))))).unwrap();
+        assert_eq!(backend.config.mount_path(), Path::new("/data/New"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn sign_in_can_replace_the_app_registration() {
+        let cli = Path::new("/opt/axentra/axentra-onedrive");
+        for registered in [false, true] {
+            // With one already too: it may be the wrong one (Enter keeps it).
+            let ran = std::cell::RefCell::new(String::new());
+            let terminal = |_: &str, script: &str| {
+                *ran.borrow_mut() = script.to_string();
+                Ok(())
+            };
+            let went = sign_in(cli, registered, terminal, || {
+                panic!("signed in without setup")
+            });
+            assert_eq!(went.unwrap(), SignIn::InTerminal);
+            let script = ran.into_inner();
+            assert!(
+                script.starts_with(
+                    "/opt/axentra/axentra-onedrive setup && /opt/axentra/axentra-onedrive login;"
+                ),
+                "{script}"
+            );
+        }
+        // No terminal: straight to the browser with the one there is...
+        let no_terminal =
+            |_: &str, _: &str| -> std::io::Result<()> { Err(std::io::ErrorKind::NotFound.into()) };
+        let logged_in = Cell::new(false);
+        let went = sign_in(cli, true, no_terminal, || logged_in.set(true));
+        assert_eq!(went.unwrap(), SignIn::InBrowser);
+        assert!(logged_in.get());
+        // ...but on the first run there's none to sign in with.
+        let e = sign_in(cli, false, no_terminal, || panic!("no app registration")).unwrap_err();
+        assert!(e.to_string().contains("`axentra-onedrive setup`"), "{e}");
+    }
+
+    #[test]
+    fn files_on_demand_goes_back_if_it_wasnt_applied() {
+        let dir = std::env::temp_dir().join(format!("axentra-ui-undo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::under(&dir);
+        let text = |on: bool| format!("# mine\nclient_id = \"my-app\"\nfiles_on_demand = {on}\n");
+        let mut backend = backend(paths.clone());
+        // "Download all files" was saved, then downloading them failed.
+        std::fs::write(&paths.config_file, text(false)).unwrap();
+        block_on(backend.handle(Cmd::UndoOnDemand(false))).unwrap();
+        assert!(Config::load(&paths.config_file).unwrap().files_on_demand);
+        assert!(backend.config.files_on_demand);
+        // Changed back since: left alone.
+        std::fs::write(&paths.config_file, text(true)).unwrap();
+        block_on(backend.handle(Cmd::UndoOnDemand(false))).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&paths.config_file).unwrap(),
+            text(true)
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

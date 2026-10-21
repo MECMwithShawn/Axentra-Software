@@ -1,11 +1,19 @@
 [Unit]
 Description=Axentra OneDrive sync (Files On-Demand)
+# Retrying forever helps nothing when a start keeps failing the same way.
+# Starts by hand count too, so after a fix it's reset-failed, then restart.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 ExecStart=@APP@/axentra-onedrive daemon
 Restart=on-failure
 RestartSec=10
+# 78: a problem only the user can fix (a mistake in config.toml, files
+# already in the OneDrive folder). It says why in a notification and stays
+# stopped until they fix it and start it again.
+RestartPreventExitStatus=78
 TimeoutStopSec=20
 Environment=RUST_LOG=info,fuser=error
 

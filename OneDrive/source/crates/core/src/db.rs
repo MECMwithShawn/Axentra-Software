@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 
 pub const ROOT: u64 = 1;
 
+/// Deeper than any real folder tree (OneDrive paths are at most 400
+/// characters), so a broken parent chain can't make a walk up or down loop.
+pub const MAX_DEPTH: usize = 400;
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Item {
     pub ino: u64,
@@ -145,6 +149,7 @@ CREATE TABLE IF NOT EXISTS items (
   seen INTEGER NOT NULL DEFAULT 1
 );
 CREATE UNIQUE INDEX IF NOT EXISTS items_by_name ON items(parent, name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS items_by_parent ON items(parent);
 CREATE TABLE IF NOT EXISTS tombstones (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL, is_dir INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS activity (
@@ -161,7 +166,9 @@ CREATE TABLE IF NOT EXISTS thumbs (
   ino INTEGER PRIMARY KEY,
   md5 TEXT NOT NULL,
   mtime INTEGER NOT NULL,
-  sizes INTEGER NOT NULL
+  sizes INTEGER NOT NULL,
+  missed INTEGER NOT NULL DEFAULT 0,
+  first_missed INTEGER NOT NULL DEFAULT 0
 );
 INSERT OR IGNORE INTO items(ino, parent, name, is_dir, mtime) VALUES (1, 0, '', 1, 0);
 ";
@@ -193,8 +200,13 @@ pub struct Thumb {
     pub md5: String,
     /// The file's modification time then, in Unix seconds.
     pub mtime: i64,
-    /// Which sizes were written (`Bucket::bit`); 0 when OneDrive has none.
+    /// Which sizes were written (`Bucket::bit`).
     pub sizes: u32,
+    /// When OneDrive last had no preview of this version (Unix seconds), or
+    /// 0 if it had one.
+    pub missed: i64,
+    /// When it first had none of this version, or 0 if it had one.
+    pub first_missed: i64,
 }
 
 #[derive(Debug, Clone)]
@@ -212,6 +224,30 @@ impl Db {
         let conn = Connection::open(path)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch(SCHEMA)?;
+        // Made before thumbs kept misses.
+        let has = |col: &str| -> rusqlite::Result<bool> {
+            conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('thumbs') WHERE name = ?1",
+                [col],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+        };
+        if !has("missed")? {
+            conn.execute(
+                "ALTER TABLE thumbs ADD COLUMN missed INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !has("first_missed")? {
+            // A miss kept without it counts as the first.
+            conn.execute_batch(
+                "BEGIN; \
+                 ALTER TABLE thumbs ADD COLUMN first_missed INTEGER NOT NULL DEFAULT 0; \
+                 UPDATE thumbs SET first_missed = missed; \
+                 COMMIT;",
+            )?;
+        }
         Ok(Self(Mutex::new(conn)))
     }
 
@@ -243,6 +279,12 @@ impl Store<'_> {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    fn inos(&self, sql: &str, p: impl rusqlite::Params) -> Result<Vec<u64>> {
+        let mut st = self.0.prepare_cached(sql)?;
+        let rows = st.query_map(p, |r| r.get::<_, i64>(0).map(|i| i as u64))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     pub fn get(&self, ino: u64) -> Result<Option<Item>> {
         self.one("ino = ?1", params![ino as i64])
     }
@@ -269,6 +311,19 @@ impl Store<'_> {
         )
     }
 
+    /// Up to `limit` children (ino, is_dir, name) with an inode above
+    /// `after`, in inode order: one page of a folder listing.
+    pub fn listing(&self, parent: u64, after: u64, limit: u32) -> Result<Vec<(u64, bool, String)>> {
+        let mut st = self.0.prepare_cached(
+            "SELECT ino, is_dir, name FROM items WHERE parent = ?1 AND ino > ?2 AND ino != 1 \
+             ORDER BY ino LIMIT ?3",
+        )?;
+        let rows = st.query_map(params![parent as i64, after as i64, limit], |r| {
+            Ok((r.get::<_, i64>(0)? as u64, r.get(1)?, r.get(2)?))
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     pub fn child_count(&self, parent: u64) -> Result<u64> {
         let n: i64 = self.0.query_row(
             "SELECT COUNT(*) FROM items WHERE parent = ?1 AND ino != 1",
@@ -293,12 +348,71 @@ impl Store<'_> {
         self.many(
             &format!(
                 "WITH RECURSIVE t(ino, depth) AS (SELECT ?1, 0 UNION ALL \
-                 SELECT i.ino, t.depth + 1 FROM items i JOIN t ON i.parent = t.ino WHERE i.ino != 1) \
+                 SELECT i.ino, t.depth + 1 FROM items i JOIN t ON i.parent = t.ino \
+                 WHERE i.ino != 1 AND t.depth < {MAX_DEPTH}) \
                  SELECT {} FROM items i JOIN t ON i.ino = t.ino ORDER BY t.depth, i.ino",
                 cols("i.")
             ),
             params![ino as i64],
         )
+    }
+
+    /// Inodes of the item and everything below it, without loading the rows.
+    pub fn subtree_inos(&self, ino: u64) -> Result<Vec<u64>> {
+        if ino == ROOT {
+            return self.inos("SELECT ino FROM items ORDER BY ino", []);
+        }
+        self.inos(
+            "WITH RECURSIVE t(ino) AS (SELECT ?1 UNION \
+             SELECT i.ino FROM items i JOIN t ON i.parent = t.ino WHERE i.ino != 1) \
+             SELECT ino FROM t",
+            params![ino as i64],
+        )
+    }
+
+    /// Files under `ino` (or `ino` itself) whose content is on this device.
+    pub fn cached_files_under(&self, ino: u64) -> Result<Vec<u64>> {
+        if ino == ROOT {
+            return self.inos(
+                "SELECT ino FROM items WHERE is_dir = 0 AND cached = 1 ORDER BY ino",
+                [],
+            );
+        }
+        self.inos(
+            "WITH RECURSIVE t(ino) AS (SELECT ?1 UNION \
+             SELECT i.ino FROM items i JOIN t ON i.parent = t.ino WHERE i.ino != 1) \
+             SELECT i.ino FROM items i JOIN t ON i.ino = t.ino WHERE i.is_dir = 0 AND i.cached = 1",
+            params![ino as i64],
+        )
+    }
+
+    pub fn set_pinned(&self, ino: u64, pinned: bool) -> Result<()> {
+        self.0
+            .prepare_cached("UPDATE items SET pinned = ?2 WHERE ino = ?1 AND pinned != ?2")?
+            .execute(params![ino as i64, pinned])?;
+        Ok(())
+    }
+
+    /// Whether the item is shared. True if that changed it.
+    pub fn set_shared(&self, ino: u64, shared: bool) -> Result<bool> {
+        let n = self
+            .0
+            .prepare_cached("UPDATE items SET shared = ?2 WHERE ino = ?1 AND shared != ?2")?
+            .execute(params![ino as i64, shared])?;
+        Ok(n == 1)
+    }
+
+    /// Stop counting a file's local copy as on this device, if it's safely
+    /// online. False if it has changes still to upload (or isn't cached).
+    pub fn mark_online_only(&self, ino: u64) -> Result<bool> {
+        let n = self
+            .0
+            .prepare_cached(
+                "UPDATE items SET cached = 0 \
+                 WHERE ino = ?1 AND is_dir = 0 AND cached = 1 AND dirty = 0 AND id IS NOT NULL",
+            )?
+            .execute(params![ino as i64])?;
+        Ok(n == 1)
     }
 
     pub fn insert(&self, it: &Item) -> Result<u64> {
@@ -349,7 +463,7 @@ impl Store<'_> {
     pub fn path(&self, ino: u64) -> Result<String> {
         let mut parts = Vec::new();
         let mut cur = ino;
-        while cur != ROOT {
+        while cur != ROOT && parts.len() < MAX_DEPTH {
             let Some(it) = self.get(cur)? else { break };
             parts.push(it.name);
             cur = it.parent;
@@ -380,7 +494,10 @@ impl Store<'_> {
 
     pub fn is_inside(&self, ino: u64, ancestor: u64) -> Result<bool> {
         let mut cur = ino;
-        while cur != ROOT && cur != 0 {
+        for _ in 0..MAX_DEPTH {
+            if cur == ROOT || cur == 0 {
+                break;
+            }
             if cur == ancestor {
                 return Ok(true);
             }
@@ -413,8 +530,27 @@ impl Store<'_> {
         self.pending("c.moved = 1 AND c.id IS NOT NULL")
     }
 
-    pub fn uploads(&self) -> Result<Vec<Item>> {
-        self.pending("c.is_dir = 0 AND c.cached = 1 AND (c.dirty = 1 OR c.id IS NULL)")
+    /// OneDrive IDs of everything moved or renamed here but not online yet,
+    /// including items whose new folder isn't online itself.
+    pub fn moved_ids(&self) -> Result<Vec<String>> {
+        let mut st = self
+            .0
+            .prepare_cached("SELECT id FROM items WHERE moved = 1 AND id IS NOT NULL")?;
+        let rows = st.query_map([], |r| r.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Files with content to upload, each with the OneDrive item of its
+    /// folder: `None` while that isn't online itself, and the file waits.
+    pub fn uploads(&self) -> Result<Vec<(Item, Option<String>)>> {
+        let mut st = self.0.prepare_cached(&format!(
+            "SELECT {}, p.id FROM items c LEFT JOIN items p ON c.parent = p.ino \
+             WHERE c.ino != 1 AND c.local_only = 0 AND c.is_dir = 0 AND c.cached = 1 \
+             AND (c.dirty = 1 OR c.id IS NULL) ORDER BY c.ino",
+            cols("c.")
+        ))?;
+        let rows = st.query_map([], |r| Ok((row_item(r)?, r.get(COLS.len())?)))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub fn pinned_uncached(&self) -> Result<Vec<Item>> {
@@ -513,6 +649,19 @@ impl Store<'_> {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Deleted here, and the delete not pushed yet.
+    pub fn is_tombstoned(&self, id: &str) -> Result<bool> {
+        Ok(self
+            .0
+            .query_row(
+                "SELECT 1 FROM tombstones WHERE id = ?1",
+                params![id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some())
+    }
+
     pub fn remove_tombstone(&self, id: &str) -> Result<()> {
         self.0
             .execute("DELETE FROM tombstones WHERE id = ?1", params![id])?;
@@ -525,7 +674,7 @@ impl Store<'_> {
         Ok(self
             .0
             .query_row(
-                "SELECT ino, md5, mtime, sizes FROM thumbs WHERE ino = ?1",
+                "SELECT ino, md5, mtime, sizes, missed, first_missed FROM thumbs WHERE ino = ?1",
                 params![ino as i64],
                 |r| {
                     Ok(Thumb {
@@ -533,6 +682,8 @@ impl Store<'_> {
                         md5: r.get(1)?,
                         mtime: r.get(2)?,
                         sizes: r.get(3)?,
+                        missed: r.get(4)?,
+                        first_missed: r.get(5)?,
                     })
                 },
             )
@@ -541,8 +692,16 @@ impl Store<'_> {
 
     pub fn set_thumb(&self, t: &Thumb) -> Result<()> {
         self.0.execute(
-            "INSERT OR REPLACE INTO thumbs (ino, md5, mtime, sizes) VALUES (?1, ?2, ?3, ?4)",
-            params![t.ino as i64, t.md5, t.mtime, t.sizes],
+            "INSERT OR REPLACE INTO thumbs (ino, md5, mtime, sizes, missed, first_missed) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                t.ino as i64,
+                t.md5,
+                t.mtime,
+                t.sizes,
+                t.missed,
+                t.first_missed
+            ],
         )?;
         Ok(())
     }
@@ -574,7 +733,7 @@ impl Store<'_> {
     /// The same for `ino` and everything below it (it moved, so their paths changed).
     pub fn take_thumbs_under(&self, ino: u64) -> Result<Vec<String>> {
         self.take_thumbs_where(
-            "ino IN (WITH RECURSIVE t(ino) AS (SELECT ?1 UNION ALL \
+            "ino IN (WITH RECURSIVE t(ino) AS (SELECT ?1 UNION \
              SELECT i.ino FROM items i JOIN t ON i.parent = t.ino WHERE i.ino != 1) SELECT ino FROM t)",
             params![ino as i64],
         )
@@ -693,6 +852,45 @@ mod tests {
     }
 
     #[test]
+    fn thumbnails_recorded_before_misses_were_keep_working() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.sqlite");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE thumbs (ino INTEGER PRIMARY KEY, md5 TEXT NOT NULL, \
+                 mtime INTEGER NOT NULL, sizes INTEGER NOT NULL); \
+                 INSERT INTO thumbs VALUES (5, 'abc', 7, 3);",
+            )
+            .unwrap();
+        for _ in 0..2 {
+            let db = Db::open(&path).unwrap();
+            let t = db.with(|s| s.thumb(5)).unwrap().unwrap();
+            assert_eq!(
+                (t.md5.as_str(), t.sizes, t.missed, t.first_missed),
+                ("abc", 3, 0, 0)
+            );
+        }
+
+        // Kept a miss, but not when the first was: that one counts as the first.
+        let path = dir.path().join("u.sqlite");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE thumbs (ino INTEGER PRIMARY KEY, md5 TEXT NOT NULL, \
+                 mtime INTEGER NOT NULL, sizes INTEGER NOT NULL, \
+                 missed INTEGER NOT NULL DEFAULT 0); \
+                 INSERT INTO thumbs VALUES (5, 'abc', 7, 0, 9000);",
+            )
+            .unwrap();
+        for _ in 0..2 {
+            let db = Db::open(&path).unwrap();
+            let t = db.with(|s| s.thumb(5)).unwrap().unwrap();
+            assert_eq!((t.missed, t.first_missed), (9000, 9000));
+        }
+    }
+
+    #[test]
     fn paths_subtrees_and_queues() {
         let dir = tempfile::tempdir().unwrap();
         let db = Db::open(&dir.path().join("t.sqlite")).unwrap();
@@ -725,13 +923,90 @@ mod tests {
             );
             // The folder has to exist online before its file can upload.
             assert_eq!(s.folders_to_create().unwrap().len(), 1);
-            assert!(s.uploads().unwrap().is_empty());
+            let waiting = |s: &Store<'_>| -> Vec<(u64, Option<String>)> {
+                let uploads = s.uploads().unwrap();
+                uploads.into_iter().map(|(it, p)| (it.ino, p)).collect()
+            };
+            assert_eq!(waiting(s), vec![(f, None)]);
             let mut d = s.get(docs).unwrap().unwrap();
             d.id = Some("DOCS".into());
             s.update(&d).unwrap();
-            assert_eq!(s.uploads().unwrap()[0].ino, f);
+            assert_eq!(waiting(s), vec![(f, Some("DOCS".into()))]);
             assert!(s.is_inside(f, docs).unwrap());
             assert!(!s.is_inside(docs, f).unwrap());
+        });
+    }
+
+    #[test]
+    fn whole_trees_without_loading_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("t.sqlite")).unwrap();
+        db.with(|s| {
+            let docs = s
+                .insert(&Item {
+                    is_dir: true,
+                    ..file(ROOT, "Documents")
+                })
+                .unwrap();
+            let synced = s
+                .insert(&Item {
+                    id: Some("A".into()),
+                    cached: true,
+                    ..file(docs, "a.txt")
+                })
+                .unwrap();
+            let edited = s
+                .insert(&Item {
+                    id: Some("B".into()),
+                    cached: true,
+                    dirty: true,
+                    ..file(docs, "b.txt")
+                })
+                .unwrap();
+            let other = s.insert(&file(ROOT, "c.txt")).unwrap();
+            let mut under = s.subtree_inos(docs).unwrap();
+            under.sort();
+            assert_eq!(under, vec![docs, synced, edited]);
+            assert_eq!(
+                s.subtree_inos(ROOT).unwrap(),
+                vec![ROOT, docs, synced, edited, other]
+            );
+            assert_eq!(s.cached_files_under(docs).unwrap().len(), 2);
+            s.set_pinned(docs, true).unwrap();
+            assert!(s.get(docs).unwrap().unwrap().pinned);
+            assert!(s.mark_online_only(synced).unwrap());
+            assert!(!s.mark_online_only(edited).unwrap(), "changes to upload");
+            assert!(!s.get(synced).unwrap().unwrap().cached);
+        });
+    }
+
+    #[test]
+    fn a_parent_loop_does_not_hang() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("t.sqlite")).unwrap();
+        db.with(|s| {
+            let a = s
+                .insert(&Item {
+                    is_dir: true,
+                    ..file(ROOT, "A")
+                })
+                .unwrap();
+            let b = s
+                .insert(&Item {
+                    is_dir: true,
+                    ..file(a, "B")
+                })
+                .unwrap();
+            let mut it = s.get(a).unwrap().unwrap();
+            it.parent = b;
+            s.update(&it).unwrap();
+            assert!(s.path(a).is_ok());
+            assert!(!s.is_inside(a, 999).unwrap());
+            assert!(!s.subtree(a).unwrap().is_empty());
+            let mut under = s.subtree_inos(a).unwrap();
+            under.sort();
+            assert_eq!(under, vec![a, b]);
+            assert!(s.take_thumbs_under(a).is_ok());
         });
     }
 }

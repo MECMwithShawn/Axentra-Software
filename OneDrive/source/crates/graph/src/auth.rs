@@ -171,10 +171,14 @@ impl TokenStore {
         }
     }
 
-    /// Force a refresh on the next request (after an unexpected 401).
-    pub async fn invalidate(&self) {
+    /// Force a refresh on the next request after `rejected` drew an unexpected
+    /// 401. A no-op once a newer token replaced it, so that a burst of
+    /// requests sent with the old token refreshes only once.
+    pub async fn invalidate(&self, rejected: &str) {
         if let Some(t) = self.tokens.lock().await.as_mut() {
-            t.expires_at = 0;
+            if t.access_token == rejected {
+                t.expires_at = 0;
+            }
         }
     }
 
@@ -207,7 +211,13 @@ impl TokenStore {
                 if fresh.refresh_token.is_none() {
                     fresh.refresh_token = Some(refresh);
                 }
-                write_tokens(&self.path, &fresh).map_err(|e| GraphError::Other(e.to_string()))?;
+                // Keep the new tokens even if saving them fails (a full disk, say):
+                // dropping them would mean another refresh for every request. The
+                // older refresh token in the file still works, and the next
+                // refresh tries to save again.
+                if let Err(e) = write_tokens(&self.path, &fresh) {
+                    tracing::warn!("couldn't save the refreshed sign-in: {e:#}");
+                }
                 let access = fresh.access_token.clone();
                 *guard = Some(fresh);
                 Ok(access)

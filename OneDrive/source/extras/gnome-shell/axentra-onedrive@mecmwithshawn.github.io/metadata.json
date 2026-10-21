@@ -1,0 +1,7 @@
+{
+  "uuid": "axentra-onedrive@mecmwithshawn.github.io",
+  "name": "Axentra OneDrive panel",
+  "description": "Opens the Axentra OneDrive panel just above its tray icon, with the keyboard focus, as on Windows. Wayland doesn't let apps place or focus their own windows.",
+  "shell-version": ["45", "46", "47", "48"],
+  "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/OneDrive"
+}

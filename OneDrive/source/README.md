@@ -21,12 +21,12 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `axentra-onedrive free`, or `setfattr -n user.axentra.onedrive.pinned -v 1` |
 | Share, View online, Version history (with Restore) | Right-click OneDrive submenu; history opens its own window |
 | Tray icon with synced / syncing / paused / problem states | StatusNotifierItem icon drawn in those states |
-| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. On X11 it opens just above the tray icon, stays out of the taskbar and closes when you click elsewhere |
+| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. It opens just above the tray icon with the keyboard focus and closes when you click elsewhere; on X11 it also stays out of the taskbar. Wayland doesn't let apps place their windows, so there a small GNOME Shell extension (installed with the app, active from the next sign-in) does it, and the panel has a close button |
 | Pause syncing for 2, 8 or 24 hours | Panel menu, tray menu, Settings or `axentra-onedrive pause` |
 | Conflicts keep both copies as `File-PCNAME.ext` | Same naming, with a notification |
 | Edited here but deleted online: your copy is kept | Same |
 | Mass-delete warning | Notification past a threshold (default 50) |
-| Settings: Sync and back up, Account, Notifications, Network, About | Same pages; upload/download rate limits; Unlink this PC |
+| Settings: Sync and back up, Account, Notifications, Network, About | Same pages, plus Appearance (the app icon colour); upload/download rate limits; Unlink this PC |
 | Files deleted locally go to the OneDrive recycle bin | Same (the web app's recycle bin) |
 | Names OneDrive can't store are flagged | Stay local with a red badge and an explanation |
 | Lock and temp files aren't uploaded | `~$*`, `.~lock.*#`, swap and partial-download files stay local |
@@ -50,7 +50,7 @@ axentra-onedrive CLI ───────────────────�
 * **`crates/ui`**: the tray icon (ksni), the activity panel, Settings and Version history ([Slint](https://slint.dev), Fluent style).
 * **`crates/cli`**: `axentra-onedrive`, for setup, sign-in, the daemon itself and scripting.
 * **`crates/mock`**: an in-memory fake OneDrive for tests and demos.
-* **`extras/`**: the Nautilus extension, badge icons, systemd units for sync and the tray icon, the desktop entry and the Axentra Command manifest.
+* **`extras/`**: the Nautilus extension, the GNOME Shell extension that places the panel on Wayland, badge icons, systemd units for sync and the tray icon, the desktop entry and the Axentra Command manifest.
 
 ## Setting it up
 
@@ -67,9 +67,19 @@ You need Rust, `fuse3`, and for the file-manager badges `python3-nautilus`. On G
    If Entra says personal accounts can't create registrations without a directory, join the free Microsoft 365 Developer Program or create a free Azure account and register the app there. The registration still accepts personal accounts.
 2. **Install:** `./install.sh`. Like the rest of the Axentra suite it installs for you only, with no sudo, into `~/.local/share/axentra/apps/onedrive`, puts the `axentra-onedrive` command in `~/.local/bin`, and lists the app in Axentra Command. It also upgrades an install made under the project's earlier working name, Cirrus, keeping its sign-in and sync state.
 3. **Connect and sign in:** `axentra-onedrive setup` (paste the client ID), then `axentra-onedrive login`.
-4. **Start:** `systemctl --user start axentra-onedrive`, then open **Axentra OneDrive** from the app menu. Both start automatically from then on; the tray icon runs as the user service `axentra-onedrive-tray`, which brings it back if it crashes or is closed by something else. Run `nautilus -q` once so Files loads the badges.
+4. **Start:** `systemctl --user start axentra-onedrive`. The installer starts the tray icon (in a desktop session), whose Sign in button can also do step 3 for you. Both start automatically from then on; the tray icon runs as the user service `axentra-onedrive-tray`, which brings it back if it crashes or is closed by something else. Run `nautilus -q` once so Files loads the badges.
 
-`~/OneDrive` must be empty (or not exist) before the first start, because it becomes the mount point. Use `axentra-onedrive setup --folder ~/elsewhere` to pick another folder.
+Signing in again later has to be with the same Microsoft account, because the files on this PC belong to its OneDrive. To switch accounts, unlink this PC first (`axentra-onedrive logout` or Settings > Account).
+
+`~/OneDrive` must be empty (or not exist) before the first start, because it becomes the mount point. Use `axentra-onedrive setup --folder ~/elsewhere` to pick another folder (then `systemctl --user restart axentra-onedrive` if it's already running).
+
+If the sync service can't start because of something only you can fix, such as a mistake in `config.toml` or files already in the OneDrive folder, it says why in a notification and stays stopped. Fix it, then start it again:
+
+```sh
+systemctl --user reset-failed axentra-onedrive; systemctl --user restart axentra-onedrive
+```
+
+`reset-failed` matters if you try more than once: systemd refuses a sixth start within five minutes, failed ones included, until it's run. The details are in `journalctl --user -u axentra-onedrive`.
 
 ## Using it
 
@@ -86,7 +96,7 @@ axentra-onedrive thumbnail <file>    print a thumbnail's path (OneDrive's, if th
 axentra-onedrive online [path]       open on the web
 axentra-onedrive versions <file>     list versions;  axentra-onedrive restore <file> <id>
 axentra-onedrive pause [hours]       pause (2 by default);  axentra-onedrive resume
-axentra-onedrive logout              unlink this PC
+axentra-onedrive logout              unlink this PC (asks first; --yes doesn't)
 ```
 
 Settings live in `~/.config/axentra/onedrive/config.toml`; the Settings window edits the same file. State and sign-in tokens (mode 0600) are in `~/.local/share/axentra/onedrive`, and downloaded files in `~/.cache/axentra/onedrive/files`.
@@ -107,9 +117,9 @@ It prints the `config.toml` lines and token file to use. Point a separate profil
 cargo test --workspace
 ```
 
-The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore, resuming an interrupted first scan, starting before the network is up, stopping while a folder is still open, and cloud thumbnails (filled when a file manager lists a folder, handed to thumbnailers and the file chooser portal instead of the file, checked with GIO itself, and removed with their items). QuickXorHash is checked against a bit-by-bit model of the algorithm.
+The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore, resuming an interrupted first scan, starting before the network is up, stopping while a folder is still open, refusing to sync another account's OneDrive into this PC's files, cloud thumbnails (filled when a file manager lists a folder, handed to thumbnailers and the file chooser portal instead of the file, checked with GIO itself, and removed with their items), and the races a sync client meets: edits, overwrites, truncates and renames while a file uploads or downloads, moves out of a folder that is then deleted, pausing or signing out mid-transfer (uploads resume where they got to), uploads whose reply was lost, changes online to items moved here, and "Always keep" changes while downloads run. QuickXorHash is checked against a bit-by-bit model of the algorithm.
 
-UI screenshots render headlessly with `cargo run -p axentra-onedrive-ui -- --screenshot <view> out.png [light|dark]`. The views are `flyout`, `flyout-syncing`, `flyout-menu`, `flyout-paused`, `flyout-signed-out`, `flyout-empty`, `settings-0` to `settings-4`, `versions` and `tray`.
+UI screenshots render headlessly with `cargo run -p axentra-onedrive-ui -- --screenshot <view> out.png [light|dark]`. The views are `flyout`, `flyout-syncing`, `flyout-menu`, `flyout-paused`, `flyout-signed-out`, `flyout-empty`, `flyout-wayland` (with its close button), `settings-0` to `settings-5`, `versions` and `tray`.
 
 ## Notes
 

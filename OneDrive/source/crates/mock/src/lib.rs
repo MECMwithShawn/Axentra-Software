@@ -1,6 +1,6 @@
 //! An in-memory OneDrive that speaks the subset of Microsoft Graph Axentra OneDrive
 //! uses: delta feed (with paging and expiry), path addressing, simple and
-//! session uploads, eTag preconditions, downloads via redirect, thumbnails
+//! resumable session uploads, eTag preconditions, downloads via redirect, thumbnails
 //! of photos and videos, sharing links, versions, and the OAuth token endpoint.
 //!
 //! Tests drive the "online" side through [`MockServer`]'s helper methods.
@@ -42,6 +42,7 @@ struct Session {
     existing: Option<String>,
     data: Vec<u8>,
     mtime: Option<DateTime<Utc>>,
+    expires: DateTime<Utc>,
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +52,7 @@ pub struct Drive {
     seq: u64,
     next_id: u64,
     sessions: HashMap<String, Session>,
+    sessions_created: u64,
     /// Delta tokens older than this get HTTP 410.
     min_token: u64,
     /// Items per delta page (small values exercise paging).
@@ -64,6 +66,28 @@ pub struct Drive {
     pub fail_delta_from: Option<usize>,
     /// Refuse custom thumbnail sizes such as `c256x256` with HTTP 400.
     pub no_custom_thumbnails: bool,
+    /// Requests whose "METHOD uri", followed by the Content-Range of an
+    /// upload fragment, contains this wait until it's cleared, so tests can
+    /// act while one is in flight.
+    pub hold: Option<String>,
+    /// How many requests have waited on `hold`.
+    pub held: usize,
+    /// Refuse upload fragments from this byte offset on with HTTP 503
+    /// (an upload cut short).
+    pub fail_fragments_from: Option<u64>,
+    /// Store the fragments that start at these offsets but answer HTTP 503,
+    /// as if the reply was lost on the way back. Each applies once.
+    pub lose_replies_at: Vec<u64>,
+    /// Bytes stored by upload sessions, to tell a resumed upload from a
+    /// restarted one.
+    pub upload_bytes: u64,
+    /// No thumbnails of anything yet, like OneDrive just after an upload.
+    pub no_thumbnails_yet: bool,
+    /// List a drive's items children first (after the drive root), as
+    /// Graph may: an item can come pages before its folder.
+    pub children_first: bool,
+    /// Report a deleted folder without each item that went with it.
+    pub deleted_folders_only: bool,
 }
 
 fn etag(it: &MItem) -> String {
@@ -172,10 +196,13 @@ impl Drive {
         }
     }
 
+    /// Names are case-insensitive, like OneDrive's, for all letters, not
+    /// only ASCII.
     fn child_of(&self, parent: &str, name: &str) -> Option<&MItem> {
+        let name = name.to_lowercase();
         self.items
             .values()
-            .find(|i| i.parent.as_deref() == Some(parent) && i.name.eq_ignore_ascii_case(name))
+            .find(|i| i.parent.as_deref() == Some(parent) && i.name.to_lowercase() == name)
     }
 
     fn by_path(&self, path: &str) -> Option<&MItem> {
@@ -391,10 +418,30 @@ impl MockServer {
         })
     }
 
+    /// Date the file at `path` `ago` back, like a photo taken long before
+    /// it was uploaded.
+    pub fn backdate(&self, path: &str, ago: std::time::Duration) {
+        self.with(|d| {
+            let id = d.id_of(path);
+            d.items.get_mut(&id).unwrap().mtime =
+                Utc::now() - chrono::Duration::from_std(ago).unwrap();
+            d.touch(&id, false);
+        })
+    }
+
     pub fn rename(&self, path: &str, new_name: &str) {
         self.with(|d| {
             let id = d.id_of(path);
             d.items.get_mut(&id).unwrap().name = new_name.into();
+            d.touch(&id, false);
+        })
+    }
+
+    /// Share the item online (or stop sharing it), as on the OneDrive website.
+    pub fn set_shared(&self, path: &str, shared: bool) {
+        self.with(|d| {
+            let id = d.id_of(path);
+            d.items.get_mut(&id).unwrap().shared = shared;
             d.touch(&id, false);
         })
     }
@@ -451,6 +498,15 @@ impl MockServer {
 
     pub fn expire_delta_tokens(&self) {
         self.with(|d| d.min_token = d.seq + 1);
+    }
+
+    /// Upload sessions not yet finished or cancelled.
+    pub fn upload_sessions(&self) -> usize {
+        self.with(|d| d.sessions.len())
+    }
+
+    pub fn expire_upload_sessions(&self) {
+        self.with(|d| d.sessions.clear());
     }
 
     pub fn requests(&self, needle: &str) -> usize {
@@ -540,18 +596,38 @@ async fn handle(
     let path = uri.path().to_string();
     let base = st.origin.as_str();
 
+    // Held in flight until the test clears `Drive::hold`.
+    let mut what = format!("{method} {uri}");
+    if let Some(range) = headers.get("content-range").and_then(|v| v.to_str().ok()) {
+        what = format!("{what} {range}");
+    }
+    let mut waiting = false;
+    loop {
+        {
+            let mut d = st.drive.lock();
+            if !d.hold.as_ref().is_some_and(|h| what.contains(h.as_str())) {
+                break;
+            }
+            if !waiting {
+                d.held += 1;
+                waiting = true;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+
     if path.ends_with("/oauth2/v2.0/token") {
         return token(&st, &body);
     }
     if let Some(sid) = path.strip_prefix("/upload/") {
-        return upload_fragment(&st, sid, &headers, body);
+        return upload_url(&st, method, sid, &headers, body);
     }
     if let Some(rest) = path.strip_prefix("/thumb/") {
         // Pre-authenticated thumbnail URL, like Graph's redirect target.
         let (id, size) = rest.split_once('/').unwrap_or((rest, ""));
         let d = st.drive.lock();
         return match (d.items.get(id), thumbnail_dims(size, true)) {
-            (Some(it), Some((w, h))) if has_thumbnail(&it.name) => (
+            (Some(it), Some((w, h))) if has_thumbnail(&it.name) && !d.no_thumbnails_yet => (
                 StatusCode::OK,
                 [("content-type", "image/jpeg")],
                 render_thumbnail(id, w, h),
@@ -660,14 +736,30 @@ fn delta(d: &Drive, uri: &Uri, base: &str) -> Response {
         .values()
         .filter(|i| since == 0 || (i.changed > since && i.changed <= end))
         .collect();
-    // Parents before children, then in change order.
-    changed.sort_by_key(|i| (d.depth(&i.id), i.changed, i.id.clone()));
+    // Parents before children (or the other way round), then in change order.
+    changed.sort_by_key(|i| {
+        let depth = d.depth(&i.id) as i64;
+        let order = if d.children_first {
+            (depth > 0, -depth)
+        } else {
+            (false, depth)
+        };
+        (order, i.changed, i.id.clone())
+    });
     let mut all: Vec<Value> = changed.iter().map(|i| d.json(i, base)).collect();
     if since > 0 {
+        let in_window = |seq: u64| seq > since && seq <= end;
         let mut gone: Vec<(&String, &(u64, Option<String>))> = d
             .deleted
             .iter()
-            .filter(|(_, (seq, _))| *seq > since && *seq <= end)
+            .filter(|(_, (seq, _))| in_window(*seq))
+            .filter(|(_, (_, parent))| {
+                !d.deleted_folders_only
+                    || !parent
+                        .as_ref()
+                        .and_then(|p| d.deleted.get(p))
+                        .is_some_and(|(seq, _)| in_window(*seq))
+            })
             .collect();
         gone.sort_by_key(|(_, (seq, _))| *seq);
         for (id, (_, parent)) in gone {
@@ -769,10 +861,27 @@ fn items(
                     }
                     let spec: Value = serde_json::from_slice(&body).unwrap_or_default();
                     let new_parent = spec["parentReference"]["id"].as_str().map(str::to_string);
+                    if new_parent
+                        .as_ref()
+                        .is_some_and(|p| !d.items.contains_key(p))
+                    {
+                        return error(StatusCode::NOT_FOUND, "itemNotFound", "no such parent");
+                    }
                     let new_name = spec["name"].as_str().map(str::to_string);
                     let target_parent =
                         new_parent.clone().or(it.parent.clone()).unwrap_or_default();
                     let target_name = new_name.clone().unwrap_or(it.name.clone());
+                    let mut up = Some(target_parent.clone());
+                    while let Some(p) = up {
+                        if p == id {
+                            return error(
+                                StatusCode::BAD_REQUEST,
+                                "invalidRequest",
+                                "can't move a folder into itself",
+                            );
+                        }
+                        up = d.items.get(&p).and_then(|i| i.parent.clone());
+                    }
                     if let Some(other) = d.child_of(&target_parent, &target_name) {
                         if other.id != id {
                             return error(StatusCode::CONFLICT, "nameAlreadyExists", "name taken");
@@ -840,7 +949,7 @@ fn items(
                     new_session(d, parent, it.name.clone(), Some(id), &spec, base)
                 }
                 (Method::GET, ["thumbnails"]) => {
-                    if it.is_dir || !has_thumbnail(&it.name) {
+                    if it.is_dir || !has_thumbnail(&it.name) || d.no_thumbnails_yet {
                         return ok_json(json!({ "value": [] }));
                     }
                     let mut set = json!({ "id": "0" });
@@ -852,7 +961,7 @@ fn items(
                     ok_json(json!({ "value": [set] }))
                 }
                 (Method::GET, ["thumbnails", "0", size, "content"]) => {
-                    if it.is_dir || !has_thumbnail(&it.name) {
+                    if it.is_dir || !has_thumbnail(&it.name) || d.no_thumbnails_yet {
                         return error(StatusCode::NOT_FOUND, "itemNotFound", "no thumbnail");
                     }
                     if thumbnail_dims(size, !d.no_custom_thumbnails).is_none() {
@@ -905,11 +1014,13 @@ fn new_session(
     spec: &Value,
     base: &str,
 ) -> Response {
-    let sid = format!("S{}", d.sessions.len() + 1);
+    d.sessions_created += 1;
+    let sid = format!("S{}", d.sessions_created);
     let mtime = spec["item"]["fileSystemInfo"]["lastModifiedDateTime"]
         .as_str()
         .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
         .map(|t| t.with_timezone(&Utc));
+    let expires = Utc::now() + chrono::Duration::days(1);
     d.sessions.insert(
         sid.clone(),
         Session {
@@ -918,14 +1029,31 @@ fn new_session(
             existing,
             data: vec![],
             mtime,
+            expires,
         },
     );
     ok_json(
-        json!({ "uploadUrl": format!("{base}/upload/{sid}"), "expirationDateTime": Utc::now().to_rfc3339() }),
+        json!({ "uploadUrl": format!("{base}/upload/{sid}"), "expirationDateTime": expires.to_rfc3339() }),
     )
 }
 
-fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -> Response {
+/// What a session still expects, as Graph reports it.
+fn session_status(s: &Session) -> Value {
+    json!({
+        "expirationDateTime": s.expires.to_rfc3339(),
+        "nextExpectedRanges": [format!("{}-", s.data.len())],
+    })
+}
+
+/// A pre-authenticated upload URL: PUT a fragment, GET the session's
+/// status, DELETE to cancel it.
+fn upload_url(
+    st: &AppState,
+    method: Method,
+    sid: &str,
+    headers: &HeaderMap,
+    body: Bytes,
+) -> Response {
     if headers.contains_key("authorization") {
         return error(
             StatusCode::UNAUTHORIZED,
@@ -933,6 +1061,24 @@ fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -
             "upload URLs take no token",
         );
     }
+    if method == Method::PUT {
+        return upload_fragment(st, sid, headers, body);
+    }
+    let mut d = st.drive.lock();
+    match method {
+        Method::GET => match d.sessions.get(sid) {
+            Some(s) => ok_json(session_status(s)),
+            None => error(StatusCode::NOT_FOUND, "itemNotFound", "no session"),
+        },
+        Method::DELETE => {
+            d.sessions.remove(sid);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        _ => error(StatusCode::METHOD_NOT_ALLOWED, "notSupported", "mock"),
+    }
+}
+
+fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -> Response {
     let range = headers
         .get("content-range")
         .and_then(|v| v.to_str().ok())
@@ -952,7 +1098,19 @@ fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -
     let Some((start, end, total)) = parsed else {
         return error(StatusCode::BAD_REQUEST, "invalidRange", range);
     };
+    let unavailable = || {
+        let mut r = error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "injected",
+            "injected failure",
+        );
+        r.headers_mut().insert("retry-after", "0".parse().unwrap());
+        r
+    };
     let mut d = st.drive.lock();
+    if d.fail_fragments_from.is_some_and(|from| start >= from) {
+        return unavailable();
+    }
     let Some(s) = d.sessions.get_mut(sid) else {
         return error(StatusCode::NOT_FOUND, "itemNotFound", "no session");
     };
@@ -964,13 +1122,17 @@ fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -
         );
     }
     s.data.extend_from_slice(&body);
-    if (s.data.len() as u64) < total {
-        let next = s.data.len();
-        return (
-            StatusCode::ACCEPTED,
-            axum::Json(json!({ "nextExpectedRanges": [format!("{next}-")] })),
-        )
-            .into_response();
+    let partial = ((s.data.len() as u64) < total).then(|| session_status(s));
+    d.upload_bytes += body.len() as u64;
+    let lost = d.lose_replies_at.iter().position(|&at| at == start);
+    if let Some(i) = lost {
+        d.lose_replies_at.remove(i);
+    }
+    if let Some(status) = partial {
+        return match lost {
+            Some(_) => unavailable(),
+            None => (StatusCode::ACCEPTED, axum::Json(status)).into_response(),
+        };
     }
     let s = d.sessions.remove(sid).unwrap();
     let id = match s.existing {
@@ -992,6 +1154,9 @@ fn upload_fragment(st: &AppState, sid: &str, headers: &HeaderMap, body: Bytes) -
             }
         },
     };
+    if lost.is_some() {
+        return unavailable();
+    }
     let base = st.origin.as_str();
     (StatusCode::CREATED, axum::Json(d.json(&d.items[&id], base))).into_response()
 }

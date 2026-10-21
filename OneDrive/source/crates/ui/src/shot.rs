@@ -25,6 +25,14 @@ impl Platform for Headless {
     }
 }
 
+/// Render without a display, into one software window. `None` if this
+/// thread already has a Slint platform.
+pub fn headless() -> Option<Rc<MinimalSoftwareWindow>> {
+    let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+    slint::platform::set_platform(Box::new(Headless(window.clone()))).ok()?;
+    Some(window)
+}
+
 const SCALE: f32 = 2.0;
 
 fn demo_account() -> Account {
@@ -64,7 +72,14 @@ fn demo_activity(now: i64) -> Vec<Activity> {
             false,
             "",
         ),
-        a(41, "uploaded", "Kickoff slides.pptx", "Work", false, ""),
+        a(
+            41,
+            "uploaded",
+            "Kickoff slides.pptx",
+            "Client projects 2026 - Northwind",
+            false,
+            "",
+        ),
         a(95, "uploaded", "Invoices", "Documents", true, ""),
         a(
             180,
@@ -128,9 +143,7 @@ pub fn run(args: &[String]) -> Result<()> {
         return tray_sheet(out, dark);
     }
 
-    let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
-    slint::platform::set_platform(Box::new(Headless(window.clone())))
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let window = headless().context("setting up headless rendering")?;
     window
         .window()
         .dispatch_event(WindowEvent::ScaleFactorChanged {
@@ -165,15 +178,17 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if let Some(page) = view.strip_prefix("settings-") {
         let ui = SettingsWindow::new()?;
         ui.global::<Theme>().invoke_use_dark(dark);
-        let cfg = Config::default();
+        let cfg = Config {
+            mount_point: "/home/alex/OneDrive".into(),
+            ..Default::default()
+        };
         present::apply_settings(
             &ui,
             &cfg,
             &demo_status("flyout"),
             &demo_account(),
-            734_003_200,
+            Some(734_003_200),
         );
-        ui.set_folder_path("/home/alex/OneDrive".into());
         ui.set_page(page.parse().context("settings page number")?);
         ui.show()?;
         (880, 620, Box::new(ui))
@@ -189,7 +204,9 @@ pub fn run(args: &[String]) -> Result<()> {
         if view == "flyout-empty" {
             activity.clear();
         }
-        present::apply_flyout(&ui, &demo_status(view), &acct, &activity);
+        present::apply_flyout(&ui, &demo_status(view), &acct, Some(&activity));
+        // As it looks on Wayland, where it has a close button.
+        ui.set_show_close(view == "flyout-wayland");
         ui.show()?;
         (360, 600, Box::new(ui))
     };

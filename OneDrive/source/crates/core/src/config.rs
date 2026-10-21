@@ -1,6 +1,6 @@
 //! User settings (`~/.config/axentra/onedrive/config.toml`) and on-disk locations.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,13 @@ pub fn icon_accent(color: &str) -> [u8; 3] {
 }
 
 pub const DBUS_IFACE: &str = "io.github.mecmwithshawn.AxentraOneDrive1";
+
+/// A problem only the user can fix, such as a settings file that doesn't
+/// parse or a OneDrive folder that already has files in it. Restarting the
+/// service won't help until they do, so it says why and stays stopped.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct NeedsUser(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -90,9 +97,18 @@ impl Default for Config {
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         match std::fs::read_to_string(path) {
-            Ok(text) => {
-                toml::from_str(&text).with_context(|| format!("reading {}", path.display()))
-            }
+            Ok(text) => toml::from_str(&text).map_err(|e| {
+                let line = e
+                    .span()
+                    .and_then(|s| text.get(..s.start))
+                    .map_or(1, |before| before.matches('\n').count() + 1);
+                NeedsUser(format!(
+                    "{} has a mistake on line {line}: {}",
+                    path.display(),
+                    e.message()
+                ))
+                .into()
+            }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
         }
@@ -122,7 +138,7 @@ impl Config {
     }
 
     pub fn mount_path(&self) -> PathBuf {
-        expand_home(&self.mount_point)
+        normalize(&expand_home(&self.mount_point))
     }
 
     pub fn auth(&self) -> axentra_onedrive_graph::AuthConfig {
@@ -134,14 +150,32 @@ impl Config {
     }
 }
 
+/// `~` and relative paths are taken from the home folder, where systemd
+/// starts the service.
 pub fn expand_home(p: &str) -> PathBuf {
-    if p == "~" {
-        return dirs::home_dir().unwrap_or_default();
-    }
+    let home = dirs::home_dir().unwrap_or_default();
     match p.strip_prefix("~/") {
-        Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
-        None => PathBuf::from(p),
+        _ if p == "~" => home,
+        Some(rest) => home.join(rest),
+        None => home.join(p),
     }
+}
+
+/// `p` with `.` and `..` worked out from the text alone, as the shell's
+/// `cd ..` does (the OneDrive folder has no symlinks to follow).
+pub fn normalize(p: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir if out.file_name().is_some() => {
+                out.pop();
+            }
+            Component::ParentDir if out.has_root() => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Every file Axentra OneDrive keeps, so tests and alternate profiles can relocate them.
@@ -209,5 +243,45 @@ mod tests {
         assert_eq!(old.icon_color(), "ice");
         assert!(old.cloud_thumbnails);
         assert_eq!(icon_accent("periwinkle"), [139, 151, 255]);
+    }
+
+    #[test]
+    fn paths_are_worked_out_like_the_shell() {
+        let n = |p: &str| normalize(Path::new(p)).display().to_string();
+        assert_eq!(
+            n("/home/u/OneDrive/Pictures/2024/.."),
+            "/home/u/OneDrive/Pictures"
+        );
+        assert_eq!(
+            n("/home/u/Downloads/../OneDrive/./x/"),
+            "/home/u/OneDrive/x"
+        );
+        assert_eq!(n("/.."), "/");
+        assert_eq!(n("a/../../b/../.."), "../..");
+
+        let home = dirs::home_dir().unwrap_or_default();
+        assert_eq!(expand_home("~"), home);
+        assert_eq!(expand_home("~/OneDrive"), home.join("OneDrive"));
+        assert_eq!(expand_home("/srv/OneDrive"), PathBuf::from("/srv/OneDrive"));
+        let relative = Config {
+            mount_point: "OneDrive2/".into(),
+            ..Default::default()
+        };
+        assert_eq!(relative.mount_path(), home.join("OneDrive2"));
+    }
+
+    #[test]
+    fn a_broken_settings_file_needs_the_user() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "client_id = \"x\"\npoll_interval_secs = \"often\"\n").unwrap();
+        let e = Config::load(&path).unwrap_err();
+        let why = &e.downcast_ref::<NeedsUser>().unwrap().0;
+        assert!(why.contains("on line 2"), "{why}");
+        // A missing file is fine: it's the defaults.
+        assert_eq!(
+            Config::load(&dir.path().join("none.toml")).unwrap(),
+            Config::default()
+        );
     }
 }

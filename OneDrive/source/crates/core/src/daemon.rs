@@ -53,6 +53,8 @@ pub async fn run(paths: Paths, opts: DaemonOptions) -> Result<()> {
     } else {
         None
     };
+    // Only now: before, another instance may be running, mid-download.
+    engine.tidy_up();
 
     let mount = engine.cfg().mount_path();
     let session = {
@@ -157,6 +159,7 @@ fn is_mounted(mount: &Path) -> bool {
 
 /// For tests and the demo: an engine and mount without the bus.
 pub fn start_mounted(engine: Arc<Engine>) -> Result<fuser::BackgroundSession> {
+    engine.tidy_up();
     let mount = engine.cfg().mount_path();
     let session = crate::fs::mount(engine.clone(), &mount)?;
     engine.attach_kernel(session.notifier());

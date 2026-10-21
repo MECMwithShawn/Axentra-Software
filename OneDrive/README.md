@@ -6,7 +6,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 
 **0.1.0 is a development preview for Linux.** It is installed and syncing a real personal OneDrive on Zorin OS 18.1, but no binary release is published and there is no Windows build (Windows has OneDrive built in). Sign-in uses your own free Microsoft Entra app registration; see [Setting it up](#setting-it-up).
 
-![Axentra OneDrive activity panel on Linux (demo data)](screenshots/linux-2026-10-20.png)
+![Axentra OneDrive activity panel on Linux (demo data)](screenshots/linux-2026-10-21.png)
 
 ## What matches the Windows client
 
@@ -19,7 +19,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `free`, or an extended attribute |
 | Share, View online, Version history with Restore | Right-click OneDrive submenu; history opens its own window |
 | Tray icon: synced, syncing, paused, problem | The same states, drawn for any panel |
-| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. On X11 it opens just above the tray icon, stays out of the taskbar and closes when you click elsewhere |
+| Activity panel above the tray: account, status, recent files with their folders, Open folder / View online / Recycle bin | Same layout in Fluent light and dark. It opens just above the tray icon with the keyboard focus and closes when you click elsewhere; on X11 it also stays out of the taskbar. Wayland doesn't let apps place their windows, so there a small GNOME Shell extension (installed with the app, active from the next sign-in) does it, and the panel has a close button |
 | Pause syncing for 2, 8 or 24 hours | Panel, tray menu, Settings or `axentra-onedrive pause` |
 | Conflicts keep both copies as `File-PCNAME.ext` | Same naming, with a notification |
 | Edited here but deleted online: your copy is kept | Same |
@@ -63,7 +63,8 @@ The installer adds a Command manifest, `~/.local/share/axentra/command/apps/oned
 
 ## Validation
 
-- 46 Rust tests passed, including 23 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- 172 Rust tests passed, including 81 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock. The end-to-end suite passed 20 runs in a row under full parallel load.
+- A multi-agent review of the whole codebase confirmed 96 problems over three rounds (57, then 29 from how the first fixes fit together, then 10); all are fixed and covered by tests.
 - On the real account, an online-only photo got OneDrive's thumbnail in under a second and stayed online-only.
 - Signed in to a real personal OneDrive account, listed its files through the mount and downloaded files on demand with QuickXorHash verification.
 - Tray, panel, D-Bus control and the systemd service were exercised on a live Zorin OS GNOME desktop. The file-manager extension was tested against a live mount in a test harness.

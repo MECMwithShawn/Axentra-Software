@@ -21,5 +21,8 @@
 - On Wayland, the panel and Settings no longer sit in the taskbar as empty windows before they are first opened.
 - Settings polish: Network rows describe each setting instead of repeating the dropdown, show "Limit to ___ KB/s" in order, and line up; About has a "Source code and help" link and a compact Slint credit.
 - When the desktop session ends, the tray app exits cleanly instead of crashing during shutdown.
+- A full multi-agent review confirmed 96 problems (57, then 29 and 10 in follow-up rounds), now fixed with tests (46 to 172). The most serious: files moved out of a folder that was then deleted were deleted online; a save-by-rename during an upload could delete the file online; overwriting or truncating a file while it downloaded could lose the new content; writes only counted at close; a folder 409 could loop forever; long uploads hit the 120 s timeout and never resumed; signing out or pausing left uploads running. Others covered upload/download backoff instead of repeated toasts, case-only renames, big-folder listing, Download all files confirmation, config mistakes no longer overwritten, keyboard and screen-reader access, Nautilus badges, logout and different-account safety, and the service no longer restarting forever on problems only the user can fix.
+- On Wayland the panel opens above the tray icon with the focus, through a small GNOME Shell extension the installer adds (active from the next sign-in), and has a close button. Long folder names in the activity list are shortened instead of the action.
+- Folder listings are attributed to the program that made them before the reply, so cloud thumbnails no longer miss folders listed by short-lived threads.
 
 No binary release, installer or checksums are published for this version.

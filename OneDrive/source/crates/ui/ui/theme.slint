@@ -22,27 +22,106 @@ export global Theme {
         dark = on;
     }
 
+    // Whether the keyboard is in use. As on Windows, the focus is only drawn
+    // after Tab or an arrow key, and a click hides it again.
+    in-out property <bool> keyboard;
+
     out property <color> base: dark ? #202020 : #f3f3f3;
     out property <color> layer: dark ? #2b2b2b : #ffffff;
-    out property <color> layer-alt: dark ? #2d2d2d : #f9f9f9;
     out property <color> stroke: dark ? #ffffff12 : #0000000f;
     out property <color> divider: dark ? #ffffff14 : #00000014;
     out property <color> text: dark ? #ffffff : #1b1b1b;
     out property <color> text2: dark ? #ffffffc5 : #00000099;
     out property <color> text3: dark ? #ffffff87 : #00000070;
+    out property <color> text-disabled: dark ? #ffffff5d : #0000005c;
     out property <color> accent: dark ? #60cdff : #005fb8;
     out property <color> on-accent: dark ? #000000 : #ffffff;
     out property <color> hover: dark ? #ffffff10 : #0000000a;
     out property <color> pressed: dark ? #ffffff0a : #00000006;
+    // Opaque fills of a standard button and of selectable cards at rest,
+    // under the pointer and pressed. Mixing the translucent hover colour
+    // into an opaque one left no visible change.
+    out property <color> control: dark ? #2d2d2d : #fbfbfb;
+    out property <color> control-hover: dark ? #323232 : #f5f5f5;
+    out property <color> control-pressed: dark ? #272727 : #f0f0f0;
+    out property <color> card-hover: dark ? #323232 : #f9f9f9;
     out property <color> track: dark ? #ffffff26 : #00000021;
     out property <color> danger: dark ? #ff99a4 : #c42b1c;
     out property <color> success: dark ? #6ccb5f : #0f7b0f;
+    // InfoBar backgrounds.
+    out property <color> attention-fill: dark ? #ffffff08 : #f6f6f6;
+    out property <color> danger-fill: dark ? #442726 : #fde7e9;
+    // The keyboard focus outline.
+    out property <color> focus-outer: dark ? #ffffff : #000000e6;
+    out property <color> focus-inner: dark ? #000000b3 : #ffffff;
     // The tray panel: an acrylic-like surface with a slightly darker command bar.
     out property <color> flyout: dark ? #2c2c2c : #f9f9f9;
     out property <color> flyout-bar: dark ? #202020 : #eeeeee;
     out property <color> flyout-stroke: dark ? #ffffff1f : #0000002e;
     out property <color> card: dark ? #353535 : #ffffff;
     out property <string> font: "Inter";
+}
+
+/// The keyboard focus outline of Fluent controls, drawn over the control's edge.
+export component FocusRing inherits Rectangle {
+    border-width: 2px;
+    border-color: Theme.focus-outer;
+    Rectangle {
+        x: 2px;
+        y: 2px;
+        width: parent.width - 4px;
+        height: parent.height - 4px;
+        border-width: 1px;
+        border-radius: max(0, parent.border-radius - 2px);
+        border-color: Theme.focus-inner;
+    }
+}
+
+/// A TouchArea that tells the theme the pointer is in use.
+export component Press inherits TouchArea {
+    pointer-event(event) => {
+        if (event.kind == PointerEventKind.down) {
+            Theme.keyboard = false;
+        }
+    }
+}
+
+/// Lets a control be reached with Tab and pressed with Enter or Space. It has
+/// no width, so clicks don't move the focus to it. With `arrows`, Up and Down
+/// call `up` and `down`.
+export component KeyFocus inherits FocusScope {
+    in property <bool> arrows;
+    callback activate();
+    callback up();
+    callback down();
+
+    x: 0;
+    width: 0;
+
+    focus-gained(reason) => {
+        if (reason == FocusReason.tab-navigation) {
+            Theme.keyboard = true;
+        }
+    }
+    key-pressed(event) => {
+        if (event.text == Key.Return || event.text == Key.Space) {
+            Theme.keyboard = true;
+            root.activate();
+            return accept;
+        }
+        if (root.arrows && (event.text == Key.UpArrow || event.text == Key.DownArrow)) {
+            // The first key press only shows where the focus is.
+            if (!Theme.keyboard) {
+                Theme.keyboard = true;
+            } else if (event.text == Key.UpArrow) {
+                root.up();
+            } else {
+                root.down();
+            }
+            return accept;
+        }
+        reject
+    }
 }
 
 export component IconButton inherits Rectangle {
@@ -57,6 +136,8 @@ export component IconButton inherits Rectangle {
     background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
     accessible-role: button;
     accessible-label: label;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     Image {
         source: root.icon;
@@ -67,24 +148,36 @@ export component IconButton inherits Rectangle {
         y: (parent.height - self.height) / 2;
     }
 
-    ta := TouchArea {
+    ta := Press {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
     }
+    kf := KeyFocus {
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
 }
 
+/// A menu command. Up and Down call `up` and `down`, which the menu uses
+/// to move the focus to the neighbouring command.
 export component MenuItem inherits Rectangle {
     in property <string> text;
     in property <image> icon;
     in property <bool> has-icon: false;
     in property <bool> danger: false;
     callback clicked();
+    callback up();
+    callback down();
+    // After Enter or Space: the popup only closes by itself on a click.
+    callback close-menu();
 
     height: 34px;
     border-radius: 4px;
-    background: ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover : transparent;
+    background: ta.pressed ? Theme.pressed : ta.has-hover || (kf.has-focus && Theme.keyboard) ? Theme.hover : transparent;
     accessible-role: button;
     accessible-label: text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
 
     HorizontalLayout {
         padding-left: 10px;
@@ -108,8 +201,17 @@ export component MenuItem inherits Rectangle {
         }
     }
 
-    ta := TouchArea {
+    ta := Press {
         clicked => { root.clicked(); }
+    }
+    kf := KeyFocus {
+        arrows: true;
+        activate => {
+            root.clicked();
+            root.close-menu();
+        }
+        up => { root.up(); }
+        down => { root.down(); }
     }
 }
 
@@ -149,11 +251,12 @@ export component Meter inherits Rectangle {
     }
 }
 
-/// Flat accent-coloured button (primary) or subtle one.
+/// Flat accent-coloured button (primary) or standard one.
 export component FluentButton inherits Rectangle {
     in property <string> text;
     in property <bool> primary: false;
     in property <bool> danger: false;
+    in property <bool> enabled: true;
     callback clicked();
 
     height: 32px;
@@ -162,33 +265,118 @@ export component FluentButton inherits Rectangle {
     border-width: root.primary ? 0 : 1px;
     border-color: Theme.stroke;
     background: root.primary
-        ? (ta.pressed ? Theme.accent.darker(0.15) : ta.has-hover ? Theme.accent.darker(0.07) : Theme.accent)
-        : (ta.pressed ? Theme.pressed : ta.has-hover ? Theme.hover.mix(Theme.layer-alt, 0.5) : Theme.layer-alt);
+        ? (!root.enabled ? Theme.text-disabled : ta.pressed ? Theme.accent.darker(0.15) : ta.has-hover ? Theme.accent.darker(0.07) : Theme.accent)
+        : (!root.enabled ? Theme.control : ta.pressed ? Theme.control-pressed : ta.has-hover ? Theme.control-hover : Theme.control);
     accessible-role: button;
     accessible-label: text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.clicked();
+        }
+    }
+    forward-focus: kf;
 
     label := Text {
         text: root.text;
         font-size: 13px;
         font-weight: root.primary ? 600 : 400;
-        color: root.primary ? Theme.on-accent : root.danger ? Theme.danger : Theme.text;
+        color: root.primary ? Theme.on-accent
+            : !root.enabled ? Theme.text-disabled
+            : ta.pressed ? Theme.text2
+            : root.danger ? Theme.danger : Theme.text;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
 
-    ta := TouchArea {
-        mouse-cursor: pointer;
+    ta := Press {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
         clicked => { root.clicked(); }
     }
+    kf := KeyFocus {
+        enabled: root.enabled;
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: root.border-radius; }
 }
 
 export component Hyperlink inherits Text {
+    // False where the link is reached another way, such as from a list row.
+    in property <bool> tab-stop: true;
     callback clicked();
     font-size: 12px;
     color: ta.has-hover ? Theme.accent.brighter(0.15) : Theme.accent;
     accessible-role: button;
-    ta := TouchArea {
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: kf;
+    ta := Press {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
+    }
+    kf := KeyFocus {
+        focus-on-tab-navigation: root.tab-stop;
+        activate => { root.clicked(); }
+    }
+    if kf.has-focus && Theme.keyboard: FocusRing { border-radius: 2px; }
+}
+
+/// A Windows InfoBar: a message with an icon and a close button.
+export component InfoBar inherits Rectangle {
+    in property <string> text;
+    in property <bool> error;
+    callback closed();
+
+    background: root.error ? Theme.danger-fill : Theme.attention-fill;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: Theme.stroke;
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 6px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            if !root.error: Image {
+                source: @image-url("icons/info.svg");
+                colorize: Theme.accent;
+                width: 20px;
+                height: 20px;
+            }
+            if root.error: Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                background: Theme.danger;
+                Image {
+                    source: @image-url("icons/x.svg");
+                    colorize: Theme.dark ? #000000 : #ffffff;
+                    width: 12px;
+                    height: 12px;
+                }
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            color: Theme.text;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: @image-url("icons/close.svg");
+                label: "Close";
+                clicked => { root.closed(); }
+            }
+        }
     }
 }

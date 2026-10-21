@@ -11,6 +11,7 @@
 
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
 use md5::{Digest, Md5};
@@ -28,14 +29,23 @@ fn comm(pid: u32) -> Option<String> {
     )
 }
 
-fn parent(pid: u32) -> Option<u32> {
+fn status_field(pid: u32, field: &str) -> Option<u32> {
     let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
     status
         .lines()
-        .find_map(|l| l.strip_prefix("PPid:"))?
+        .find_map(|l| l.strip_prefix(field)?.strip_prefix(':'))?
         .trim()
         .parse()
         .ok()
+}
+
+fn parent(pid: u32) -> Option<u32> {
+    status_field(pid, "PPid")
+}
+
+/// The process a thread belongs to (the mount is told which thread asked).
+pub fn process_of(tid: u32) -> Option<u32> {
+    status_field(tid, "Tgid")
 }
 
 /// "program[pid] from parent[pid]", to say who asked for a download.
@@ -59,7 +69,8 @@ fn is_thumbnailer(comm: &str) -> bool {
 
 fn is_indexer(comm: &str) -> bool {
     let p = program(comm);
-    p.starts_with("tracker") || p.starts_with("localsearch")
+    // localsearch-3's worker threads are "pool-localsearc" (cut to 15 characters).
+    p.starts_with("tracker") || p.starts_with("localsearc")
 }
 
 /// The program's own name when the kernel's 15-character one is cut short
@@ -285,7 +296,13 @@ pub fn write(
     create_private_dir(&dir)?;
     let name = cache_name(of.uri);
     let dest = dir.join(format!("{name}.png"));
-    let tmp = dir.join(format!(".{name}.axentra-{}.png", std::process::id()));
+    // Unique per write: two writes of the same thumbnail mustn't share one.
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+    let tmp = dir.join(format!(
+        ".{name}.axentra-{}-{}.png",
+        std::process::id(),
+        WRITES.fetch_add(1, Ordering::Relaxed)
+    ));
     let result = (|| -> Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         let file = std::fs::OpenOptions::new()
@@ -328,14 +345,38 @@ fn create_private_dir(dir: &Path) -> Result<()> {
     }
 }
 
+static REMOVALS: AtomicU64 = AtomicU64::new(0);
+
+/// Changes whenever cache entries are removed (see [`remove`]): files that
+/// had a thumbnail may need one again, a renamed one under its new name.
+pub fn removals() -> u64 {
+    REMOVALS.load(Ordering::Relaxed)
+}
+
+/// Where thumbnailers' "failed" markers go, one folder per kind
+/// (`fail/gnome-thumbnail-factory`, …).
+pub fn fail_dirs(root: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(root.join("fail"))
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default()
+}
+
+/// Whether a thumbnailer failed on the file with cache name `name`, or was
+/// turned away (offline, or OneDrive had no preview yet). File managers
+/// don't try it again while the marker is there, so they never ask for it.
+pub fn failed(fail_dirs: &[PathBuf], name: &str) -> bool {
+    fail_dirs
+        .iter()
+        .any(|d| d.join(format!("{name}.png")).is_file())
+}
+
 /// Delete the cache entries (every size, and "failed" markers) for these names.
 pub fn remove(root: &Path, names: &[String]) {
     if names.is_empty() {
         return;
     }
-    let fail_dirs: Vec<PathBuf> = std::fs::read_dir(root.join("fail"))
-        .map(|d| d.flatten().map(|e| e.path()).collect())
-        .unwrap_or_default();
+    REMOVALS.fetch_add(1, Ordering::Relaxed);
+    let fail_dirs = fail_dirs(root);
     for name in names {
         for b in Bucket::ALL {
             let _ = std::fs::remove_file(path_in(root, b, name));
@@ -350,11 +391,8 @@ pub fn remove(root: &Path, names: &[String]) {
 /// file managers try again now that it's here.
 pub fn clear_failure(root: &Path, abs_path: &Path) {
     let name = cache_name(&file_uri(abs_path));
-    let Ok(entries) = std::fs::read_dir(root.join("fail")) else {
-        return;
-    };
-    for e in entries.flatten() {
-        let _ = std::fs::remove_file(e.path().join(format!("{name}.png")));
+    for d in fail_dirs(root) {
+        let _ = std::fs::remove_file(d.join(format!("{name}.png")));
     }
 }
 
@@ -409,7 +447,53 @@ mod tests {
         assert!(is_thumbnailer("ffmpegthumbnai"));
         assert!(is_indexer("pool-tracker-mi"));
         assert!(is_indexer("localsearch-3"));
+        assert!(is_indexer("pool-localsearc"));
+        assert!(!is_indexer("pool-org.gnome."));
         assert!(!is_thumbnailer("pool-xdg-deskto"));
+    }
+
+    #[test]
+    fn threads_belong_to_their_process() {
+        let me = std::process::id();
+        assert_eq!(process_of(me), Some(me));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (done, wait) = std::sync::mpsc::channel::<()>();
+        let t = std::thread::spawn(move || {
+            tx.send(unsafe { libc::gettid() } as u32).unwrap();
+            let _ = wait.recv();
+        });
+        let tid = rx.recv().unwrap();
+        assert_ne!(tid, me);
+        assert_eq!(process_of(tid), Some(me));
+        drop(done);
+        t.join().unwrap();
+    }
+
+    #[test]
+    fn writing_the_same_thumbnail_twice_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let uri = "file:///home/a/OneDrive/IMG_2.jpg";
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::new(300, 200));
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                s.spawn(|| {
+                    let of = Original {
+                        uri,
+                        mtime: 1,
+                        size: 2,
+                    };
+                    for _ in 0..10 {
+                        let p = write(dir.path(), Bucket::Normal, &of, &img).unwrap();
+                        assert!(is_valid(&p, &of));
+                    }
+                });
+            }
+        });
+        let left: Vec<_> = std::fs::read_dir(dir.path().join("normal"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, [format!("{}.png", cache_name(uri))]);
     }
 
     #[test]
@@ -456,7 +540,26 @@ mod tests {
         let p = write(dir.path(), Bucket::Large, &of, &small).unwrap();
         assert_eq!(image::image_dimensions(&p).unwrap(), (60, 40));
 
+        let before = removals();
         remove(dir.path(), &[cache_name(uri)]);
         assert!(!p.exists());
+        assert_ne!(removals(), before);
+    }
+
+    #[test]
+    fn any_thumbnailers_failed_marker_counts_until_cleared() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = Path::new("/home/a/OneDrive/IMG_3.jpg");
+        let name = cache_name(&file_uri(file));
+        let failed_now = || failed(&fail_dirs(dir.path()), &name);
+        assert!(!failed_now());
+        let mate = dir.path().join("fail/mate-thumbnail-factory");
+        std::fs::create_dir_all(&mate).unwrap();
+        std::fs::write(mate.join("other.png"), b"").unwrap();
+        assert!(!failed_now());
+        std::fs::write(mate.join(format!("{name}.png")), b"").unwrap();
+        assert!(failed_now());
+        clear_failure(dir.path(), file);
+        assert!(!failed_now());
     }
 }

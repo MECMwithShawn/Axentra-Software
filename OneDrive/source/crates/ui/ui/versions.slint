@@ -23,8 +23,13 @@ export component VersionsWindow inherits Window {
 
     in property <string> file-name;
     in property <[VersionRow]> versions;
+    // Why there's no list, shown in its place.
+    in property <string> problem;
+    // The outcome of the last restore, under the list.
     in property <string> message;
+    // A restore is running; `restoring` is the version being restored.
     in property <bool> busy;
+    in property <string> restoring;
     callback restore(string);
 
     VerticalLayout {
@@ -49,7 +54,7 @@ export component VersionsWindow inherits Window {
             border-width: 1px;
             border-color: Theme.stroke;
             clip: true;
-            ListView {
+            if root.versions.length > 0: ListView {
                 for v[i] in root.versions: Rectangle {
                     height: 60px;
                     HorizontalLayout {
@@ -67,12 +72,39 @@ export component VersionsWindow inherits Window {
                             alignment: center;
                             Text { text: "Current version"; font-size: 12px; font-weight: 600; color: Theme.accent; }
                         }
-                        if !v.current: VerticalLayout {
+                        if !v.current && root.restoring == v.id: VerticalLayout {
                             alignment: center;
-                            FluentButton { text: "Restore"; clicked => { root.restore(v.id); } }
+                            Text { text: "Restoring…"; font-size: 12px; color: Theme.text2; }
+                        }
+                        if !v.current && root.restoring != v.id: VerticalLayout {
+                            alignment: center;
+                            FluentButton {
+                                text: "Restore";
+                                enabled: !root.busy;
+                                clicked => { root.restore(v.id); }
+                            }
                         }
                     }
                     if i > 0: Rectangle { y: 0; height: 1px; background: Theme.divider; }
+                }
+            }
+            if root.versions.length == 0: VerticalLayout {
+                alignment: center;
+                padding: 24px;
+                spacing: 6px;
+                Text {
+                    text: root.problem != "" ? "Couldn't load the version history" : "No versions yet";
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    horizontal-alignment: center;
+                }
+                Text {
+                    text: root.problem != "" ? root.problem : "Earlier versions show up here after the file changes.";
+                    font-size: 12px;
+                    color: Theme.text2;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
                 }
             }
         }

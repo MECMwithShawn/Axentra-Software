@@ -87,11 +87,37 @@ mkdir -p "$DATA/axentra/command/apps"
 sed -e "s|@APP@|$APP|g" -e "s|@DATA@|$DATA|g" -e "s|@ACCENT@|$accent|g" \
   extras/command/onedrive.json > "$DATA/axentra/command/apps/onedrive.json"
 
+# Set when Files has to restart to load a new copy of the extension.
+# GNOME on Wayland doesn't let apps place their windows: a small Shell
+# extension opens the panel above the tray icon, with the focus.
+EXT=axentra-onedrive@mecmwithshawn.github.io
+ext_login=""
+if command -v gnome-shell >/dev/null; then
+  install -Dm644 -t "$DATA/gnome-shell/extensions/$EXT" extras/gnome-shell/$EXT/metadata.json extras/gnome-shell/$EXT/extension.js
+  if ! gnome-extensions enable "$EXT" 2>/dev/null; then
+    # The running Shell doesn't know it yet (Wayland loads extensions at
+    # sign-in): list it as enabled for the next one.
+    enabled="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || true)"
+    case "$enabled" in
+      *"'$EXT'"*) ;;
+      "" | "@as []") gsettings set org.gnome.shell enabled-extensions "['$EXT']" 2>/dev/null || true ;;
+      *) gsettings set org.gnome.shell enabled-extensions "${enabled%]}, '$EXT']" 2>/dev/null || true ;;
+    esac
+    ext_login=1
+  fi
+fi
+
 nautilus=""
 if python3 -c "import gi; gi.require_version('Nautilus', '4.0')" 2>/dev/null; then
-  mkdir -p "$DATA/nautilus-python/extensions"
-  fill extras/nautilus/axentra_onedrive_nautilus.py "$DATA/nautilus-python/extensions/axentra_onedrive_nautilus.py"
-  nautilus=1
+  ext="$DATA/nautilus-python/extensions/axentra_onedrive_nautilus.py"
+  mkdir -p "$(dirname "$ext")"
+  fill extras/nautilus/axentra_onedrive_nautilus.py "$ext.new"
+  if cmp -s "$ext.new" "$ext"; then
+    rm -f "$ext.new"
+  else
+    mv -f "$ext.new" "$ext"
+    nautilus=1
+  fi
 else
   echo "Note: python3-nautilus isn't installed, so file badges and the right-click menu are skipped."
   echo "      sudo apt install python3-nautilus, then run this script again."
@@ -101,30 +127,39 @@ gtk-update-icon-cache -q -t -f "$DATA/icons/hicolor" 2>/dev/null || true
 update-desktop-database -q "$DATA/applications" 2>/dev/null || true
 systemctl --user daemon-reload
 systemctl --user enable axentra-onedrive.service axentra-onedrive-tray.service >/dev/null 2>&1
-# Start the tray now when a desktop session is running.
+# (Re)start a service, even one that failed or gave up restarting.
+start() {
+  systemctl --user reset-failed "$1" 2>/dev/null || true
+  systemctl --user restart "$1" || echo "Couldn't start $1: journalctl --user -u $1" >&2
+}
+# The tray icon always runs as its service when a desktop session is, so it
+# comes back if it crashes. On a first install it's where you sign in.
+tray=""
 start_tray() {
   if systemctl --user is-active --quiet graphical-session.target; then
-    systemctl --user restart axentra-onedrive-tray.service
+    start axentra-onedrive-tray.service
+    tray=1
   fi
 }
 
-if [ -z "$upgraded" ] && systemctl --user is-active --quiet axentra-onedrive.service; then
-  # Reinstall over a running copy: switch to the new build.
-  systemctl --user restart axentra-onedrive.service
+# Set up before (or upgraded from Cirrus), whether or not sync is running
+# right now: a reinstall is often how a stopped or failing service gets fixed.
+if grep -qs '^client_id = ".' "$CONFIG/axentra/onedrive/config.toml"; then
+  start axentra-onedrive.service
   start_tray
   echo
-  echo "Updated Axentra OneDrive to this build ($version) and restarted it."
-  exit 0
-fi
-
-if [ -n "$upgraded" ]; then
-  # It was running before the upgrade: bring it straight back.
-  systemctl --user start axentra-onedrive.service
-  start_tray
-  echo
-  echo "Upgraded to Axentra OneDrive $version. Sync and the tray icon are running again."
-  echo "The command is now: axentra-onedrive (status, pin, free, share, ...)"
-  [ -n "$nautilus" ] && echo "Restart Files to load the new badges and menu:  nautilus -q"
+  if [ -n "$upgraded" ]; then
+    echo "Upgraded to Axentra OneDrive $version and started it again."
+    echo "The command is now: axentra-onedrive (status, pin, free, share, ...)"
+  else
+    echo "Updated Axentra OneDrive to this build ($version) and restarted it."
+  fi
+  if [ -n "$ext_login" ]; then
+    echo "Sign out and back in once so GNOME opens the panel above the tray icon."
+  fi
+  if [ -n "$nautilus" ]; then
+    echo "Restart Files to load the new badges and menu:  nautilus -q"
+  fi
   exit 0
 fi
 
@@ -136,14 +171,22 @@ if [ -d "$mount_point" ] && [ -n "$(ls -A "$mount_point" 2>/dev/null)" ] && ! mo
   echo "         folder with: axentra-onedrive setup --folder ~/SomewhereElse) before starting."
 fi
 
+start_tray
 cat <<MSG
 
 Installed Axentra OneDrive $version in $APP. Next:
   1. axentra-onedrive setup        connect your Microsoft app registration (once)
   2. axentra-onedrive login        sign in in your browser
   3. systemctl --user start axentra-onedrive
-  4. Open "Axentra OneDrive" from the app menu (it starts with your session from then on)
 MSG
 if [ -n "$nautilus" ]; then
-  echo "  5. nautilus -q                   restart Files to load the badges and menu"
+  echo "  4. nautilus -q                   restart Files to load the badges and menu"
+fi
+if [ -n "$tray" ]; then
+  echo "The tray icon is running and starts with your session; its Sign in button does steps 1 and 2."
+else
+  echo "The tray icon starts with your next desktop session."
+fi
+if [ -n "$ext_login" ]; then
+  echo "  Then sign out and back in once so GNOME opens the panel above the tray icon."
 fi
