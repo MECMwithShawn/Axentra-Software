@@ -18,5 +18,6 @@
 - GNOME's own thumbnailers (whose names the kernel shortens) and the RAW helper `dcraw` are now recognised and kept from downloading online-only files.
 - A second sync service can no longer take the D-Bus name from the running one.
 - The tray icon runs as the user service `axentra-onedrive-tray.service` instead of an autostart entry, so it comes back if it crashes or is closed by something else; the installer restarts it through systemd.
+- On Wayland, the panel and Settings no longer sit in the taskbar as empty windows before they are first opened.
 
 No binary release, installer or checksums are published for this version.

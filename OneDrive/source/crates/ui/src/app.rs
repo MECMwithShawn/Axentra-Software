@@ -122,6 +122,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(settings.on_set_icon_color(c) => Cmd::SetIconColor(c.to_string()));
 
     close_on_focus_loss(&flyout);
+    drop_unshown_windows(flyout.as_weak(), settings.as_weak(), 0);
     if show_panel {
         let _ = tx.send(Cmd::ShowFlyout(None));
     }
@@ -224,6 +225,35 @@ fn close_on_focus_loss(flyout: &Flyout) {
             });
         }
         EventResult::Propagate
+    });
+}
+
+/// Slint creates every window when the event loop starts, hidden. Wayland
+/// has no hidden windows, so the panel and Settings would sit in the
+/// taskbar as empty windows until first used. Once they exist, show and
+/// hide each one that isn't meant to be open in the same turn: on Wayland
+/// hiding destroys the window, before it has drawn anything.
+fn drop_unshown_windows(flyout: Weak<Flyout>, settings: Weak<SettingsWindow>, tries: u32) {
+    if crate::panel::is_x11() {
+        return;
+    }
+    slint::Timer::single_shot(Duration::from_millis(100), move || {
+        let (Some(f), Some(s)) = (flyout.upgrade(), settings.upgrade()) else {
+            return;
+        };
+        let exists = |w: &slint::Window| w.with_winit_window(|_| ()).is_some();
+        if !(exists(f.window()) && exists(s.window())) {
+            if tries < 50 {
+                drop_unshown_windows(flyout, settings, tries + 1);
+            }
+            return;
+        }
+        for window in [f.window(), s.window()] {
+            if !window.is_visible() {
+                let _ = window.show();
+                let _ = window.hide();
+            }
+        }
     });
 }
 
