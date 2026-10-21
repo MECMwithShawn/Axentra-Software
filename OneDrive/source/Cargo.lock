@@ -669,6 +669,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "ksni",
+ "libc",
  "png 0.17.16",
  "serde",
  "serde_json",

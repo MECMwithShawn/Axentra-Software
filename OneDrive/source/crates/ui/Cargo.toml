@@ -23,6 +23,7 @@ slint = { version = "1.18", default-features = false, features = ["std", "compat
 ksni = { version = "0.3", features = ["tokio"], default-features = false }
 png = "0.17"
 arboard = { version = "3", default-features = false }
+libc.workspace = true
 x11rb = { version = "0.13", default-features = false, features = ["randr"] }
 futures-util.workspace = true
 url.workspace = true

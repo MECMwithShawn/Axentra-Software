@@ -30,6 +30,7 @@ pub enum Cmd {
     ShowSettings,
     OpenFolder,
     ViewOnline,
+    OpenSource,
     RecycleBin,
     ManageStorage,
     Pause(u32),
@@ -119,6 +120,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     wire!(settings.on_unlink => Cmd::Unlink);
     wire!(settings.on_manage_storage => Cmd::ManageStorage);
     wire!(settings.on_view_online => Cmd::ViewOnline);
+    wire!(settings.on_open_source => Cmd::OpenSource);
     wire!(settings.on_set_icon_color(c) => Cmd::SetIconColor(c.to_string()));
 
     close_on_focus_loss(&flyout);
@@ -129,7 +131,14 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
     rt.spawn(
         Backend::new(tx.clone(), flyout.as_weak(), settings.as_weak()).run(rx, start_with_settings),
     );
-    slint::run_event_loop_until_quit()?;
+    if let Err(e) = slint::run_event_loop_until_quit() {
+        // The display connection closed, normally because the desktop
+        // session ended. Leave at once: tearing down after that aborts in
+        // the clipboard's thread. Exiting with 1 lets the tray service start
+        // it again if the session is still running.
+        tracing::warn!("the desktop session went away ({e}); exiting");
+        unsafe { libc::_exit(1) };
+    }
     rt.shutdown_timeout(Duration::from_secs(1));
     Ok(())
 }
@@ -655,6 +664,9 @@ impl Backend {
                 };
                 self.hide_flyout();
                 open(&url.unwrap_or_else(|| "https://onedrive.live.com/my".into()));
+            }
+            Cmd::OpenSource => {
+                open("https://github.com/MECMwithShawn/Axentra-Software/tree/main/OneDrive")
             }
             Cmd::RecycleBin => {
                 self.hide_flyout();

@@ -19,5 +19,7 @@
 - A second sync service can no longer take the D-Bus name from the running one.
 - The tray icon runs as the user service `axentra-onedrive-tray.service` instead of an autostart entry, so it comes back if it crashes or is closed by something else; the installer restarts it through systemd.
 - On Wayland, the panel and Settings no longer sit in the taskbar as empty windows before they are first opened.
+- Settings polish: Network rows describe each setting instead of repeating the dropdown, show "Limit to ___ KB/s" in order, and line up; About has a "Source code and help" link and a compact Slint credit.
+- When the desktop session ends, the tray app exits cleanly instead of crashing during shutdown.
 
 No binary release, installer or checksums are published for this version.

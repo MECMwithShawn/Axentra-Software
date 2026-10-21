@@ -235,6 +235,7 @@ export component SettingsWindow inherits Window {
     callback unlink();
     callback manage-storage();
     callback view-online();
+    callback open-source();
     callback set-icon-color(string);
 
     HorizontalLayout {
@@ -419,7 +420,13 @@ export component SettingsWindow inherits Window {
                         Card {
                             icon: @image-url("icons/share.svg");
                             title: "Upload rate";
-                            description: root.upload-mode == 0 ? "Don't limit" : "Limit to " + root.upload-kbps + " KB/s";
+                            description: "How fast OneDrive uploads files from this PC.";
+                            ComboBox {
+                                width: 170px;
+                                model: ["Don't limit", "Limit to"];
+                                current-index <=> root.upload-mode;
+                                selected => { root.changed(); }
+                            }
                             if root.upload-mode == 1: SpinBox {
                                 width: 120px;
                                 minimum: 10;
@@ -427,17 +434,23 @@ export component SettingsWindow inherits Window {
                                 value <=> root.upload-kbps;
                                 edited => { root.changed(); }
                             }
-                            ComboBox {
-                                width: 150px;
-                                model: ["Don't limit", "Limit to"];
-                                current-index <=> root.upload-mode;
-                                selected => { root.changed(); }
+                            if root.upload-mode == 1: Text {
+                                text: "KB/s";
+                                font-size: 13px;
+                                color: Theme.text2;
+                                vertical-alignment: center;
                             }
                         }
                         Card {
                             icon: @image-url("icons/download.svg");
                             title: "Download rate";
-                            description: root.download-mode == 0 ? "Don't limit" : "Limit to " + root.download-kbps + " KB/s";
+                            description: "How fast OneDrive downloads files to this PC.";
+                            ComboBox {
+                                width: 170px;
+                                model: ["Don't limit", "Limit to"];
+                                current-index <=> root.download-mode;
+                                selected => { root.changed(); }
+                            }
                             if root.download-mode == 1: SpinBox {
                                 width: 120px;
                                 minimum: 10;
@@ -445,11 +458,11 @@ export component SettingsWindow inherits Window {
                                 value <=> root.download-kbps;
                                 edited => { root.changed(); }
                             }
-                            ComboBox {
-                                width: 150px;
-                                model: ["Don't limit", "Limit to"];
-                                current-index <=> root.download-mode;
-                                selected => { root.changed(); }
+                            if root.download-mode == 1: Text {
+                                text: "KB/s";
+                                font-size: 13px;
+                                color: Theme.text2;
+                                vertical-alignment: center;
                             }
                         }
                         Card {
@@ -515,6 +528,15 @@ export component SettingsWindow inherits Window {
                             title: "About this app";
                             description: root.notice;
                         }
+                        Card {
+                            icon: @image-url("icons/open.svg");
+                            title: "Source code and help";
+                            description: "Open source under the MIT license. Read the docs or report a problem on GitHub.";
+                            FluentButton {
+                                text: "Open on GitHub";
+                                clicked => { root.open-source(); }
+                            }
+                        }
                         // Attribution required by Slint's royalty-free license.
                         Rectangle {
                             background: Theme.layer;
@@ -522,10 +544,21 @@ export component SettingsWindow inherits Window {
                             border-width: 1px;
                             border-color: Theme.stroke;
                             HorizontalLayout {
-                                padding: 16px;
-                                alignment: start;
+                                padding-left: 16px;
+                                padding-right: 16px;
+                                padding-top: 10px;
+                                padding-bottom: 10px;
+                                spacing: 16px;
                                 AboutSlint {
-                                    max-width: 180px;
+                                    max-width: 120px;
+                                }
+                                Text {
+                                    text: "The windows and panel are built with Slint, an open-source UI toolkit.";
+                                    font-size: 12px;
+                                    color: Theme.text2;
+                                    wrap: word-wrap;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
                                 }
                             }
                         }
