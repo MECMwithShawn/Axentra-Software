@@ -377,6 +377,20 @@
         }
       ],
       "tray": []
+    },
+    {
+      "id": "imessage",
+      "name": "Axentra iMessage",
+      "tagline": "iPhone messages over Bluetooth \u00b7 Linux preview",
+      "kind": "desktop",
+      "order": 75,
+      "accent": "#6CBFFF",
+      "links": [
+        {
+          "label": "Preview status and documentation",
+          "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/iMessage"
+        }
+      ]
     }
   ]
 }
