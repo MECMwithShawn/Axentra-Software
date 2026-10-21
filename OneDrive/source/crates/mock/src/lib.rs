@@ -1,7 +1,7 @@
 //! An in-memory OneDrive that speaks the subset of Microsoft Graph Axentra OneDrive
 //! uses: delta feed (with paging and expiry), path addressing, simple and
-//! session uploads, eTag preconditions, downloads via redirect, sharing
-//! links, versions, and the OAuth token endpoint.
+//! session uploads, eTag preconditions, downloads via redirect, thumbnails
+//! of photos and videos, sharing links, versions, and the OAuth token endpoint.
 //!
 //! Tests drive the "online" side through [`MockServer`]'s helper methods.
 
@@ -62,6 +62,8 @@ pub struct Drive {
     pub fail_next: Option<(u16, u32)>,
     /// Reject delta pages from this offset on (simulates a scan cut short).
     pub fail_delta_from: Option<usize>,
+    /// Refuse custom thumbnail sizes such as `c256x256` with HTTP 400.
+    pub no_custom_thumbnails: bool,
 }
 
 fn etag(it: &MItem) -> String {
@@ -70,6 +72,55 @@ fn etag(it: &MItem) -> String {
 
 fn ctag(it: &MItem) -> String {
     format!("\"c:{{{}}},{}\"", it.id, it.ctag_n)
+}
+
+/// Whether OneDrive makes thumbnails for a file with this name.
+fn has_thumbnail(name: &str) -> bool {
+    const MEDIA: [&str; 15] = [
+        "jpg", "jpeg", "png", "gif", "heic", "webp", "bmp", "tif", "tiff", "mp4", "mov", "m4v",
+        "avi", "mkv", "webm",
+    ];
+    name.rsplit_once('.')
+        .is_some_and(|(_, ext)| MEDIA.contains(&ext.to_ascii_lowercase().as_str()))
+}
+
+/// Pixel size of a thumbnail size name: the named sizes, or `c{W}x{H}`
+/// (fit inside the box). Mock photos are 4:3 landscape.
+fn thumbnail_dims(size: &str, custom: bool) -> Option<(u32, u32)> {
+    let (bw, bh) = match size {
+        "small" => (96, 96),
+        "medium" => (176, 176),
+        "large" => (800, 800),
+        c if custom => {
+            let (w, h) = c.strip_prefix('c')?.split_once('x')?;
+            (w.parse().ok()?, h.parse().ok()?)
+        }
+        _ => return None,
+    };
+    if bw == 0 || bh == 0 || bw > 4000 || bh > 4000 {
+        return None;
+    }
+    let w = bw.min(bh * 4 / 3).max(1);
+    Some((w, (w * 3 / 4).max(1)))
+}
+
+/// A JPEG preview: a gradient whose colour depends on the item.
+fn render_thumbnail(id: &str, w: u32, h: u32) -> Vec<u8> {
+    let seed = id
+        .bytes()
+        .fold(7u32, |a, b| a.wrapping_mul(31).wrapping_add(b as u32));
+    let img = image::RgbImage::from_fn(w, h, |x, y| {
+        image::Rgb([
+            (seed % 200) as u8 + (x * 55 / w) as u8,
+            ((seed / 200) % 200) as u8 + (y * 55 / h) as u8,
+            ((seed / 40000) % 256) as u8,
+        ])
+    });
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 85)
+        .encode_image(&img)
+        .expect("encoding a mock thumbnail");
+    out
 }
 
 fn qxh(data: &[u8]) -> String {
@@ -405,6 +456,17 @@ impl MockServer {
     pub fn requests(&self, needle: &str) -> usize {
         self.with(|d| d.log.iter().filter(|l| l.contains(needle)).count())
     }
+
+    /// File contents fetched (thumbnails don't count).
+    pub fn downloads(&self) -> usize {
+        self.with(|d| {
+            d.log
+                .iter()
+                .filter(|l| l.ends_with("/content") && !l.contains("/thumbnails/"))
+                .filter(|l| l.starts_with("GET "))
+                .count()
+        })
+    }
 }
 
 fn error(status: StatusCode, code: &str, message: &str) -> Response {
@@ -483,6 +545,20 @@ async fn handle(
     }
     if let Some(sid) = path.strip_prefix("/upload/") {
         return upload_fragment(&st, sid, &headers, body);
+    }
+    if let Some(rest) = path.strip_prefix("/thumb/") {
+        // Pre-authenticated thumbnail URL, like Graph's redirect target.
+        let (id, size) = rest.split_once('/').unwrap_or((rest, ""));
+        let d = st.drive.lock();
+        return match (d.items.get(id), thumbnail_dims(size, true)) {
+            (Some(it), Some((w, h))) if has_thumbnail(&it.name) => (
+                StatusCode::OK,
+                [("content-type", "image/jpeg")],
+                render_thumbnail(id, w, h),
+            )
+                .into_response(),
+            _ => error(StatusCode::NOT_FOUND, "itemNotFound", "no thumbnail"),
+        };
     }
     if let Some(id) = path.strip_prefix("/download/") {
         let d = st.drive.lock();
@@ -762,6 +838,32 @@ fn items(
                     let spec: Value = serde_json::from_slice(&body).unwrap_or_default();
                     let parent = it.parent.clone().unwrap_or_default();
                     new_session(d, parent, it.name.clone(), Some(id), &spec, base)
+                }
+                (Method::GET, ["thumbnails"]) => {
+                    if it.is_dir || !has_thumbnail(&it.name) {
+                        return ok_json(json!({ "value": [] }));
+                    }
+                    let mut set = json!({ "id": "0" });
+                    for size in ["small", "medium", "large"] {
+                        let (w, h) = thumbnail_dims(size, false).unwrap();
+                        set[size] = json!({ "width": w, "height": h,
+                            "url": format!("{base}/thumb/{id}/{size}") });
+                    }
+                    ok_json(json!({ "value": [set] }))
+                }
+                (Method::GET, ["thumbnails", "0", size, "content"]) => {
+                    if it.is_dir || !has_thumbnail(&it.name) {
+                        return error(StatusCode::NOT_FOUND, "itemNotFound", "no thumbnail");
+                    }
+                    if thumbnail_dims(size, !d.no_custom_thumbnails).is_none() {
+                        return error(StatusCode::BAD_REQUEST, "invalidRequest", "bad size");
+                    }
+                    let mut r = StatusCode::FOUND.into_response();
+                    r.headers_mut().insert(
+                        "location",
+                        format!("{base}/thumb/{id}/{size}").parse().unwrap(),
+                    );
+                    r
                 }
                 (Method::POST, ["createLink"]) => {
                     d.items.get_mut(&id).unwrap().shared = true;

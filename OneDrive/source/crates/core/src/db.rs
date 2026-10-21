@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS activity (
   is_dir INTEGER NOT NULL,
   detail TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS thumbs (
+  ino INTEGER PRIMARY KEY,
+  md5 TEXT NOT NULL,
+  mtime INTEGER NOT NULL,
+  sizes INTEGER NOT NULL
+);
 INSERT OR IGNORE INTO items(ino, parent, name, is_dir, mtime) VALUES (1, 0, '', 1, 0);
 ";
 
@@ -176,6 +182,19 @@ pub struct Activity {
     pub path: String,
     pub is_dir: bool,
     pub detail: String,
+}
+
+/// A cloud thumbnail written to the freedesktop cache, so it can be removed
+/// with its item.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Thumb {
+    pub ino: u64,
+    /// The cache file name (MD5 of the file's URI) when it was written.
+    pub md5: String,
+    /// The file's modification time then, in Unix seconds.
+    pub mtime: i64,
+    /// Which sizes were written (`Bucket::bit`); 0 when OneDrive has none.
+    pub sizes: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -500,6 +519,76 @@ impl Store<'_> {
         Ok(())
     }
 
+    // ----- cloud thumbnails -----------------------------------------------------
+
+    pub fn thumb(&self, ino: u64) -> Result<Option<Thumb>> {
+        Ok(self
+            .0
+            .query_row(
+                "SELECT ino, md5, mtime, sizes FROM thumbs WHERE ino = ?1",
+                params![ino as i64],
+                |r| {
+                    Ok(Thumb {
+                        ino: r.get::<_, i64>(0)? as u64,
+                        md5: r.get(1)?,
+                        mtime: r.get(2)?,
+                        sizes: r.get(3)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    pub fn set_thumb(&self, t: &Thumb) -> Result<()> {
+        self.0.execute(
+            "INSERT OR REPLACE INTO thumbs (ino, md5, mtime, sizes) VALUES (?1, ?2, ?3, ?4)",
+            params![t.ino as i64, t.md5, t.mtime, t.sizes],
+        )?;
+        Ok(())
+    }
+
+    fn take_thumbs_where(
+        &self,
+        cond: &str,
+        p: impl rusqlite::Params + Copy,
+    ) -> Result<Vec<String>> {
+        let md5s = {
+            let mut st = self
+                .0
+                .prepare_cached(&format!("SELECT md5 FROM thumbs WHERE {cond}"))?;
+            let rows = st.query_map(p, |r| r.get(0))?;
+            rows.collect::<rusqlite::Result<Vec<String>>>()?
+        };
+        if !md5s.is_empty() {
+            self.0
+                .execute(&format!("DELETE FROM thumbs WHERE {cond}"), p)?;
+        }
+        Ok(md5s)
+    }
+
+    /// Forget the thumbnail of `ino`; returns the cache names to delete.
+    pub fn take_thumb(&self, ino: u64) -> Result<Vec<String>> {
+        self.take_thumbs_where("ino = ?1", params![ino as i64])
+    }
+
+    /// The same for `ino` and everything below it (it moved, so their paths changed).
+    pub fn take_thumbs_under(&self, ino: u64) -> Result<Vec<String>> {
+        self.take_thumbs_where(
+            "ino IN (WITH RECURSIVE t(ino) AS (SELECT ?1 UNION ALL \
+             SELECT i.ino FROM items i JOIN t ON i.parent = t.ino WHERE i.ino != 1) SELECT ino FROM t)",
+            params![ino as i64],
+        )
+    }
+
+    /// Thumbnails whose item is gone.
+    pub fn take_orphan_thumbs(&self) -> Result<Vec<String>> {
+        self.take_thumbs_where("ino NOT IN (SELECT ino FROM items)", [])
+    }
+
+    pub fn take_all_thumbs(&self) -> Result<Vec<String>> {
+        self.take_thumbs_where("1", [])
+    }
+
     // ----- key/value ----------------------------------------------------------
 
     pub fn kv(&self, k: &str) -> Result<Option<String>> {
@@ -573,7 +662,7 @@ impl Store<'_> {
     /// Forget everything (after "Unlink this PC").
     pub fn reset(&self) -> Result<()> {
         self.0.execute_batch(
-            "DELETE FROM items WHERE ino != 1; DELETE FROM tombstones; DELETE FROM kv; DELETE FROM activity;\
+            "DELETE FROM items WHERE ino != 1; DELETE FROM tombstones; DELETE FROM kv; DELETE FROM activity; DELETE FROM thumbs;\
              UPDATE items SET id = NULL, etag = NULL, ctag = NULL WHERE ino = 1;",
         )?;
         Ok(())

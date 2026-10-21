@@ -21,11 +21,13 @@ use futures_util::StreamExt;
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::{broadcast, watch, Notify};
 
+use crate::cloud_thumbs::CloudThumbs;
 use crate::config::{Config, Paths};
 use crate::db::{Activity, Db, Item, Store, Tombstone, ROOT};
 use crate::names::{self, IgnoreRules};
 use crate::notify::Notifier;
 use crate::status::{human_size, Account, Issue, Status, Transfer};
+use crate::thumbs::{self, Bucket};
 
 const ACCOUNT_REFRESH: Duration = Duration::from_secs(600);
 const BIG_DOWNLOAD_NOTICE: u64 = 50 * 1024 * 1024;
@@ -82,6 +84,8 @@ struct PullOutcome {
     /// Kernel dentries and inodes to drop so the change shows immediately.
     stale_entries: Vec<(u64, String)>,
     stale_inodes: Vec<u64>,
+    /// Cloud thumbnails of items that changed, moved or went away.
+    stale_thumbs: Vec<String>,
 }
 
 pub struct Engine {
@@ -108,6 +112,7 @@ pub struct Engine {
     account_due: Mutex<Option<tokio::time::Instant>>,
     notifier: Arc<Notifier>,
     kernel: OnceLock<fuser::Notifier>,
+    pub(crate) thumbs: CloudThumbs,
 }
 
 impl Engine {
@@ -138,6 +143,15 @@ impl Engine {
             .flatten()
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
+        // Thumbnails are named after the files' paths, so a new OneDrive
+        // folder location orphans them all.
+        let mount = cfg.mount_path().display().to_string();
+        if db.with(|s| s.kv("thumbs_mount")).ok().flatten().as_deref() != Some(mount.as_str()) {
+            if let Ok(names) = db.with(|s| s.take_all_thumbs()) {
+                thumbs::remove(&paths.thumbnail_dir, &names);
+            }
+            let _ = db.with(|s| s.set_kv("thumbs_mount", &mount));
+        }
         let (changed_tx, _) = broadcast::channel(64);
         Ok(Arc::new(Self {
             signed_in: AtomicBool::new(paths.tokens_file.exists()),
@@ -163,6 +177,7 @@ impl Engine {
             account_due: Mutex::new(None),
             notifier: Arc::new(Notifier::new(opts.notifications)),
             kernel: OnceLock::new(),
+            thumbs: CloudThumbs::default(),
         }))
     }
 
@@ -192,7 +207,9 @@ impl Engine {
         let _ = self.kernel.set(n);
     }
 
+    /// Drop what a change made stale: thumbnails, and the kernel's caches of the mount.
     fn invalidate(&self, out: &PullOutcome) {
+        thumbs::remove(&self.paths.thumbnail_dir, &out.stale_thumbs);
         let Some(k) = self.kernel.get() else { return };
         for (parent, name) in &out.stale_entries {
             let _ = k.inval_entry(fuser::INodeNo(*parent), OsStr::new(name));
@@ -272,7 +289,8 @@ impl Engine {
     /// Content of a cached file changed locally: queue it for upload.
     pub fn local_content_changed(&self, ino: u64) -> Result<()> {
         let meta = std::fs::metadata(self.cache_path(ino)).ok();
-        self.db.with(|s| -> Result<()> {
+        let stale = self.db.with(|s| -> Result<Vec<String>> {
+            let stale = s.take_thumb(ino)?;
             if let Some(mut it) = s.get(ino)? {
                 it.dirty = true;
                 it.cached = true;
@@ -288,8 +306,9 @@ impl Engine {
                 }
                 s.update(&it)?;
             }
-            Ok(())
+            Ok(stale)
         })?;
+        thumbs::remove(&self.paths.thumbnail_dir, &stale);
         self.changed();
         self.wake();
         Ok(())
@@ -581,6 +600,9 @@ impl Engine {
         }
         self.cycle_running.store(false, Ordering::Relaxed);
         self.spawn_pinned_downloads();
+        if let Ok(names) = self.db.with(|s| s.take_orphan_thumbs()) {
+            thumbs::remove(&self.paths.thumbnail_dir, &names);
+        }
         self.changed();
     }
 
@@ -783,6 +805,7 @@ impl Engine {
         if (row.parent != parent.ino || row.name != name) && !row.moved {
             self.make_room(s, parent.ino, name, row.ino, out)?;
             out.stale_entries.push((row.parent, row.name.clone()));
+            out.stale_thumbs.extend(s.take_thumbs_under(row.ino)?);
             row.parent = parent.ino;
             row.name = name.to_string();
             if parent.pinned {
@@ -802,6 +825,7 @@ impl Engine {
         }
         if changed {
             out.stale_inodes.push(row.ino);
+            out.stale_thumbs.extend(s.take_thumb(row.ino)?);
             if row.cached {
                 row.cached = false;
                 out.uncache.push(row.ino);
@@ -880,6 +904,7 @@ impl Engine {
         } else {
             // A synced item whose own rename or delete is later in the feed.
             out.stale_entries.push((other.parent, other.name.clone()));
+            out.stale_thumbs.extend(s.take_thumbs_under(other.ino)?);
             other.name = format!(".axentra-onedrive-pending-{}-{}", other.ino, other.name);
             s.update(&other)
         }
@@ -898,6 +923,7 @@ impl Engine {
         };
         let original = std::mem::replace(&mut row.name, new_name);
         out.stale_entries.push((row.parent, original.clone()));
+        out.stale_thumbs.extend(s.take_thumbs_under(row.ino)?);
         row.id = None;
         row.etag = None;
         row.ctag = None;
@@ -938,6 +964,7 @@ impl Engine {
                 s.update(&k)?;
             } else {
                 s.delete(it.ino)?;
+                out.stale_thumbs.extend(s.take_thumb(it.ino)?);
                 out.stale_entries.push((it.parent, it.name.clone()));
                 if it.cached {
                     out.uncache.push(it.ino);
@@ -1382,7 +1409,8 @@ impl Engine {
             ));
         }
         if let Ok(rel) = self.db.with(|s| s.path(ino)) {
-            crate::thumbs::clear_failure(
+            thumbs::clear_failure(
+                &self.paths.thumbnail_dir,
                 &self.cfg().mount_path().join(rel.trim_start_matches('/')),
             );
         }
@@ -1455,6 +1483,49 @@ impl Engine {
         Ok(kept)
     }
 
+    // ----- cloud thumbnails ------------------------------------------------------
+
+    /// A file manager or file chooser listed a folder: prepare thumbnails of
+    /// its online-only photos in the background.
+    pub fn folder_listed(self: &Arc<Self>, dir: u64) {
+        self.thumbs.folder_listed(self, dir);
+    }
+
+    /// A thumbnail of a file in the freedesktop cache, fetched from OneDrive
+    /// if the file is online-only. `None` if there isn't one.
+    pub async fn thumbnail(self: &Arc<Self>, ino: u64, size: Bucket) -> Result<Option<PathBuf>> {
+        self.thumbs.get(self, ino, size).await
+    }
+
+    /// Whether OneDrive's thumbnail can stand in for downloading `it`.
+    pub fn may_fetch_thumbnail(&self, it: &Item) -> bool {
+        self.can_reach_onedrive() && self.cfg().cloud_thumbnails && crate::cloud_thumbs::wanted(it)
+    }
+
+    /// Signed in and not known to be offline.
+    pub fn can_reach_onedrive(&self) -> bool {
+        self.signed_in.load(Ordering::Relaxed) && !self.offline.load(Ordering::Relaxed)
+    }
+
+    /// Change an attribute of `path` through the mount, so programs watching
+    /// its folder look at the file again (and find its new thumbnail).
+    pub(crate) fn nudge(&self, path: PathBuf) {
+        if self.kernel.get().is_none() {
+            return;
+        }
+        // The kernel calls back into the mount: never from a filesystem thread.
+        self.rt.spawn_blocking(move || {
+            use std::os::unix::ffi::OsStrExt;
+            let (Ok(p), Ok(n)) = (
+                std::ffi::CString::new(path.as_os_str().as_bytes()),
+                std::ffi::CString::new(thumbs::NUDGE_XATTR),
+            ) else {
+                return;
+            };
+            unsafe { libc::setxattr(p.as_ptr(), n.as_ptr(), b"1".as_ptr().cast(), 1, 0) };
+        });
+    }
+
     // ----- sharing, versions, account -------------------------------------------
 
     fn remote_id(&self, ino: u64) -> Result<String> {
@@ -1516,6 +1587,9 @@ impl Engine {
     pub async fn sign_out(&self) -> Result<()> {
         self.graph.tokens().clear().await?;
         self.signed_in.store(false, Ordering::Relaxed);
+        if let Ok(names) = self.db.with(|s| s.take_all_thumbs()) {
+            thumbs::remove(&self.paths.thumbnail_dir, &names);
+        }
         self.db.with(|s| s.reset())?;
         if let Ok(entries) = std::fs::read_dir(&self.paths.cache_dir) {
             for e in entries.flatten() {

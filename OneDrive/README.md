@@ -14,6 +14,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 |---|---|
 | OneDrive folder in Explorer | `~/OneDrive`, a FUSE filesystem |
 | Files On-Demand: online-only files take no space | Files are listed instantly and download when opened; online-only files use 0 bytes on disk |
+| Thumbnails of online-only photos and videos, without downloading them | OneDrive's previews go into the freedesktop thumbnail cache, so GNOME Files, GTK file choosers and Eye of GNOME show them |
 | Status column: cloud, green check, solid green check, sync arrows, red X | The same badges in GNOME Files, from extended attributes |
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `free`, or an extended attribute |
 | Share, View online, Version history with Restore | Right-click OneDrive submenu; history opens its own window |
@@ -27,7 +28,7 @@ Your OneDrive on Linux, working the way it does on Windows: a OneDrive folder wi
 | Lock and temporary files aren't uploaded | `~$*`, `.~lock.*#`, swap and partial-download files stay local |
 | Saving via "write temp, rename over" keeps version history | Same: becomes a new version of the original |
 
-Not done yet: Personal Vault, folder backup (Desktop/Documents/Pictures), "Choose folders", files shared with you as shortcuts, more than one account, cloud thumbnails for online-only files, and instant change notifications (Axentra OneDrive checks every 30 seconds by default).
+Not done yet: Personal Vault, folder backup (Desktop/Documents/Pictures), "Choose folders", files shared with you as shortcuts, more than one account, and instant change notifications (Axentra OneDrive checks every 30 seconds by default).
 
 | | |
 |---|---|
@@ -62,7 +63,8 @@ The installer adds a Command manifest, `~/.local/share/axentra/command/apps/oned
 
 ## Validation
 
-- 37 Rust tests passed, including 18 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- 46 Rust tests passed, including 23 end-to-end tests that mount a real FUSE filesystem and sync it against an in-memory Microsoft Graph mock.
+- On the real account, an online-only photo got OneDrive's thumbnail in under a second and stayed online-only.
 - Signed in to a real personal OneDrive account, listed its files through the mount and downloaded files on demand with QuickXorHash verification.
 - Tray, panel, D-Bus control and the systemd service were exercised on a live Zorin OS GNOME desktop. The file-manager extension was tested against a live mount in a test harness.
 - The app is unsigned and has no binary release, so there is no antivirus scan. See [security status](security/README.md).

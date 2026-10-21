@@ -224,6 +224,36 @@ pub struct DriveItemVersion {
     pub last_modified_by: Option<IdentitySet>,
 }
 
+/// One set of preview images OneDrive made for an item (photos, videos,
+/// documents). Set 0 is the item's own content.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThumbnailSet {
+    #[serde(default)]
+    pub id: Option<String>,
+    /// 96 px on the longest side.
+    #[serde(default)]
+    pub small: Option<Thumbnail>,
+    /// 176 px.
+    #[serde(default)]
+    pub medium: Option<Thumbnail>,
+    /// 800 px.
+    #[serde(default)]
+    pub large: Option<Thumbnail>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Thumbnail {
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// Pre-authenticated and short-lived.
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct Collection<T> {
     pub value: Vec<T>,

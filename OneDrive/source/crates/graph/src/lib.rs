@@ -2,7 +2,7 @@
 //!
 //! Covers what a sync client needs: OAuth sign-in (browser + PKCE, or device
 //! code), token refresh, the drive delta feed, chunked uploads, streamed
-//! downloads, sharing links and version history.
+//! downloads, thumbnails, sharing links and version history.
 
 pub mod auth;
 pub mod client;

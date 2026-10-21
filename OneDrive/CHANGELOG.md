@@ -14,5 +14,8 @@
 - Starting the app again (from the app menu or Command) shows the running one's panel or Settings instead of adding a second tray icon.
 - Windows now match `axentra-onedrive.desktop`, so the taskbar shows the app icon instead of a generic one.
 - Stopping no longer waits for programs that still have a folder in OneDrive open; it closes the folder after 5 seconds and logs which programs had it open.
+- Cloud thumbnails: online-only photos and videos get OneDrive's previews in the freedesktop thumbnail cache, so GNOME Files, GTK file choosers and Eye of GNOME show them without downloading. Adds the `GetThumbnail` D-Bus method and `axentra-onedrive thumbnail`.
+- GNOME's own thumbnailers (whose names the kernel shortens) and the RAW helper `dcraw` are now recognised and kept from downloading online-only files.
+- A second sync service can no longer take the D-Bus name from the running one.
 
 No binary release, installer or checksums are published for this version.

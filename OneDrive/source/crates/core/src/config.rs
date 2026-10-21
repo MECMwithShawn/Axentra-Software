@@ -50,6 +50,9 @@ pub struct Config {
     pub ignore: Vec<String>,
     /// App icon colour: "ice" (default), "periwinkle" or "azure".
     pub icon_color: String,
+    /// Show OneDrive's thumbnails of online-only photos and videos in file
+    /// managers and file choosers, without downloading the files.
+    pub cloud_thumbnails: bool,
 }
 
 impl Default for Config {
@@ -70,6 +73,7 @@ impl Default for Config {
             notify_conflicts: true,
             notify_errors: true,
             icon_color: "ice".into(),
+            cloud_thumbnails: true,
             ignore: vec![
                 // Office and LibreOffice lock files, editor swap files, partial downloads.
                 "~$*".into(),
@@ -148,6 +152,9 @@ pub struct Paths {
     pub db_file: PathBuf,
     /// Downloaded file contents ("locally available" files).
     pub cache_dir: PathBuf,
+    /// The freedesktop thumbnail cache (`~/.cache/thumbnails`), where cloud
+    /// thumbnails go.
+    pub thumbnail_dir: PathBuf,
 }
 
 impl Paths {
@@ -160,6 +167,7 @@ impl Paths {
             tokens_file: data.join("axentra/onedrive/tokens.json"),
             db_file: data.join("axentra/onedrive/state.sqlite"),
             cache_dir: cache.join("axentra/onedrive/files"),
+            thumbnail_dir: cache.join("thumbnails"),
         }
     }
 
@@ -169,6 +177,7 @@ impl Paths {
             tokens_file: root.join("tokens.json"),
             db_file: root.join("state.sqlite"),
             cache_dir: root.join("files"),
+            thumbnail_dir: root.join("thumbnails"),
         }
     }
 
@@ -198,6 +207,7 @@ mod tests {
         // Older settings files without the key still load.
         let old: Config = toml::from_str("client_id = \"x\"").unwrap();
         assert_eq!(old.icon_color(), "ice");
+        assert!(old.cloud_thumbnails);
         assert_eq!(icon_accent("periwinkle"), [139, 151, 255]);
     }
 }

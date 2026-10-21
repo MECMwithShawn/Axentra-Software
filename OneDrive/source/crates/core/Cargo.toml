@@ -25,6 +25,8 @@ hostname.workspace = true
 parking_lot.workspace = true
 futures-util.workspace = true
 md-5 = "0.10"
+image.workspace = true
+png.workspace = true
 
 [dev-dependencies]
 axentra-onedrive-mock.workspace = true

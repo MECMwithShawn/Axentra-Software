@@ -5,6 +5,9 @@
 //! (the reply is deferred, so other operations keep flowing); writes go to
 //! the cached copy and are uploaded when the file is closed. Status is
 //! exposed as `user.axentra.onedrive.*` extended attributes for file-manager badges.
+//!
+//! Thumbnailers get OneDrive's thumbnail instead of the file (see
+//! [`crate::cloud_thumbs`]), and so does the file chooser portal.
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -27,8 +30,11 @@ use parking_lot::Mutex;
 use crate::db::{Item, Store, Tombstone, ROOT};
 use crate::engine::{ms_to_system, now_ms, Engine};
 use crate::names;
+use crate::thumbs::{self, Bucket};
 
 const TTL: Duration = Duration::from_secs(1);
+/// How long a thumbnailer or the portal waits for OneDrive's thumbnail.
+const THUMBNAIL_WAIT: Duration = Duration::from_secs(10);
 const XATTRS: [&str; 5] = [
     "user.axentra.onedrive.status",
     "user.axentra.onedrive.pinned",
@@ -220,6 +226,29 @@ impl Inner {
                 Errno::EIO
             }));
         });
+    }
+
+    /// Open a file whose content is (or is about to be made) local.
+    fn finish_open(self: &Arc<Self>, it: Item, write: bool, trunc: bool, reply: ReplyOpen) {
+        let ino = it.ino;
+        let it = Item {
+            cached: it.cached || trunc,
+            ..it
+        };
+        let inner = self.clone();
+        self.with_content(&it, move |ready| {
+            if let Err(e) = ready {
+                return reply.error(e);
+            }
+            match inner.open_handle(ino, write, trunc) {
+                Ok(fh) => reply.opened(FileHandle(fh), FopenFlags::empty()),
+                Err(e) => reply.error(eio(e)),
+            }
+        });
+    }
+
+    fn remove_thumbnails(&self, names: &[String]) {
+        thumbs::remove(&self.engine.paths.thumbnail_dir, names);
     }
 
     fn tombstone(&self, s: &Store<'_>, it: &Item) -> Result<()> {
@@ -445,10 +474,11 @@ impl Filesystem for AxentraOneDriveFs {
             }
             fs.tombstone(s, &it)?;
             s.delete(it.ino)?;
-            Ok(it.ino)
+            Ok((it.ino, s.take_thumb(it.ino)?))
         });
         match result {
-            Ok(ino) => {
+            Ok((ino, stale)) => {
+                fs.remove_thumbnails(&stale);
                 // Open handles keep the unlinked content readable.
                 let _ = std::fs::remove_file(fs.engine.cache_path(ino));
                 fs.engine.wake();
@@ -531,8 +561,11 @@ impl Filesystem for AxentraOneDriveFs {
             return reply.error(Errno::EPERM);
         }
         let mut drop_cache = Vec::new();
+        let mut stale_thumbs = Vec::new();
         let result = fs.tx(|s| {
             let mut src = s.child(parent.0, name)?.ok_or(FsErr(Errno::ENOENT))?;
+            // Thumbnails are named after the path, which is about to change.
+            stale_thumbs = s.take_thumbs_under(src.ino)?;
             let np = s.get(newparent.0)?.ok_or(FsErr(Errno::ENOENT))?;
             if !np.is_dir {
                 return fail(Errno::ENOTDIR);
@@ -583,6 +616,7 @@ impl Filesystem for AxentraOneDriveFs {
                     fs.tombstone(s, &dest)?;
                 }
                 s.delete(dest.ino)?;
+                stale_thumbs.extend(s.take_thumb(dest.ino)?);
                 drop_cache.push(dest.ino);
             }
 
@@ -622,6 +656,7 @@ impl Filesystem for AxentraOneDriveFs {
         });
         match result {
             Ok(()) => {
+                fs.remove_thumbnails(&stale_thumbs);
                 for ino in drop_cache {
                     let _ = std::fs::remove_file(fs.engine.cache_path(ino));
                 }
@@ -645,39 +680,68 @@ impl Filesystem for AxentraOneDriveFs {
         let write = flags.acc_mode() != OpenAccMode::O_RDONLY;
         let trunc = write && flags.0 & libc::O_TRUNC != 0;
         if !it.cached {
+            let pid = req.pid();
             if trunc {
                 if let Err(e) = fs.make_empty(it.ino) {
                     return reply.error(e);
                 }
-            } else if crate::thumbs::is_background_reader(req.pid()) {
-                tracing::debug!(
-                    "not downloading {} for {}",
-                    it.name,
-                    crate::thumbs::describe(req.pid())
-                );
+            } else if thumbs::is_background_reader(pid) {
+                if thumbs::is_thumbnailer_pid(pid) && fs.engine.may_fetch_thumbnail(&it) {
+                    // Save OneDrive's thumbnail where the thumbnailer would
+                    // have, then turn it away: file managers look for the
+                    // thumbnail again when a thumbnailer gives up.
+                    let size = thumbs::requested_size(pid).map_or(Bucket::Large, Bucket::fitting);
+                    let engine = fs.engine.clone();
+                    let who = thumbs::describe(pid);
+                    fs.engine.rt.spawn(async move {
+                        let got =
+                            tokio::time::timeout(THUMBNAIL_WAIT, engine.thumbnail(ino.0, size))
+                                .await;
+                        match got {
+                            Ok(Ok(Some(_))) => {
+                                tracing::debug!("gave {who} OneDrive's thumbnail of {}", it.name)
+                            }
+                            Ok(Ok(None)) => {
+                                tracing::debug!("not downloading {} for {who}", it.name)
+                            }
+                            Ok(Err(e)) => tracing::debug!(
+                                "no cloud thumbnail of {} for {who}: {e:#}",
+                                it.name
+                            ),
+                            Err(_) => {
+                                tracing::debug!("OneDrive's thumbnail of {} took too long", it.name)
+                            }
+                        }
+                        reply.error(Errno::EACCES);
+                    });
+                    return;
+                }
+                tracing::debug!("not downloading {} for {}", it.name, thumbs::describe(pid));
                 return reply.error(Errno::EACCES);
+            } else if thumbs::is_portal(pid) && fs.engine.may_fetch_thumbnail(&it) {
+                // The file chooser reads photos for its previews; it can have
+                // the thumbnail instead. Anything else it reads downloads.
+                let who = thumbs::describe(pid);
+                let inner = fs.clone();
+                fs.engine.rt.spawn(async move {
+                    let got = tokio::time::timeout(THUMBNAIL_WAIT, inner.engine.thumbnail(ino.0, Bucket::Large)).await;
+                    if let Ok(Ok(Some(_))) = got {
+                        tracing::info!("showing \"{}\" to {who} as OneDrive's thumbnail instead of downloading it", it.name);
+                        return reply.error(Errno::EACCES);
+                    }
+                    tracing::info!("downloading \"{}\" on demand for {who}", it.name);
+                    inner.finish_open(it, write, false, reply);
+                });
+                return;
             } else {
                 tracing::info!(
                     "downloading \"{}\" on demand for {}",
                     it.name,
-                    crate::thumbs::describe(req.pid())
+                    thumbs::describe(pid)
                 );
             }
         }
-        let it = Item {
-            cached: it.cached || trunc,
-            ..it
-        };
-        let inner = fs.clone();
-        fs.with_content(&it, move |ready| {
-            if let Err(e) = ready {
-                return reply.error(e);
-            }
-            match inner.open_handle(ino.0, write, trunc) {
-                Ok(fh) => reply.opened(FileHandle(fh), FopenFlags::empty()),
-                Err(e) => reply.error(eio(e)),
-            }
-        });
+        fs.finish_open(it, write, trunc, reply);
     }
 
     fn read(
@@ -797,7 +861,7 @@ impl Filesystem for AxentraOneDriveFs {
 
     fn readdir(
         &self,
-        _req: &Request,
+        req: &Request,
         ino: INodeNo,
         _fh: FileHandle,
         offset: u64,
@@ -832,6 +896,9 @@ impl Filesystem for AxentraOneDriveFs {
             }
         }
         reply.ok();
+        if offset == 0 && thumbs::lists_for_display(req.pid()) {
+            fs.engine.folder_listed(dir.ino);
+        }
     }
 
     fn statfs(&self, _req: &Request, _ino: INodeNo, reply: ReplyStatfs) {
@@ -864,6 +931,9 @@ impl Filesystem for AxentraOneDriveFs {
         _position: u32,
         reply: ReplyEmpty,
     ) {
+        if name == thumbs::NUDGE_XATTR {
+            return reply.ok(); // the change notification is the point
+        }
         if name != "user.axentra.onedrive.pinned" {
             return reply.error(Errno::EOPNOTSUPP);
         }

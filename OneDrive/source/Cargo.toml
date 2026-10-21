@@ -36,6 +36,8 @@ parking_lot = "0.12"
 clap = { version = "4", features = ["derive"] }
 axum = "0.8"
 tempfile = "3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+png = "0.18"
 
 axentra-onedrive-graph = { path = "crates/graph" }
 axentra-onedrive-core = { path = "crates/core" }

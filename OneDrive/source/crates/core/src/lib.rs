@@ -1,6 +1,7 @@
 //! Axentra OneDrive core: local state, the sync engine, the Files On-Demand mount and
 //! the D-Bus service the tray, flyout and file manager talk to.
 
+pub mod cloud_thumbs;
 pub mod config;
 pub mod daemon;
 pub mod db;

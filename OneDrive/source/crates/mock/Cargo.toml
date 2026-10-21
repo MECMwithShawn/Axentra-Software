@@ -18,3 +18,4 @@ bytes.workspace = true
 tracing.workspace = true
 percent-encoding.workspace = true
 url.workspace = true
+image.workspace = true

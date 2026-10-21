@@ -603,3 +603,361 @@ async fn interrupted_first_scan_resumes_where_it_stopped() {
     assert_eq!(list(env.p("A")).await.len(), 7);
     assert_eq!(env.engine.status().state, "up_to_date");
 }
+
+// ----- cloud thumbnails ---------------------------------------------------------
+
+use axentra_onedrive_core::thumbs::{self, Bucket, Original};
+
+/// Run `f` on a thread with this name, which is what the mount sees as the
+/// program (GLib's worker threads are "pool-<program>").
+async fn as_program<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> T {
+    let name = name.to_string();
+    fsop(move || {
+        std::thread::Builder::new()
+            .name(name)
+            .spawn(f)
+            .unwrap()
+            .join()
+            .unwrap()
+    })
+    .await
+}
+
+fn thumb_of(env: &Env, rel: &str, size: Bucket) -> PathBuf {
+    let uri = thumbs::file_uri(&env.p(rel));
+    thumbs::path_in(
+        &env.engine.paths.thumbnail_dir,
+        size,
+        &thumbs::cache_name(&uri),
+    )
+}
+
+/// Whether the thumbnail is one GIO would use for the file as the mount shows it.
+async fn thumb_is_valid(env: &Env, rel: &str, size: Bucket) -> bool {
+    let file = env.p(rel);
+    let meta = fsop(move || std::fs::metadata(file).unwrap()).await;
+    let uri = thumbs::file_uri(&env.p(rel));
+    thumbs::is_valid(
+        &thumb_of(env, rel, size),
+        &Original {
+            uri: &uri,
+            mtime: meta.mtime(),
+            size: meta.len(),
+        },
+    )
+}
+
+async fn eventually(what: &str, cond: impl Fn() -> bool) {
+    for _ in 0..200 {
+        if cond() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("timed out waiting for {what}");
+}
+
+fn thumbnail_requests(env: &Env, rel: &str) -> usize {
+    let id = env.mock.id(rel).unwrap();
+    env.mock.requests(&format!("/items/{id}/thumbnails"))
+}
+
+async fn photo_env() -> Env {
+    let env = Env::new().await;
+    env.mock.add_folder("/", "Photos");
+    for name in [
+        "IMG_0001.JPG",
+        "IMG_0002.jpg",
+        "clip.mov",
+        "kept.jpg",
+        "seen.jpg",
+    ] {
+        env.mock.add_file("/Photos", name, &vec![7u8; 50_000]);
+    }
+    env.mock.add_file("/Photos", "IMG_0001.AAE", b"<plist/>");
+    env.mock.add_file("/Photos", "notes.txt", b"hello");
+    env.sync().await;
+    env
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn listing_a_photo_folder_fills_the_thumbnail_cache_without_downloading() {
+    let env = photo_env().await;
+    // On this device already: left to the system's thumbnailers.
+    assert_eq!(read(env.p("Photos/seen.jpg")).await.unwrap().len(), 50_000);
+    env.engine
+        .set_pinned(env.ino("/Photos/kept.jpg"), true)
+        .unwrap();
+    eventually("the pinned photo to download", || {
+        env.engine
+            .db
+            .with(|s| s.pinned_uncached())
+            .unwrap()
+            .is_empty()
+    })
+    .await;
+    let downloads = env.mock.downloads();
+    let used = env.engine.local_usage();
+
+    // A script or `find` walking the tree fetches nothing.
+    assert_eq!(list(env.p("Photos")).await.len(), 7);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(env.mock.requests("/thumbnails"), 0);
+
+    // Watch the folder like a file manager does.
+    let photos = env.p("Photos");
+    let watch = fsop(move || {
+        let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK) };
+        let p = CString::new(photos.as_os_str().as_bytes()).unwrap();
+        assert!(unsafe { libc::inotify_add_watch(fd, p.as_ptr(), libc::IN_ATTRIB) } >= 0);
+        fd
+    })
+    .await;
+
+    // Nautilus lists folders on GLib worker threads.
+    let photos = env.p("Photos");
+    assert_eq!(
+        as_program("pool-org.gnome.", move || names(&photos))
+            .await
+            .len(),
+        7
+    );
+    for rel in [
+        "Photos/IMG_0001.JPG",
+        "Photos/IMG_0002.jpg",
+        "Photos/clip.mov",
+    ] {
+        let (normal, large) = (
+            thumb_of(&env, rel, Bucket::Normal),
+            thumb_of(&env, rel, Bucket::Large),
+        );
+        eventually(rel, || normal.exists() && large.exists()).await;
+        assert!(thumb_is_valid(&env, rel, Bucket::Large).await, "{rel}");
+        assert!(thumb_is_valid(&env, rel, Bucket::Normal).await, "{rel}");
+        // Mock photos are 4:3.
+        assert_eq!(image::image_dimensions(&large).unwrap(), (256, 192));
+        assert_eq!(image::image_dimensions(&normal).unwrap(), (128, 96));
+    }
+    for rel in [
+        "/Photos/kept.jpg",
+        "/Photos/seen.jpg",
+        "/Photos/notes.txt",
+        "/Photos/IMG_0001.AAE",
+    ] {
+        assert_eq!(thumbnail_requests(&env, rel), 0, "{rel}");
+    }
+    assert_eq!(env.mock.downloads(), downloads, "no photo was downloaded");
+    assert_eq!(
+        env.engine.local_usage(),
+        used,
+        "\"on this device\" didn't change"
+    );
+    assert_eq!(status_of(env.p("Photos/IMG_0001.JPG")).await, "online");
+
+    // Each new thumbnail was announced, so open windows show it.
+    let mut buf = [0u8; 4096];
+    let n = unsafe { libc::read(watch, buf.as_mut_ptr().cast(), buf.len()) };
+    unsafe { libc::close(watch) };
+    let events = String::from_utf8_lossy(&buf[..n.max(0) as usize]).into_owned();
+    for name in ["IMG_0001.JPG", "IMG_0002.jpg", "clip.mov"] {
+        assert!(events.contains(name), "no change notification for {name}");
+    }
+
+    // GIO itself finds and accepts them, as file managers and choosers ask it.
+    if std::process::Command::new("gio")
+        .arg("--version")
+        .output()
+        .is_ok()
+    {
+        let file = env.p("Photos/IMG_0002.jpg");
+        let cache_home = env
+            .engine
+            .paths
+            .thumbnail_dir
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let out = fsop(move || {
+            std::process::Command::new("gio")
+                .args(["info", "-a", "thumbnail::path,thumbnail::is-valid"])
+                .arg(&file)
+                .env("XDG_CACHE_HOME", cache_home)
+                .output()
+                .unwrap()
+        })
+        .await;
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains("thumbnail::is-valid: TRUE"), "{text}");
+        assert!(
+            text.contains(&*thumb_of(&env, "Photos/IMG_0002.jpg", Bucket::Large).to_string_lossy()),
+            "{text}"
+        );
+    }
+
+    // Listing again soon doesn't fetch again.
+    let before = env.mock.requests("/thumbnails");
+    let photos = env.p("Photos");
+    as_program("pool-org.gnome.", move || names(&photos)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(env.mock.requests("/thumbnails"), before);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn thumbnailers_get_the_cloud_thumbnail_instead_of_the_file() {
+    let env = photo_env().await;
+    let photo = env.p("Photos/IMG_0001.JPG");
+    let err = as_program("x-thumbnailer", move || std::fs::read(photo).unwrap_err()).await;
+    assert_eq!(err.raw_os_error(), Some(libc::EACCES));
+    assert!(thumb_is_valid(&env, "Photos/IMG_0001.JPG", Bucket::Large).await);
+    // Indexers want the file, not a picture of it: refused, nothing fetched.
+    let photo = env.p("Photos/IMG_0002.jpg");
+    let err = as_program("tracker-extract", move || std::fs::read(photo).unwrap_err()).await;
+    assert_eq!(err.raw_os_error(), Some(libc::EACCES));
+    assert_eq!(thumbnail_requests(&env, "/Photos/IMG_0002.jpg"), 0);
+
+    // The real GNOME thumbnailer, asked for a 512 px thumbnail.
+    if std::path::Path::new("/usr/bin/gdk-pixbuf-thumbnailer").exists() {
+        let uri = thumbs::file_uri(&env.p("Photos/clip.mov"));
+        let out = env._dir.path().join("out.png");
+        let o = out.clone();
+        let status = fsop(move || {
+            std::process::Command::new("/usr/bin/gdk-pixbuf-thumbnailer")
+                .args(["-s", "512", &uri])
+                .arg(&o)
+                .output()
+                .unwrap()
+                .status
+        })
+        .await;
+        assert!(!status.success() && !out.exists(), "it read the file");
+        let xl = thumb_of(&env, "Photos/clip.mov", Bucket::XLarge);
+        assert!(thumb_is_valid(&env, "Photos/clip.mov", Bucket::XLarge).await);
+        assert_eq!(image::image_dimensions(&xl).unwrap(), (512, 384));
+    }
+    // A thumbnailer whose helper does the reading (like `xapp-raw-thumbnailer`
+    // running `dcraw`), asked for 128 px.
+    let script = env._dir.path().join("raw-thumbnailer");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\ncat \"$3\" >/dev/null 2>&1\necho $? > \"$4\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let (photo, result) = (
+        env.p("Photos/IMG_0002.jpg"),
+        env._dir.path().join("cat-status"),
+    );
+    let r = result.clone();
+    fsop(move || {
+        std::process::Command::new(script)
+            .args(["-s", "128"])
+            .arg(photo)
+            .arg(r)
+            .status()
+            .unwrap()
+    })
+    .await;
+    assert_ne!(
+        std::fs::read_to_string(&result).unwrap().trim(),
+        "0",
+        "the helper read the photo"
+    );
+    assert!(thumb_is_valid(&env, "Photos/IMG_0002.jpg", Bucket::Normal).await);
+    assert!(!thumb_of(&env, "Photos/IMG_0002.jpg", Bucket::Large).exists());
+    assert_eq!(env.mock.downloads(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_file_chooser_portal_is_shown_thumbnails_but_can_still_read_other_files() {
+    let env = photo_env().await;
+    let photo = env.p("Photos/IMG_0002.jpg");
+    let err = as_program("pool-xdg-deskto", move || std::fs::read(photo).unwrap_err()).await;
+    assert_eq!(err.raw_os_error(), Some(libc::EACCES));
+    assert!(thumb_is_valid(&env, "Photos/IMG_0002.jpg", Bucket::Large).await);
+    assert_eq!(env.mock.downloads(), 0);
+
+    // No thumbnail possible: the portal gets the file.
+    let notes = env.p("Photos/notes.txt");
+    let data = as_program("pool-xdg-deskto", move || std::fs::read(notes).unwrap()).await;
+    assert_eq!(data, b"hello");
+    assert_eq!(env.mock.downloads(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn cloud_thumbnails_go_with_their_items() {
+    let env = photo_env().await;
+    let get = |rel: &str| {
+        let ino = env.ino(rel);
+        let engine = env.engine.clone();
+        async move { engine.thumbnail(ino, Bucket::Normal).await.unwrap() }
+    };
+    for rel in [
+        "/Photos/IMG_0001.JPG",
+        "/Photos/IMG_0002.jpg",
+        "/Photos/clip.mov",
+        "/Photos/kept.jpg",
+    ] {
+        assert!(get(rel).await.is_some(), "{rel}");
+    }
+    let old = |rel: &str| thumb_of(&env, rel, Bucket::Normal);
+    let (changed, renamed, deleted, moved) = (
+        old("Photos/IMG_0001.JPG"),
+        old("Photos/IMG_0002.jpg"),
+        old("Photos/clip.mov"),
+        old("Photos/kept.jpg"),
+    );
+
+    // Renamed here: the old path's thumbnail goes.
+    let (a, b) = (env.p("Photos/IMG_0002.jpg"), env.p("Photos/beach.jpg"));
+    fsop(move || std::fs::rename(a, b).unwrap()).await;
+    assert!(!renamed.exists());
+    // Changed, deleted or moved online.
+    env.mock.modify("/Photos/IMG_0001.JPG", b"new picture");
+    env.mock.delete("/Photos/clip.mov");
+    env.mock.add_folder("/", "Album");
+    env.mock.move_to("/Photos/kept.jpg", "/Album");
+    env.sync().await;
+    assert!(!changed.exists());
+    assert!(!deleted.exists());
+    assert!(!moved.exists());
+    let rows: i64 = env
+        .engine
+        .db
+        .with(|s| {
+            s.0.query_row("SELECT COUNT(*) FROM thumbs", [], |r| r.get(0))
+        })
+        .unwrap();
+    assert_eq!(rows, 0);
+
+    // Fetched again on request, for the new name and content.
+    assert!(get("/Photos/beach.jpg").await.is_some());
+    assert!(thumb_is_valid(&env, "Photos/beach.jpg", Bucket::Normal).await);
+    assert!(get("/Photos/IMG_0001.JPG").await.is_some());
+    assert!(thumb_is_valid(&env, "Photos/IMG_0001.JPG", Bucket::Normal).await);
+    // A file OneDrive has no thumbnail of.
+    assert!(get("/Photos/notes.txt").await.is_none());
+    // Downloaded here: no cloud thumbnail is made for it.
+    assert_eq!(read(env.p("Photos/seen.jpg")).await.unwrap().len(), 50_000);
+    assert!(get("/Photos/seen.jpg").await.is_none());
+    assert_eq!(thumbnail_requests(&env, "/Photos/seen.jpg"), 0);
+
+    // Unlinking this PC removes them all.
+    let beach = thumb_of(&env, "Photos/beach.jpg", Bucket::Normal);
+    env.engine.sign_out().await.unwrap();
+    assert!(!beach.exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn thumbnails_are_scaled_here_when_onedrive_has_no_custom_sizes() {
+    let env = photo_env().await;
+    env.mock.with(|d| d.no_custom_thumbnails = true);
+    let ino = env.ino("/Photos/IMG_0001.JPG");
+    let p = env
+        .engine
+        .thumbnail(ino, Bucket::Large)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(image::image_dimensions(&p).unwrap(), (256, 192));
+    assert!(env.mock.requests("/thumbnails/0/large/content") == 1);
+}

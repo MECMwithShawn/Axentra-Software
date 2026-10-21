@@ -17,6 +17,7 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 | OneDrive folder in Explorer | `~/OneDrive`, a FUSE filesystem |
 | Files On-Demand: online-only files take no space | Files are listed instantly and download when opened; `du` shows 0 bytes for online-only files |
 | Status column: cloud, green check, solid green check, sync arrows, red X | The same badges in GNOME Files, from `user.axentra.onedrive.status` extended attributes |
+| Thumbnails of online-only photos and videos, without downloading them | OneDrive's previews go into the freedesktop thumbnail cache, so GNOME Files, GTK file choosers and Eye of GNOME show them ([details and D-Bus API](docs/thumbnails.md)) |
 | Always keep on this device / Free up space | Right-click menu, `axentra-onedrive pin` / `axentra-onedrive free`, or `setfattr -n user.axentra.onedrive.pinned -v 1` |
 | Share, View online, Version history (with Restore) | Right-click OneDrive submenu; history opens its own window |
 | Tray icon with synced / syncing / paused / problem states | StatusNotifierItem icon drawn in those states |
@@ -31,7 +32,7 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 | Lock and temp files aren't uploaded | `~$*`, `.~lock.*#`, swap and partial-download files stay local |
 | Saving by "write temp, rename over" keeps version history | Same: the rename becomes a new version of the original |
 
-Not done yet: Personal Vault, folder backup (moving Desktop/Documents/Pictures into OneDrive), "Choose folders", files shared with you that were added as shortcuts, more than one account, cloud thumbnails (online-only files show a generic icon, because thumbnailers aren't allowed to download whole folders), and instant push notifications (Axentra OneDrive checks for changes every 30 seconds by default).
+Not done yet: Personal Vault, folder backup (moving Desktop/Documents/Pictures into OneDrive), "Choose folders", files shared with you that were added as shortcuts, more than one account, and instant push notifications (Axentra OneDrive checks for changes every 30 seconds by default).
 
 ## How it works
 
@@ -44,8 +45,8 @@ axentra-onedrive CLI ───────────────────�
 ~/OneDrive (FUSE) ◄─────────────────┘  SQLite state + content cache
 ```
 
-* **`crates/graph`**: Microsoft Graph client. Browser sign-in (PKCE, loopback redirect) or device code, token refresh, the drive delta feed with paging and expiry, 4 MB simple uploads and chunked upload sessions, streamed downloads with QuickXorHash verification, sharing links, versions, and backoff on 429/5xx.
-* **`crates/core`**: the daemon. A SQLite row per item (which doubles as its inode number); the FUSE layer that serves listings from it and downloads content on open without blocking other operations; the sync engine; and the D-Bus API `io.github.mecmwithshawn.AxentraOneDrive1`.
+* **`crates/graph`**: Microsoft Graph client. Browser sign-in (PKCE, loopback redirect) or device code, token refresh, the drive delta feed with paging and expiry, 4 MB simple uploads and chunked upload sessions, streamed downloads with QuickXorHash verification, thumbnails, sharing links, versions, and backoff on 429/5xx.
+* **`crates/core`**: the daemon. A SQLite row per item (which doubles as its inode number); the FUSE layer that serves listings from it and downloads content on open without blocking other operations; the sync engine; cloud thumbnails; and the D-Bus API `io.github.mecmwithshawn.AxentraOneDrive1`.
 * **`crates/ui`**: the tray icon (ksni), the activity panel, Settings and Version history ([Slint](https://slint.dev), Fluent style).
 * **`crates/cli`**: `axentra-onedrive`, for setup, sign-in, the daemon itself and scripting.
 * **`crates/mock`**: an in-memory fake OneDrive for tests and demos.
@@ -81,6 +82,7 @@ axentra-onedrive pin   <path>...     always keep on this device
 axentra-onedrive unpin <path>...     stop always keeping (files stay local for now)
 axentra-onedrive free  <path>...     free up space
 axentra-onedrive share <path>        print a view link (--edit for an edit link)
+axentra-onedrive thumbnail <file>    print a thumbnail's path (OneDrive's, if the file is online-only)
 axentra-onedrive online [path]       open on the web
 axentra-onedrive versions <file>     list versions;  axentra-onedrive restore <file> <id>
 axentra-onedrive pause [hours]       pause (2 by default);  axentra-onedrive resume
@@ -105,7 +107,7 @@ It prints the `config.toml` lines and token file to use. Point a separate profil
 cargo test --workspace
 ```
 
-The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore, resuming an interrupted first scan, starting before the network is up, and stopping while a folder is still open. QuickXorHash is checked against a bit-by-bit model of the algorithm.
+The end-to-end tests mount a real FUSE filesystem for each test and sync it against the mock server. They cover on-demand download, uploads (including chunked large files), rename keeping item identity, conflicts, deleted-online-but-edited files, pin and free, save-by-rename version history, delta paging and expiry, token refresh, throttling, invalid names, sharing, version restore, resuming an interrupted first scan, starting before the network is up, stopping while a folder is still open, and cloud thumbnails (filled when a file manager lists a folder, handed to thumbnailers and the file chooser portal instead of the file, checked with GIO itself, and removed with their items). QuickXorHash is checked against a bit-by-bit model of the algorithm.
 
 UI screenshots render headlessly with `cargo run -p axentra-onedrive-ui -- --screenshot <view> out.png [light|dark]`. The views are `flyout`, `flyout-syncing`, `flyout-menu`, `flyout-paused`, `flyout-signed-out`, `flyout-empty`, `settings-0` to `settings-4`, `versions` and `tray`.
 

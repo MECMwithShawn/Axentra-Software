@@ -86,6 +86,14 @@ enum Cmd {
     Versions {
         path: PathBuf,
     },
+    /// Print the path of a thumbnail of a photo or video, getting OneDrive's
+    /// if the file is online-only (it isn't downloaded).
+    Thumbnail {
+        path: PathBuf,
+        /// normal (128 px), large (256), x-large (512), xx-large (1024) or pixels.
+        #[arg(long, default_value = "large")]
+        size: String,
+    },
     /// Restore a previous version (ID from `axentra-onedrive versions`).
     Restore {
         path: PathBuf,
@@ -212,6 +220,14 @@ async fn main() -> Result<()> {
                     if i == 0 { "  (current)" } else { "" }
                 );
             }
+            Ok(())
+        }
+        Cmd::Thumbnail { path, size } => {
+            let thumb = proxy().await?.get_thumbnail(abs(path)?, size).await?;
+            if thumb.is_empty() {
+                bail!("There's no thumbnail of this file");
+            }
+            println!("{thumb}");
             Ok(())
         }
         Cmd::Restore { path, version } => {

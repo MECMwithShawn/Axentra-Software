@@ -18,7 +18,7 @@ All nine applications have native Linux development previews installed and launc
 
 ## Axentra OneDrive (added 2026-10-19)
 
-[Axentra OneDrive](../OneDrive/) 0.1.0 is a Linux-only development preview that mirrors the Windows OneDrive client: Files On-Demand, tray and activity panel, file-manager badges and Windows conflict rules. It is installed on Zorin OS 18.1 under `~/.local/share/axentra/apps/onedrive` and syncing a real personal account. Its source is included in this repository under the MIT license. 37 Rust tests passed. Its ice cloud icon is in the Icon Kit (revision 1.6). No binary release is published. Its installer adds a Command manifest, so Command lists it on Linux. See its [Linux notes](../OneDrive/LINUX.md).
+[Axentra OneDrive](../OneDrive/) 0.1.0 is a Linux-only development preview that mirrors the Windows OneDrive client: Files On-Demand, tray and activity panel, file-manager badges and Windows conflict rules. It is installed on Zorin OS 18.1 under `~/.local/share/axentra/apps/onedrive` and syncing a real personal account. Its source is included in this repository under the MIT license. 46 Rust tests passed. Its ice cloud icon is in the Icon Kit (revision 1.6). No binary release is published. Its installer adds a Command manifest, so Command lists it on Linux. See its [Linux notes](../OneDrive/LINUX.md).
 
 ## Axentra Outlook (added 2026-10-19)
 

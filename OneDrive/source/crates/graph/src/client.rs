@@ -347,6 +347,40 @@ impl Graph {
         Ok(done)
     }
 
+    /// The thumbnail sets OneDrive has for an item (empty for most non-media files).
+    pub async fn thumbnails(&self, id: &str) -> GResult<Vec<ThumbnailSet>> {
+        let page: Collection<ThumbnailSet> = self
+            .get_json(&self.url(&format!("/me/drive/items/{id}/thumbnails")))
+            .await?;
+        Ok(page.value)
+    }
+
+    /// One preview image of an item, without downloading the item itself.
+    ///
+    /// `size` is `small`, `medium`, `large` or a custom bounding box such as
+    /// `c256x256` (the image keeps its aspect ratio and fits inside). The
+    /// result is usually a JPEG. `None` when OneDrive has no thumbnail for it.
+    pub async fn thumbnail(&self, id: &str, size: &str) -> GResult<Option<Bytes>> {
+        const MAX: usize = 8 * 1024 * 1024;
+        let url = self.url(&format!("/me/drive/items/{id}/thumbnails/0/{size}/content"));
+        let resp = match self.send(|c| c.get(&url)).await {
+            Ok(r) => r,
+            Err(e) if e.is_not_found() => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        let mut body = Vec::new();
+        let mut stream = resp.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            if body.len() + chunk.len() > MAX {
+                return Err(GraphError::Other("thumbnail is unexpectedly large".into()));
+            }
+            self.download_limit.consume(chunk.len() as u64).await;
+            body.extend_from_slice(&chunk);
+        }
+        Ok((!body.is_empty()).then(|| Bytes::from(body)))
+    }
+
     /// Upload a local file, as a new item or a new version of an existing one.
     ///
     /// `if_match` makes the upload fail with HTTP 412 if the item changed

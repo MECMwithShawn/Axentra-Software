@@ -12,6 +12,7 @@ use zbus::{fdo, interface, object_server::SignalEmitter};
 
 use crate::config::{Config, DBUS_NAME, DBUS_PATH};
 use crate::engine::Engine;
+use crate::thumbs::Bucket;
 
 pub struct SyncService {
     engine: Arc<Engine>,
@@ -100,6 +101,24 @@ impl SyncService {
         Ok(serde_json::to_string(&v).unwrap_or_default())
     }
 
+    /// Path of a PNG thumbnail of `path` in the freedesktop thumbnail cache,
+    /// or "" if there isn't one. Online-only photos and videos get OneDrive's
+    /// thumbnail, without downloading the file. `size` is normal (128 px),
+    /// large (256), x-large (512), xx-large (1024) or a pixel size; "" means large.
+    async fn get_thumbnail(&self, path: String, size: String) -> fdo::Result<String> {
+        let size = Bucket::parse(&size)
+            .ok_or_else(|| fdo::Error::InvalidArgs(format!("unknown thumbnail size {size:?}")))?;
+        let ino = self.ino_for(&path)?;
+        match tokio::time::timeout(Duration::from_secs(20), self.engine.thumbnail(ino, size)).await
+        {
+            Ok(Ok(p)) => Ok(p.map(|p| p.display().to_string()).unwrap_or_default()),
+            Ok(Err(e)) => Err(failed(e)),
+            Err(_) => Err(fdo::Error::TimedOut(
+                "OneDrive didn't send the thumbnail in time".into(),
+            )),
+        }
+    }
+
     async fn restore_version(&self, path: String, version_id: String) -> fdo::Result<()> {
         let ino = self.ino_for(&path)?;
         self.engine
@@ -149,7 +168,10 @@ impl SyncService {
 /// Claim the bus name and forward engine changes as `Changed` signals.
 pub async fn serve(engine: Arc<Engine>, quit: watch::Sender<bool>) -> Result<zbus::Connection> {
     let mut changes = engine.subscribe();
+    // zbus would otherwise let a second daemon take the name away from this one.
     let conn = zbus::connection::Builder::session()?
+        .allow_name_replacements(false)
+        .replace_existing_names(false)
         .name(DBUS_NAME)?
         .serve_at(DBUS_PATH, SyncService { engine, quit })?
         .build()
@@ -194,6 +216,7 @@ pub trait AxentraOneDrive {
     fn share_link(&self, path: String, edit: bool) -> zbus::Result<String>;
     fn web_url(&self, path: String) -> zbus::Result<String>;
     fn versions(&self, path: String) -> zbus::Result<String>;
+    fn get_thumbnail(&self, path: String, size: String) -> zbus::Result<String>;
     fn restore_version(&self, path: String, version_id: String) -> zbus::Result<()>;
     fn pause(&self, seconds: u32) -> zbus::Result<()>;
     fn resume(&self) -> zbus::Result<()>;
