@@ -8,10 +8,12 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
 BIN="${BIN:-$HOME/.local/bin}"
 APP="$DATA/axentra/apps/onedrive"
 
+systemctl --user disable --now axentra-onedrive-tray.service 2>/dev/null || true
 pkill -x AxentraOneDrive 2>/dev/null || true
 systemctl --user disable --now axentra-onedrive.service 2>/dev/null || true
 rm -f "$BIN/axentra-onedrive" \
-  "$CONFIG/systemd/user/axentra-onedrive.service" "$CONFIG/autostart/axentra-onedrive.desktop" \
+  "$CONFIG/systemd/user/axentra-onedrive.service" "$CONFIG/systemd/user/axentra-onedrive-tray.service" \
+  "$CONFIG/autostart/axentra-onedrive.desktop" \
   "$DATA/applications/axentra-onedrive.desktop" "$DATA/nautilus-python/extensions/axentra_onedrive_nautilus.py" \
   "$DATA/axentra/command/apps/onedrive.json" \
   "$DATA/icons/hicolor/scalable/apps/axentra-onedrive.svg" "$DATA"/icons/hicolor/*/apps/axentra-onedrive.png "$DATA"/icons/hicolor/scalable/emblems/axentra-onedrive-*.svg

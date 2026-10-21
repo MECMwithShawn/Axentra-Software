@@ -1,0 +1,21 @@
+[Unit]
+Description=Axentra OneDrive tray icon and panel
+# Runs with the desktop session and stops with it.
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=@APP@/AxentraOneDrive
+# Comes back if it crashes or is killed. Quit from its menu exits with 0,
+# as does a second copy that hands over to a running one, and stays stopped.
+Restart=always
+RestartPreventExitStatus=0
+RestartSec=3
+Environment=RUST_LOG=warn,arboard=error
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install Axentra OneDrive for the current user (no sudo), in the Axentra suite
 # layout: the app in ~/.local/share/axentra/apps/onedrive, plus icons, the
-# Nautilus extension, a systemd user service and the tray autostart entry.
+# Nautilus extension, systemd user services for sync and the tray icon.
 # An earlier install under the project's working name, Cirrus, is upgraded in
 # place: its sign-in, sync state and downloaded files are kept.
 set -euo pipefail
@@ -45,8 +45,10 @@ if [ -f "$CONFIG/systemd/user/cirrus.service" ] || [ -d "$CONFIG/cirrus" ]; then
 fi
 
 # ----- the app -------------------------------------------------------------------
-tray_was_open=""
-if pkill -x AxentraOneDrive 2>/dev/null; then tray_was_open=1; fi
+# Stop the tray app while its files are replaced (the service, or a copy
+# started by hand or by an older install).
+systemctl --user stop axentra-onedrive-tray.service 2>/dev/null || true
+pkill -x AxentraOneDrive 2>/dev/null || true
 install -Dm755 target/release/AxentraOneDrive "$APP/AxentraOneDrive"
 install -Dm755 target/release/axentra-onedrive "$APP/axentra-onedrive"
 install -Dm644 README.md "$APP/README.md"
@@ -71,10 +73,14 @@ done
 for f in extras/icons/emblems/*.svg; do
   install -Dm644 "$f" "$DATA/icons/hicolor/scalable/emblems/$(basename "$f")"
 done
-mkdir -p "$DATA/applications" "$CONFIG/autostart" "$CONFIG/systemd/user"
+mkdir -p "$DATA/applications" "$CONFIG/systemd/user"
 fill extras/desktop/axentra-onedrive.desktop "$DATA/applications/axentra-onedrive.desktop"
-fill extras/desktop/axentra-onedrive-autostart.desktop "$CONFIG/autostart/axentra-onedrive.desktop"
 fill extras/systemd/axentra-onedrive.service "$CONFIG/systemd/user/axentra-onedrive.service"
+# The tray app is a user service tied to the desktop session, so it comes
+# back if it crashes or is closed by something else (it used to be an
+# autostart entry, which nothing restarted).
+fill extras/systemd/axentra-onedrive-tray.service "$CONFIG/systemd/user/axentra-onedrive-tray.service"
+rm -f "$CONFIG/autostart/axentra-onedrive.desktop"
 # List the app in Axentra Command, with its card in the icon colour.
 case "$colour" in periwinkle) accent="#8B97FF" ;; azure) accent="#48AAFF" ;; *) accent="#B8DEFF" ;; esac
 mkdir -p "$DATA/axentra/command/apps"
@@ -94,14 +100,18 @@ fi
 gtk-update-icon-cache -q -t -f "$DATA/icons/hicolor" 2>/dev/null || true
 update-desktop-database -q "$DATA/applications" 2>/dev/null || true
 systemctl --user daemon-reload
-systemctl --user enable axentra-onedrive.service >/dev/null
+systemctl --user enable axentra-onedrive.service axentra-onedrive-tray.service >/dev/null 2>&1
+# Start the tray now when a desktop session is running.
+start_tray() {
+  if systemctl --user is-active --quiet graphical-session.target; then
+    systemctl --user restart axentra-onedrive-tray.service
+  fi
+}
 
 if [ -z "$upgraded" ] && systemctl --user is-active --quiet axentra-onedrive.service; then
   # Reinstall over a running copy: switch to the new build.
   systemctl --user restart axentra-onedrive.service
-  if [ -n "$tray_was_open" ]; then
-    setsid -f "$APP/AxentraOneDrive" >/dev/null 2>&1 < /dev/null
-  fi
+  start_tray
   echo
   echo "Updated Axentra OneDrive to this build ($version) and restarted it."
   exit 0
@@ -110,7 +120,7 @@ fi
 if [ -n "$upgraded" ]; then
   # It was running before the upgrade: bring it straight back.
   systemctl --user start axentra-onedrive.service
-  setsid -f "$APP/AxentraOneDrive" >/dev/null 2>&1 < /dev/null
+  start_tray
   echo
   echo "Upgraded to Axentra OneDrive $version. Sync and the tray icon are running again."
   echo "The command is now: axentra-onedrive (status, pin, free, share, ...)"

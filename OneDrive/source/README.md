@@ -50,7 +50,7 @@ axentra-onedrive CLI ───────────────────�
 * **`crates/ui`**: the tray icon (ksni), the activity panel, Settings and Version history ([Slint](https://slint.dev), Fluent style).
 * **`crates/cli`**: `axentra-onedrive`, for setup, sign-in, the daemon itself and scripting.
 * **`crates/mock`**: an in-memory fake OneDrive for tests and demos.
-* **`extras/`**: the Nautilus extension, badge icons, systemd unit, desktop entries.
+* **`extras/`**: the Nautilus extension, badge icons, systemd units for sync and the tray icon, the desktop entry and the Axentra Command manifest.
 
 ## Setting it up
 
@@ -67,7 +67,7 @@ You need Rust, `fuse3`, and for the file-manager badges `python3-nautilus`. On G
    If Entra says personal accounts can't create registrations without a directory, join the free Microsoft 365 Developer Program or create a free Azure account and register the app there. The registration still accepts personal accounts.
 2. **Install:** `./install.sh`. Like the rest of the Axentra suite it installs for you only, with no sudo, into `~/.local/share/axentra/apps/onedrive`, puts the `axentra-onedrive` command in `~/.local/bin`, and lists the app in Axentra Command. It also upgrades an install made under the project's earlier working name, Cirrus, keeping its sign-in and sync state.
 3. **Connect and sign in:** `axentra-onedrive setup` (paste the client ID), then `axentra-onedrive login`.
-4. **Start:** `systemctl --user start axentra-onedrive`, then open **Axentra OneDrive** from the app menu. Both start automatically from then on. Run `nautilus -q` once so Files loads the badges.
+4. **Start:** `systemctl --user start axentra-onedrive`, then open **Axentra OneDrive** from the app menu. Both start automatically from then on; the tray icon runs as the user service `axentra-onedrive-tray`, which brings it back if it crashes or is closed by something else. Run `nautilus -q` once so Files loads the badges.
 
 `~/OneDrive` must be empty (or not exist) before the first start, because it becomes the mount point. Use `axentra-onedrive setup --folder ~/elsewhere` to pick another folder.
 
