@@ -1,0 +1,27 @@
+name: USB RAID safeguards
+on:
+  push:
+    paths: ['USB/source/**', '.github/workflows/usb-raid.yml']
+  pull_request:
+    paths: ['USB/source/**', '.github/workflows/usb-raid.yml']
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libx11-dev libxi-dev libgl1-mesa-dev libxkbcommon-dev libwayland-dev shellcheck python3-tk xvfb xauth
+      - name: RAID tests (mock storage; never mount or write physical disks)
+        run: |
+          xvfb-run -a /usr/bin/python3 -m unittest discover -s USB/source/raid/tests -v
+          bash -n USB/source/raid/build-iso.sh
+          sh -n USB/source/raid/zz-axentra-imsm
+          sh -n USB/source/raid/axentra-imsm
+          shellcheck USB/source/raid/build-iso.sh USB/source/raid/zz-axentra-imsm USB/source/raid/axentra-imsm
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: USB Rust tests
+        working-directory: USB/source
+        run: cargo +1.95.0 test --locked

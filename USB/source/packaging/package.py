@@ -1,8 +1,8 @@
-"""Development packaging only. No Python is included in native app releases."""
+"""Package native releases; Linux RAID preparation requires system Python 3."""
 import argparse
 import hashlib
 import io
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import struct
 import tarfile
 import zipfile
@@ -10,13 +10,24 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
-DEPENDS = 'libc6 (>= 2.35), libgcc-s1, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libxkbcommon0, libwayland-client0, util-linux, parted, dosfstools, ntfs-3g, udev, pkexec'
+DEPENDS = 'libc6 (>= 2.35), libgcc-s1, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libxkbcommon0, libwayland-client0, util-linux, parted, dosfstools, ntfs-3g, udev, pkexec, python3'
 
 
 def tar(entries):
     out = io.BytesIO()
     with tarfile.open(fileobj=out, mode='w:gz') as archive:
+        directories = set()
         for name, data, mode in entries:
+            for parent in reversed(PurePosixPath(name).parents):
+                if str(parent) == '.' or str(parent) in directories:
+                    continue
+                directory = tarfile.TarInfo(str(parent) + '/')
+                directory.type = tarfile.DIRTYPE
+                directory.mode = 0o755
+                directory.uid = directory.gid = 0
+                directory.uname = directory.gname = 'root'
+                archive.addfile(directory)
+                directories.add(str(parent))
             item = tarfile.TarInfo(name)
             item.size = len(data); item.mode = mode; item.mtime = 0
             item.uid = item.gid = 0; item.uname = item.gname = 'root'
@@ -35,7 +46,7 @@ def build(windows, linux, out):
     elf = linux.read_bytes() if linux else None
     if win: assert win[:2] == b'MZ', 'Windows binary is not a PE executable'
     if elf: assert elf[:6] == b'\x7fELF\x02\x01' and struct.unpack_from('<H', elf, 18)[0] == 62, 'Linux binary is not x86-64 ELF'
-    docs = [(p.name, p.read_bytes(), 0o644) for p in [ROOT/'README.md', ROOT/'LICENSE', ROOT/'VALIDATION.txt', ROOT/'THIRD-PARTY-NOTICES.txt']]
+    docs = [(p.name, p.read_bytes(), 0o644) for p in [ROOT/'README.md', ROOT/'LICENSE', ROOT/'VALIDATION.txt', ROOT/'THIRD-PARTY-NOTICES.txt', ROOT/'DOWNLOAD-DEPENDENCY-NOTICES.txt', ROOT/'DOWNLOAD-VALIDATION.md']]
     if win:
         winzip = out/f'AxentraUSB-{VERSION}-Windows-x64.zip'
         with zipfile.ZipFile(winzip, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
