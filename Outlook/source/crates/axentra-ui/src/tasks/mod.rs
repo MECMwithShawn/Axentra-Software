@@ -138,6 +138,14 @@ pub fn TasksModule() -> Element {
     let app = use_app();
     let mut ctx = ctx::provide_todo();
     let _ = app.tasks_rev();
+    // A completion still animating finishes when To Do goes (its timer goes
+    // with the module).
+    use_drop(move || {
+        let Ok(ids) = ctx.completing.try_peek().map(|c| c.clone()) else { return };
+        if actions::finish_completions(&ids) {
+            app.bump_tasks();
+        }
+    });
 
     // Cross-module navigation: open the requested list (or the task in its
     // list, with the detail pane) and clear the request.
@@ -171,6 +179,11 @@ pub fn TasksModule() -> Element {
         let mut nav = app.nav;
         nav.set(None);
     });
+
+    // Keys typed in a title, note or step just before a click that opened
+    // another task, which the page still had for that field after it went.
+    let on_late = use_callback(move |(rest, value): (String, String)| detail::late_typed(app, &rest, &value));
+    crate::kit::dom::use_late_keys(detail::LATE_PREFIX, on_late);
 
     // Boot script, then a once-a-minute check for the local date changing
     // (My Day resets at midnight; also covers suspend and time-zone changes).

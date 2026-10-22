@@ -34,6 +34,16 @@ impl Field {
         }
     }
 
+    pub const ALL: [Field; 3] = [Field::To, Field::Cc, Field::Bcc];
+
+    fn index(self) -> usize {
+        match self {
+            Field::To => 0,
+            Field::Cc => 1,
+            Field::Bcc => 2,
+        }
+    }
+
     pub fn list(self, d: &Draft) -> &Vec<EmailAddress> {
         match self {
             Field::To => &d.to,
@@ -131,6 +141,8 @@ pub struct Form {
     pub expanded: Signal<bool>,
     /// The selected recipient chip (one at a time across the wells).
     pub chip: Signal<Option<(Field, usize)>>,
+    /// What is typed in each well and not a chip yet ([`Form::typed`]).
+    typed: [Signal<String>; 3],
     /// Polite screen-reader announcement ("Added Priya Raman").
     pub live: Signal<String>,
     pub mention: Signal<Option<Mention>>,
@@ -147,6 +159,8 @@ pub struct Form {
     pub saved_id: CopyValue<Option<MessageId>>,
     /// Set once the form was sent or discarded: nothing more to save.
     pub closed: CopyValue<bool>,
+    /// A send waiting for its body (see [`super::actions::SendHandoff`]).
+    pub send_handoff: CopyValue<Option<super::actions::Handoff>>,
 }
 
 impl Form {
@@ -170,6 +184,7 @@ impl Form {
             show_from: Signal::new(false),
             expanded: Signal::new(expanded),
             chip: Signal::new(None),
+            typed: take_typed_for_next_form().map(Signal::new),
             live: Signal::new(String::new()),
             mention: Signal::new(None),
             error: Signal::new(None),
@@ -182,13 +197,23 @@ impl Form {
             send_opts: Signal::new(SendOpts::default()),
             saved_id,
             closed: CopyValue::new(false),
+            send_handoff: CopyValue::new(None),
         }
     }
 
     /// Run an action owned by the form, not by the control that started it:
     /// menus and dialogs close (and drop their tasks) before it finishes.
+    /// The form closing drops it, so it never resumes on a form that has
+    /// gone (see [`crate::kit::spawn_in`]).
     pub fn spawn(&self, fut: impl std::future::Future<Output = ()> + 'static) {
-        dioxus::core::Runtime::current().spawn(self.scope, fut);
+        crate::kit::spawn_in(self.scope, self.closed, fut);
+    }
+
+    /// The text typed in `field`'s well that is not a chip yet. Send, Esc,
+    /// Ctrl+S and leaving the form turn it into recipients
+    /// (`recipients::commit_typed`), as leaving the well does.
+    pub fn typed(&self, field: Field) -> Signal<String> {
+        self.typed[field.index()]
     }
 
     pub fn dom(&self, part: &str) -> String {
@@ -223,12 +248,65 @@ impl Form {
         live.set(text.into());
     }
 
-    /// Move keyboard focus to an element of this form.
+    /// Move keyboard focus to an element of this form. One that comes with
+    /// the next render (the Cc line the Cc button just showed) is waited
+    /// for a moment, so typing straight on lands in it.
     pub fn focus(&self, part: &str) {
         let id = self.dom(part);
-        let js = format!("const e = document.getElementById({id:?}); if (e) {{ e.focus(); }}");
+        let js = format!(
+            "const f = (n) => {{ const e = document.getElementById({id:?}); if (e) e.focus(); else if (n > 0) setTimeout(() => f(n - 1), 20); }}; f(25);"
+        );
         document::eval(&js);
     }
+
+    /// Focus a text field of this form with the caret after its text, and
+    /// type there what the page held while the form was replaced
+    /// (`axTypedText.hold()`).
+    pub fn focus_end(&self, part: &str) {
+        let id = self.dom(part);
+        let js = format!(
+            "const e = document.getElementById({id:?}); \
+             if (window.axTypedText && axTypedText.release) axTypedText.release({id:?}); \
+             else if (e) {{ e.focus(); const n = e.value.length; try {{ e.setSelectionRange(n, n); }} catch (_) {{}} }}"
+        );
+        document::eval(&js);
+    }
+}
+
+/// The field that had focus when the form popped out or back in, for the
+/// form mounted there next (keys still arriving keep going into it).
+static NEXT_FORM_FOCUS: std::sync::Mutex<Option<(&'static str, Instant)>> = std::sync::Mutex::new(None);
+
+pub fn keep_focus_for_next_form(part: &'static str) {
+    if let Ok(mut f) = NEXT_FORM_FOCUS.lock() {
+        *f = Some((part, Instant::now()));
+    }
+}
+
+/// Taken once, by the next form, within a few seconds.
+pub fn take_focus_for_next_form() -> Option<&'static str> {
+    let taken = NEXT_FORM_FOCUS.lock().ok()?.take()?;
+    (taken.1.elapsed() < std::time::Duration::from_secs(5)).then_some(taken.0)
+}
+
+/// What was typed in the To, Cc and Bcc wells (not chips yet) when the
+/// form popped out or back in: the next form's wells start with it.
+static NEXT_FORM_TYPED: std::sync::Mutex<Option<([String; 3], Instant)>> = std::sync::Mutex::new(None);
+
+pub fn keep_typed_for_next_form(typed: [String; 3]) {
+    if let Ok(mut t) = NEXT_FORM_TYPED.lock() {
+        *t = typed.iter().any(|t| !t.is_empty()).then(|| (typed, Instant::now()));
+    }
+}
+
+fn take_typed_for_next_form() -> [String; 3] {
+    NEXT_FORM_TYPED
+        .lock()
+        .ok()
+        .and_then(|mut t| t.take())
+        .filter(|(_, at)| at.elapsed() < std::time::Duration::from_secs(5))
+        .map(|(t, _)| t)
+        .unwrap_or_default()
 }
 
 /// What the ribbon needs to know about the open form. The Mail ribbon

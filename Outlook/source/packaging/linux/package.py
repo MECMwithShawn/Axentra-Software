@@ -33,6 +33,23 @@ DEPENDS = ", ".join([
     "xdg-utils",
 ])
 RECOMMENDS = "gnome-keyring | kwalletmanager"
+# A copy still running from before the upgrade keeps the old program; the new
+# one won't start beside it (it tells the user so), so say it here too.
+POSTINST = """#!/bin/sh
+set -e
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true; fi
+if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi
+if [ "$1" = configure ]; then
+  for p in /proc/[0-9]*; do
+    case "$(readlink "$p/exe" 2>/dev/null || true)" in
+      /opt/axentra/outlook/axentra-outlook*)
+        echo "Axentra Outlook is still running (the version from before this update). Close it, then open it again."
+        break ;;
+    esac
+  done
+fi
+exit 0
+"""
 
 
 def main() -> None:
@@ -101,7 +118,7 @@ Description: Mail, calendar, people and to-do with the Outlook layout
  local demo mailbox and connects to Microsoft 365 / Outlook.com (Microsoft
  Graph) and IMAP/SMTP accounts. Built for Zorin OS 18 and Ubuntu 24.04.
 """)
-        (control / "postinst").write_text("#!/bin/sh\nset -e\nif command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true; fi\nif command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi\n")
+        (control / "postinst").write_text(POSTINST)
         (control / "postrm").write_text("#!/bin/sh\nset -e\nif command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true; fi\nif command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database -q /usr/share/applications || true; fi\n")
 
         stage.chmod(0o755)  # the temporary directory is created 0700

@@ -136,6 +136,8 @@ pub fn MiniMonth(
                                         role: "gridcell",
                                         "data-date": "{d}",
                                         tabindex: if d == focus_day { "0" } else { "-1" },
+                                        // F6 into the navigation pane lands here, like Tab.
+                                        "data-ax-default-focus": if d == focus_day { "true" },
                                         "aria-selected": if selected == Some(d) || banded { "true" } else { "false" },
                                         "aria-current": if d == today { "date" } else { "false" },
                                         "aria-label": d.format("%A, %B %-d, %Y").to_string(),

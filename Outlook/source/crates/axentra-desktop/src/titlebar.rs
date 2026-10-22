@@ -180,6 +180,9 @@ pub fn CsdRoot() -> Element {
     let weak = Rc::downgrade(&desktop);
     let w = weak.clone();
     use_wry_event_handler(move |event, _| {
+        if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
+            crate::instance::closing();
+        }
         if let Event::WindowEvent { event: WindowEvent::Resized(_), .. } = event
             && let Some(d) = w.upgrade()
         {
@@ -202,7 +205,11 @@ pub fn CsdRoot() -> Element {
         WindowControls {
             minimize: on(|d| d.set_minimized(true)),
             toggle_maximize: on(|d| d.toggle_maximized()),
-            close: on(|d| d.close()),
+            // A launch from now on waits for this copy to go and opens anew.
+            close: on(|d| {
+                crate::instance::closing();
+                d.close();
+            }),
             start_drag: on(|d| d.drag()),
             start_resize: Callback::new(move |edge: ResizeEdge| {
                 tracing::debug!(?edge, "start resize");
@@ -217,6 +224,20 @@ pub fn CsdRoot() -> Element {
             layout: prefs.layout,
             double_click: prefs.double_click,
             middle_click: prefs.middle_click,
+        }
+    });
+    rsx! {
+        axentra_ui::App {}
+    }
+}
+
+/// Root component with the system title bar: the app, and its window
+/// manager close noted for later launches ([`crate::instance::closing`]).
+#[allow(non_snake_case)]
+pub fn SystemRoot() -> Element {
+    use_wry_event_handler(|event, _| {
+        if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
+            crate::instance::closing();
         }
     });
     rsx! {

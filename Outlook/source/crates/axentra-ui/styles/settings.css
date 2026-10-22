@@ -51,8 +51,11 @@
 .ax-set-row-control .ax-select { min-width: 0; }
 .ax-settings .ax-slider { max-width: 100%; }
 .ax-settings .ax-slider input[type="range"] { min-width: 0; flex: 0 1 auto; }
-.ax-settings .ax-sender-add { flex-wrap: wrap; }
+/* A stable width, whatever the hint under it says (settings/mail.rs). */
+.ax-settings .ax-sender-add-wrap { align-self: stretch; max-width: 520px; display: flex; flex-direction: column; gap: 4px; }
+.ax-settings .ax-sender-add { flex-wrap: wrap; width: 100%; }
 .ax-settings .ax-sender-add > .ax-field { flex: 1 1 200px; min-width: 0; }
+.ax-settings .ax-sender-hint { min-height: var(--ax-lh-200); }
 .ax-set-value { color: var(--ax-fg-2); }
 .ax-set-note { display: flex; align-items: center; gap: 6px; font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); padding: 4px 0; }
 .ax-set-error { color: var(--ax-danger-fg); font-size: var(--ax-text-200); }
@@ -86,13 +89,16 @@
 }
 .ax-density-tile:hover { border-color: var(--ax-stroke-1-hover); background: var(--ax-bg-1-hover); }
 .ax-density-tile.ax-selected { border-color: var(--ax-stroke-brand); box-shadow: inset 0 0 0 1px var(--ax-stroke-brand); }
-.ax-density-preview { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--ax-radius-m); background: var(--ax-bg-3); }
-.ax-density-roomy .ax-density-preview { gap: 9px; }
-.ax-density-compact .ax-density-preview { gap: 3px; }
+.ax-density-tile.ax-selected:focus-visible { box-shadow: inset 0 0 0 3px var(--ax-stroke-focus-inner); }
+/* Previews share one height (Roomy's), so the three labels line up. The
+   spacing follows the tile, not the app's own density class. */
+.ax-density-preview { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 88px; padding: 8px; border-radius: var(--ax-radius-m); background: var(--ax-bg-3); }
+.ax-density-tile.ax-density-roomy .ax-density-preview { gap: 9px; }
+.ax-density-tile.ax-density-compact .ax-density-preview { gap: 3px; }
 .ax-density-line { display: flex; align-items: center; gap: 6px; }
 .ax-density-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--ax-stroke-1); flex: none; }
 .ax-density-bars { display: flex; flex-direction: column; gap: 3px; flex: 1; }
-.ax-density-compact .ax-density-bars { gap: 2px; }
+.ax-density-tile.ax-density-compact .ax-density-bars { gap: 2px; }
 .ax-density-bar { height: 4px; border-radius: 2px; background: var(--ax-stroke-1); }
 .ax-density-bar:first-child { width: 60%; background: var(--ax-fg-4); }
 .ax-density-bar:nth-child(3) { width: 80%; }

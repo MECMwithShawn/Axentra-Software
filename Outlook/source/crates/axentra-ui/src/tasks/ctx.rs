@@ -460,9 +460,10 @@ impl TodoCtx {
     }
 
     /// Run a future owned by the module root, so it survives the component
-    /// that started it (a row that disappears, a closed menu).
+    /// that started it (a row that disappears, a closed menu). Leaving To Do
+    /// drops it (see [`crate::kit::spawn_in`]).
     pub fn spawn(self, fut: impl std::future::Future<Output = ()> + 'static) {
-        dioxus::core::Runtime::current().spawn(self.root, fut);
+        crate::kit::spawn_in(self.root, self.order, fut);
     }
 
     /// Announce through the polite live region (re-announces identical text).

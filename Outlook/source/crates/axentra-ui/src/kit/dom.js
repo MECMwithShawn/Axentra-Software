@@ -46,12 +46,14 @@
     return ax.focus(items[0] || root);
   };
 
-  // Same normalisation as kit::keys::chord on the Rust side.
+  // Same normalisation as kit::keys::chord on the Rust side. Tab goes by its
+  // code: WebKitGTK reports Shift+Tab (GTK's ISO_Left_Tab) as "Unidentified".
   const chord = (e) => {
     const c = e.code || "";
     let k;
     if (c.startsWith("Key")) k = c.slice(3);
     else if (c.startsWith("Digit")) k = c.slice(5);
+    else if (c === "Tab") k = "Tab";
     else if (e.key === " ") k = "Space";
     else if (e.key && e.key.length === 1) k = e.key.toUpperCase();
     else k = e.key;
@@ -276,9 +278,13 @@
     const lostRegion = lastFocused.__axRegion;
     lastFocused = null;
     const modal = topModal();
-    while (stack.length) {
-      const el = stack.pop();
-      if (el.isConnected && focusable(el) && (!modal || modal.contains(el))) {
+    // Newest first. An invoker outside the open modal (the button that
+    // opened it) stays for when the modal closes; one that is gone, goes.
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const el = stack[i];
+      if (el.isConnected && modal && !modal.contains(el)) continue;
+      stack.splice(i, 1);
+      if (el.isConnected && focusable(el)) {
         ax.focus(el);
         return;
       }
@@ -326,8 +332,10 @@
     return best;
   };
   const enter = (r) => {
+    // The control last focused in the region; the region itself (focused
+    // while it had nothing to focus) gives way to what it holds now.
     const last = r.__axLast;
-    if (last && last.isConnected && r.contains(last) && focusable(last) && ax.focus(last)) return;
+    if (last && last !== r && last.isConnected && r.contains(last) && focusable(last) && ax.focus(last)) return;
     const picks = [
       "[data-ax-default-focus]",
       '[aria-current="page"]',
@@ -348,6 +356,9 @@
     const r = doc.querySelector(sel);
     if (r) enter(r);
   };
+  // A module pane with nothing in it to focus (People's details while no
+  // contact is open) is no stop.
+  const hollow = (r) => r.classList.contains("ax-pane") && !Array.from(r.querySelectorAll(FOCUSABLE)).some(focusable);
   ax.cycle = (dir) => {
     if (topModal()) return;
     const rs = ax.regions();
@@ -357,7 +368,8 @@
     rs.forEach((r, n) => {
       if (r.contains(a) && (i < 0 || rs[i].contains(r))) i = n;
     });
-    const n = i < 0 ? (dir > 0 ? 0 : rs.length - 1) : (i + dir + rs.length) % rs.length;
+    let n = i < 0 ? (dir > 0 ? 0 : rs.length - 1) : (i + dir + rs.length) % rs.length;
+    for (let k = 1; k < rs.length && hollow(rs[n]); k++) n = (n + dir + rs.length) % rs.length;
     enter(rs[n]);
   };
 
@@ -531,15 +543,44 @@
   ax.fit = (elOrId) => {
     const el = typeof elOrId === "string" ? doc.getElementById(elOrId) : elOrId;
     if (!el) return;
+    // A menu with submenus taller than the window scrolls its items in its
+    // inner box (kit.css, .ax-menu-scroll); the layout height ignores the
+    // opening animation.
+    if (el.classList.contains("ax-menu-nested") && !el.classList.contains("ax-submenu") && el.offsetHeight > innerHeight - 16) {
+      el.classList.add("ax-menu-scroll");
+    }
+    if (!el.classList.contains("ax-submenu")) return;
+    // In a scrolling menu the submenu hangs off the menu, not its clipped
+    // item box: level with its item (first row level, as in kit.css).
+    const wrap = el.parentElement;
+    const box = wrap && wrap.parentElement;
+    const menu = box && box.parentElement;
+    const onMenu = !!menu && box.classList.contains("ax-menu-scroller") && menu.classList.contains("ax-menu-scroll");
+    if (onMenu) {
+      const top = wrap.getBoundingClientRect().top - menu.getBoundingClientRect().top - menu.clientTop - 5;
+      el.style.top = top + "px";
+      el.setAttribute("data-ax-placed", "");
+    }
     const r = el.getBoundingClientRect();
-    if (el.classList.contains("ax-submenu")) {
-      if (r.right > innerWidth - 4) {
-        el.style.left = "auto";
-        el.style.right = "calc(100% + 4px)";
-      }
-      if (r.bottom > innerHeight - 4) el.style.top = innerHeight - 4 - r.bottom + "px";
+    if (r.right > innerWidth - 4) {
+      el.style.left = "auto";
+      el.style.right = onMenu ? "100%" : "calc(100% + 4px)";
+    }
+    if (r.bottom > innerHeight - 4) {
+      el.style.top = onMenu ? parseFloat(el.style.top) - (r.bottom - innerHeight + 4) + "px" : innerHeight - 4 - r.bottom + "px";
     }
   };
+  // A submenu of a scrolling menu follows its item.
+  doc.addEventListener(
+    "scroll",
+    (e) => {
+      const s = e.target;
+      if (s instanceof Element && s.classList.contains("ax-menu-scroller")) {
+        s.querySelectorAll(":scope > .ax-menu-item-wrap > .ax-submenu").forEach((m) => ax.fit(m));
+      }
+    },
+    true
+  );
   ax.flash = (sel) => {
     const el = doc.querySelector(sel);
     if (!el) return;
@@ -686,7 +727,10 @@
   doc.addEventListener(
     "mousedown",
     (e) => {
+      // A new press starts clean: a click still marked to be swallowed (its
+      // release never reached the page) must not eat this one.
       pressHeld = false;
+      swallowClick = false;
       if (gesture) endGesture();
       if (e.button !== 0) return;
       const t = e.target instanceof Element ? e.target : null;
@@ -707,10 +751,16 @@
       } else {
         const handle = t.closest("[data-ax-surface-move]");
         if (!handle || !el.contains(handle) || !el.hasAttribute("data-ax-movable")) return;
-        const ctl = t.closest(SURFACE_INTERACTIVE);
+        // Controls and selectable text in the bar keep their own press: a
+        // click, or a text selection.
+        const ctl = t.closest(SURFACE_INTERACTIVE + ", .ax-selectable");
         if (ctl && handle.contains(ctl)) return;
-        // Empty title space: keep focus where it is, no text selection.
+        // Empty title space: no text selection. Like a window's title bar,
+        // a press activates the surface: focus already inside it stays
+        // where it is, focus elsewhere moves to it (a surface that can take
+        // focus, tabindex -1), so Esc and its other keys go to it.
         e.preventDefault();
+        if (!el.contains(document.activeElement) && el.hasAttribute("tabindex")) el.focus({ preventScroll: true });
         gesture = { el, kind: "move" };
       }
       const b = surfaceBounds(el);
@@ -896,10 +946,33 @@
     },
     true
   );
+  // A press outside the topmost modal (its backdrop, a window behind it)
+  // gives focus to a container there (the app root), and Esc, Tab and Enter
+  // then no longer reach the modal. Focus goes back into it, where it was.
+  // A control outside it (a menu or field it opened elsewhere on the page)
+  // still takes focus.
+  let pressOutside = 0;
+  const CONTROL = 'input, textarea, select, [contenteditable="true"], button, a[href], [role="menuitem"], [role="option"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
+  doc.addEventListener(
+    "mousedown",
+    (e) => {
+      const m = topModal();
+      pressOutside = m && e.target instanceof Element && !m.contains(e.target) ? Date.now() : 0;
+    },
+    true
+  );
   doc.addEventListener(
     "focusin",
     (e) => {
       const t = e.target;
+      const m = topModal();
+      if (m && m.contains(t)) m.__axLastIn = t;
+      else if (m && pressOutside && Date.now() - pressOutside < 1000 && t instanceof Element && !t.closest(CONTROL)) {
+        pressOutside = 0;
+        const back = m.__axLastIn && m.__axLastIn.isConnected && m.contains(m.__axLastIn) ? m.__axLastIn : tabbables(m)[0] || m;
+        ax.focus(back);
+        return;
+      }
       lastFocused = t;
       syncTabStop(t);
       const r = regionOf(t);

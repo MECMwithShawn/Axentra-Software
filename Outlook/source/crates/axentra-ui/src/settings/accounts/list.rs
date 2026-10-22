@@ -99,7 +99,7 @@ pub fn AccountRow(
                 onfocus: move |_| on_focus.call(()),
                 onkeydown: move |e: KeyboardEvent| on_key.call(e),
                 ondoubleclick: move |_| on_action.call(Action::Manage(id)),
-                Avatar { name: account.display_name.clone(), email: account.email.clone(), size: avatar }
+                Avatar { name: account.display_name.clone(), email: account.email.clone(), size: avatar, photo: app.account_photo(id) }
                 div { class: "ax-acct-row-main",
                     div { class: "ax-acct-row-name",
                         span { class: "ax-ellipsis", "{name}" }

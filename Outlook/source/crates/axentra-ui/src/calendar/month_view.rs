@@ -22,6 +22,18 @@ const HEADER_H: f64 = 32.0;
 const LABEL_H: f64 = 26.0;
 /// Chip / bar pitch: 20px items with a 2px gap.
 const LANE_H: f64 = 22.0;
+/// Shortest week row: the date label and three lanes with a 2px margin, so a
+/// five-week month fits a 700px window without scrolling (.ax-cal-month-row).
+const MIN_ROW_H: f64 = 94.0;
+
+/// Below this day width a chip's title would shrink to a letter or two
+/// next to the time and icons, so the icons are left out.
+const NARROW_DAY: f64 = 140.0;
+
+/// Chip / bar lanes that fit a week row `row_h` high.
+fn lanes_for(row_h: f64) -> usize {
+    (((row_h - LABEL_H - 2.0) / LANE_H).floor() as usize).max(1)
+}
 
 /// A timed occurrence on one day of a week row.
 #[derive(Clone, Debug, PartialEq)]
@@ -93,8 +105,8 @@ pub fn MonthView() -> Element {
     let (w, h) = size();
     let weeknums = s.show_week_numbers;
     let col_w = if w > 0.0 { (w - if weeknums { 32.0 } else { 0.0 }) / 7.0 } else { 160.0 };
-    let row_h = if h > 0.0 { ((h - HEADER_H) / rows as f64).max(96.0) } else { 120.0 };
-    let lanes = (((row_h - LABEL_H - 4.0) / LANE_H).floor() as usize).max(1);
+    let row_h = if h > 0.0 { ((h - HEADER_H) / rows as f64).max(MIN_ROW_H) } else { 120.0 };
+    let lanes = lanes_for(row_h);
     let long_names = col_w >= 120.0;
     let header: Vec<NaiveDate> = cells.iter().take(7).copied().collect();
     let label = range::grid_label(ViewKind::Month, anchor, &cells);
@@ -107,6 +119,7 @@ pub fn MonthView() -> Element {
             onmounted: move |e| async move { let _ = e.set_focus(true).await; },
             class: if dragging { "ax-cal-dragging" },
             class: if weeknums { "ax-with-weeknums" },
+            class: if col_w < NARROW_DAY { "ax-cal-narrow" },
             role: "grid",
             "aria-label": "{label}",
             onresize: move |e: ResizeEvent| {
@@ -476,4 +489,24 @@ pub fn shift_days(occ: &Occurrence, days: i64) -> (chrono::DateTime<chrono::Utc>
     let start = local_to_utc(s.date_naive() + Duration::days(days), s.time());
     let end = local_to_utc(e.date_naive() + Duration::days(days), e.time());
     (start, end.max(start))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_shortest_row_keeps_three_lanes_and_five_weeks_fit_700px() {
+        let lanes = lanes_for(MIN_ROW_H);
+        assert_eq!(lanes, 3);
+        assert_eq!(lanes_for(MIN_ROW_H - 1.0), 2);
+        // The last lane's 20px chip ends inside the row (above its 1px border).
+        let last_bottom = LABEL_H + (lanes - 1) as f64 * LANE_H + 20.0;
+        assert!(last_bottom <= MIN_ROW_H - 1.0, "{last_bottom}");
+        // At 1100x700 the month view is 509px high: header plus five rows.
+        let five_weeks = HEADER_H + 5.0 * MIN_ROW_H;
+        assert!(five_weeks <= 509.0, "{five_weeks}");
+        // Taller rows still gain lanes as before.
+        assert_eq!(lanes_for(120.0), 4);
+    }
 }

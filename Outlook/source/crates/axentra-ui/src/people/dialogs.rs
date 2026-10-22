@@ -364,24 +364,30 @@ fn ImportDialog() -> Element {
                     if p.contacts.len() > 10 { div { class: "ax-people-muted", "Showing the first 10." } }
                     label { class: "ax-people-input",
                         span { class: "ax-field-label", "Destination folder" }
-                        select {
-                            class: "ax-select",
-                            "aria-label": "Destination folder",
-                            onchange: move |e| folder.set(e.value()),
-                            option { value: "", selected: folder().is_empty(), "Contacts" }
-                            for f in folders.iter().cloned() {
-                                option { key: "{f}", value: "{f}", selected: folder() == f, "{f}" }
+                        div { class: "ax-select-wrap",
+                            select {
+                                class: "ax-select",
+                                "aria-label": "Destination folder",
+                                onchange: move |e| folder.set(e.value()),
+                                option { value: "", selected: folder().is_empty(), "Contacts" }
+                                for f in folders.iter().cloned() {
+                                    option { key: "{f}", value: "{f}", selected: folder() == f, "{f}" }
+                                }
                             }
+                            Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                         }
                     }
                     label { class: "ax-people-input",
                         span { class: "ax-field-label", "Duplicates" }
-                        select {
-                            class: "ax-select",
-                            "aria-label": "Duplicates",
-                            onchange: move |e| merge.set(e.value() == "merge"),
-                            option { value: "skip", selected: !merge(), "Skip contacts already saved with the same name and email" }
-                            option { value: "merge", selected: merge(), "Merge into saved contacts with the same email address" }
+                        div { class: "ax-select-wrap",
+                            select {
+                                class: "ax-select",
+                                "aria-label": "Duplicates",
+                                onchange: move |e| merge.set(e.value() == "merge"),
+                                option { value: "skip", selected: !merge(), "Skip contacts already saved with the same name and email" }
+                                option { value: "merge", selected: merge(), "Merge into saved contacts with the same email address" }
+                            }
+                            Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                         }
                     }
                 }
@@ -445,26 +451,32 @@ fn ExportDialog() -> Element {
             div { class: "ax-people-io",
                 label { class: "ax-people-input",
                     span { class: "ax-field-label", "Contacts from this folder" }
-                    select {
-                        class: "ax-select",
-                        "aria-label": "Contacts from this folder",
-                        onchange: move |e| source.set(e.value()),
-                        option { value: "*", selected: source() == "*", "All contacts" }
-                        option { value: "", selected: source().is_empty(), "Contacts" }
-                        for f in folders.iter().cloned() {
-                            option { key: "{f}", value: "{f}", selected: source() == f, "{f}" }
+                    div { class: "ax-select-wrap",
+                        select {
+                            class: "ax-select",
+                            "aria-label": "Contacts from this folder",
+                            onchange: move |e| source.set(e.value()),
+                            option { value: "*", selected: source() == "*", "All contacts" }
+                            option { value: "", selected: source().is_empty(), "Contacts" }
+                            for f in folders.iter().cloned() {
+                                option { key: "{f}", value: "{f}", selected: source() == f, "{f}" }
+                            }
                         }
+                        Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                     }
                 }
                 label { class: "ax-people-input",
                     span { class: "ax-field-label", "Format" }
-                    select {
-                        class: "ax-select",
-                        "aria-label": "Format",
-                        onchange: move |e| format.set(e.value()),
-                        option { value: "vcf4", selected: format() == "vcf4", "vCard 4.0 (.vcf)" }
-                        option { value: "vcf3", selected: format() == "vcf3", "vCard 3.0 (.vcf)" }
-                        option { value: "csv", selected: format() == "csv", "CSV (.csv)" }
+                    div { class: "ax-select-wrap",
+                        select {
+                            class: "ax-select",
+                            "aria-label": "Format",
+                            onchange: move |e| format.set(e.value()),
+                            option { value: "vcf4", selected: format() == "vcf4", "vCard 4.0 (.vcf)" }
+                            option { value: "vcf3", selected: format() == "vcf3", "vCard 3.0 (.vcf)" }
+                            option { value: "csv", selected: format() == "csv", "CSV (.csv)" }
+                        }
+                        Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                     }
                 }
                 p { class: "ax-people-io-text", "The file is saved to your Downloads folder ({downloads})." }

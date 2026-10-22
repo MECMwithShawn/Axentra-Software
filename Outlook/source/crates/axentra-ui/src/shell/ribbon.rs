@@ -82,6 +82,9 @@ pub struct Command {
     pub keytip: Option<String>,
     /// Classic group label for the group this command is in.
     pub group: Option<String>,
+    /// A press leaves focus where it is (no blur of the field being typed
+    /// in before the command runs).
+    pub keep_focus: bool,
 }
 
 impl Command {
@@ -139,6 +142,10 @@ impl Command {
     }
     pub fn group(mut self, label: impl Into<String>) -> Self {
         self.group = Some(label.into());
+        self
+    }
+    pub fn keep_focus(mut self) -> Self {
+        self.keep_focus = true;
         self
     }
 

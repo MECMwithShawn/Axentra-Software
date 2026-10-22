@@ -28,7 +28,8 @@ pub fn NavPane() -> Element {
         .collect();
     let width = if s.show_week_numbers { 244 } else { 216 };
     rsx! {
-        nav { class: "ax-cal-nav", style: "width:{width}px", "aria-label": "Navigation pane",
+        // An F6 stop of its own (with the grid, calendar/mod.rs).
+        nav { class: "ax-cal-nav", style: "width:{width}px", "aria-label": "Navigation pane", "data-ax-region": "true",
             div { class: "ax-cal-newevent",
                 button {
                     r#type: "button",

@@ -5,6 +5,7 @@ pub mod client;
 pub mod contacts;
 pub mod mail;
 pub mod map;
+pub mod photo;
 pub mod todo;
 
 use serde_json::Value;

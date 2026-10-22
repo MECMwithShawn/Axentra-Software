@@ -128,6 +128,10 @@ pub fn BodyEditor(#[props(default)] focus_start: bool) -> Element {
             spellcheck: "true",
             "aria-multiline": "true",
             "aria-label": "Message body",
+            // Tab leaves the body (keyboard spec 5.2), but keys typed
+            // straight on after it come back here instead of pressing Send
+            // (kit/typed_text.js).
+            "data-ax-tab-keeps-typing": "true",
             style: "{style}",
             onkeydown: move |e| commands::on_body_key(form, &e),
         }

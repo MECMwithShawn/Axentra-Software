@@ -32,7 +32,11 @@
 /* ---------------------------------------------------------------- folder pane */
 .ax-mail-folders { flex: none; display: flex; flex-direction: column; min-height: 0; padding-top: 6px; /* MEASURED: tree starts ~14px below the ribbon */ }
 .ax-mail-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; outline: none; }
-.ax-mail-tree:focus-visible { outline: none; box-shadow: none; }
+/* Composite widgets (tree, list): the focused row shows focus, not the
+   container. The kbd forms match the base keyboard-mode ring, for focus a
+   module moved there itself (Ctrl+Y, Escape from a window), which the
+   engines don't always count as focus-visible. */
+.ax-mail-tree:focus-visible, :where(html[data-ax-kbd]) .ax-mail-tree:focus { outline: none; box-shadow: none; }
 .ax-mail-tree-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-bottom: 8px; }
 .ax-mail-tree-pinned { flex: none; padding-bottom: 4px; margin: 0 18px 4px 8px; border-bottom: 1px solid var(--ax-stroke-2); }
 .ax-mail-tree-pinned .ax-mail-node { margin: 0; }
@@ -45,7 +49,7 @@
   transition: background 100ms linear; cursor: default;
 }
 .ax-density-compact .ax-mail-node { height: 32px; }
-.ax-mail-node:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-mail-node:hover { background: var(--ax-bg-canvas-hover); color: var(--ax-fg-1); }
 .ax-mail-node:active { background: var(--ax-bg-subtle-pressed); }
 .ax-mail-node.ax-selected { background: var(--ax-bg-1-selected); color: var(--ax-fg-1); }
 .ax-mail-node.ax-selected::before {
@@ -57,7 +61,8 @@
 .ax-mail-node.ax-bold .ax-mail-node-name { font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
 .ax-mail-node.ax-drop { background: var(--ax-info-bg); box-shadow: inset 0 0 0 1px var(--ax-stroke-brand); color: var(--ax-fg-1); }
 .ax-mail-node.ax-no-drop { cursor: not-allowed; }
-.ax-mail-tree:focus-visible .ax-mail-node.ax-focused { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; }
+.ax-mail-tree:focus-visible .ax-mail-node.ax-focused,
+:where(html[data-ax-kbd]) .ax-mail-tree:focus .ax-mail-node.ax-focused { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; }
 .ax-mail-node-chevron { width: 16px; height: 16px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--ax-fg-2); }
 .ax-mail-node-icon { width: 20px; height: 20px; flex: none; margin-right: 8px; display: inline-flex; color: var(--ax-fg-2); }
 .ax-mail-node-name { flex: 1; min-width: 0; }
@@ -68,10 +73,12 @@
   display: none; width: 24px; height: 24px; margin-left: 4px; flex: none; align-items: center; justify-content: center;
   border: none; border-radius: var(--ax-radius-m); background: transparent; color: var(--ax-fg-2); padding: 0;
 }
-.ax-mail-node-more:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-brand); }
+.ax-mail-node-more:hover { background: var(--ax-bg-subtle-pressed); color: var(--ax-fg-brand); }
 /* "More options" replaces the count on hover and on keyboard focus (§2.2) */
-.ax-mail-node:hover .ax-mail-node-more, .ax-mail-tree:focus-visible .ax-mail-node.ax-focused .ax-mail-node-more { display: inline-flex; }
-.ax-mail-node:hover .ax-mail-node-count, .ax-mail-tree:focus-visible .ax-mail-node.ax-focused .ax-mail-node-count { display: none; }
+.ax-mail-node:hover .ax-mail-node-more, .ax-mail-tree:focus-visible .ax-mail-node.ax-focused .ax-mail-node-more,
+:where(html[data-ax-kbd]) .ax-mail-tree:focus .ax-mail-node.ax-focused .ax-mail-node-more { display: inline-flex; }
+.ax-mail-node:hover .ax-mail-node-count, .ax-mail-tree:focus-visible .ax-mail-node.ax-focused .ax-mail-node-count,
+:where(html[data-ax-kbd]) .ax-mail-tree:focus .ax-mail-node.ax-focused .ax-mail-node-count { display: none; }
 .ax-mail-node-header { font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
 .ax-mail-node-header .ax-mail-node-chevron { margin-right: 4px; }
 .ax-mail-node-favorites { height: 28px; font-size: var(--ax-text-200); color: var(--ax-fg-2); margin-top: 2px; }
@@ -87,7 +94,7 @@
   display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 8px; border: none; border-radius: var(--ax-radius-m);
   background: transparent; color: var(--ax-fg-2); font-size: var(--ax-text-300); text-align: left;
 }
-.ax-mail-add-account:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-mail-add-account:hover { background: var(--ax-bg-canvas-hover); color: var(--ax-fg-1); }
 .ax-mail-add-account:hover .ax-icon { color: var(--ax-fg-2-brand-hover); }
 .ax-density-compact .ax-mail-add-account { height: 32px; }
 .ax-mail-node-create { color: var(--ax-fg-brand); gap: 8px; }
@@ -153,7 +160,7 @@
 .ax-mail-cols .ax-mail-ctime { justify-content: flex-end; }
 
 .ax-mail-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; outline: none; position: relative; }
-.ax-mail-scroll:focus-visible { box-shadow: none; outline: none; }
+.ax-mail-scroll:focus-visible, :where(html[data-ax-kbd]) .ax-mail-scroll:focus { box-shadow: none; outline: none; }
 .ax-mail-canvas { position: relative; width: 100%; }
 
 /* the group at the top of the viewport keeps its header (sticky) */
@@ -193,7 +200,7 @@
 .ax-mail-item.ax-selected, .ax-mail-crow.ax-selected, .ax-mail-child.ax-selected { --ax-mail-row-bg: var(--ax-mail-row-selected); }
 .ax-mail-item.ax-selected:hover, .ax-mail-crow.ax-selected:hover, .ax-mail-child.ax-selected:hover { --ax-mail-row-bg: var(--ax-mail-row-selected-hover); }
 .ax-mail-item.ax-dragging, .ax-mail-crow.ax-dragging { opacity: 0.5; } /* ESTIMATE */
-.ax-mail-scroll:focus-visible .ax-focused { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; z-index: 1; }
+.ax-mail-scroll:focus-visible .ax-focused, :where(html[data-ax-kbd]) .ax-mail-scroll:focus .ax-focused { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; z-index: 1; }
 .ax-mail-bar { position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; /* MEASURED */ border-radius: 2px; background: var(--ax-unread-bar); }
 .ax-mail-sender { color: var(--ax-fg-2); }
 .ax-mail-subject { color: var(--ax-fg-2); }
@@ -310,12 +317,21 @@
   background: var(--ax-bg-1); border-radius: var(--ax-radius-m);
 }
 .ax-mail-panes > .ax-mail-reading { min-width: 320px; }
+/* When the module gets narrow (a side pane is open), the folder pane and the
+   list give up width before the reading pane is pushed under the side pane,
+   down to their splitters' minimums (FOLDER_PANE_MIN, LIST_MIN): the list's
+   title row still shows the folder name next to its tools. */
+.ax-mail-panes > .ax-mail-folders { flex: 0 1 auto; min-width: 180px; }
+.ax-mail-panes > .ax-mail-list:not(.ax-columns) { flex: 0 1 auto; min-width: 300px; }
 .ax-mail-reading-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
 .ax-mail-reading-head { display: flex; align-items: flex-start; gap: 8px; }
 .ax-mail-reading-subject {
   flex: 1; min-width: 0; margin: 2px 0 0; font-size: var(--ax-text-500); line-height: var(--ax-lh-500); font-weight: var(--ax-weight-semibold);
   color: var(--ax-fg-1); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; outline: none;
 }
+/* Focusable to keep focus in the pane while its text is selected, not a
+   tab stop: no keyboard ring. */
+.ax-app .ax-mail-reading-subject:focus { outline: none; box-shadow: none; }
 .ax-mail-reading-head-actions { display: flex; gap: 2px; flex: none; }
 .ax-mail-reading-cats { margin-top: 8px; }
 .ax-mail-reading-cats .ax-mail-pills { margin-left: 0; flex-wrap: wrap; }
@@ -331,7 +347,8 @@
 .ax-mail-card-avatar.ax-link, .ax-mail-sender-name.ax-link { cursor: pointer; }
 .ax-mail-sender-name.ax-link:hover { text-decoration: underline; }
 .ax-mail-card-avatar.ax-link:hover { box-shadow: 0 0 0 2px var(--ax-stroke-brand); }
-.ax-mail-sender-addr { color: var(--ax-fg-3); }
+/* A long address ellipsizes (the sender tooltip has it in full). */
+.ax-mail-sender-addr { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ax-fg-3); }
 .ax-mail-recipients { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-2); }
 .ax-mail-recipients-label { color: var(--ax-fg-3); }
 .ax-mail-recipients .ax-mail-link { margin-left: 6px; font-size: inherit; }
@@ -353,7 +370,7 @@
 .ax-mail-banner .ax-overdue { color: var(--ax-danger-fg); }
 .ax-mail-link {
   display: inline-flex; align-items: center; gap: 4px; padding: 0; border: none; background: none;
-  color: var(--ax-fg-link); font: inherit; cursor: pointer;
+  color: var(--ax-fg-link); font: inherit; text-align: start; cursor: pointer;
 }
 .ax-mail-link:hover { text-decoration: underline; color: var(--ax-fg-brand-hover); }
 .ax-mail-link:disabled { color: var(--ax-fg-disabled); text-decoration: none; cursor: default; }
@@ -442,12 +459,20 @@
   display: flex; flex-direction: column; background: var(--ax-bg-1);
   border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28); border: 1px solid var(--ax-stroke-3);
 }
+/* Focused by a press on its title bar (kit/dom.js): the window itself, no ring. */
+.ax-mail-read-window:focus { outline: none; }
 .ax-mail-read-window-bar {
-  display: flex; align-items: center; gap: 8px; flex: none; height: 40px; padding: 0 4px 0 16px;
+  display: flex; align-items: center; gap: 8px; flex: none; min-height: 40px; padding: 0 4px 0 16px;
   border-bottom: 1px solid var(--ax-stroke-3); color: var(--ax-fg-2);
 }
-.ax-mail-read-window-title { flex: 1 1 auto; min-width: 0; font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
-.ax-mail-reading-scroll:focus-visible { outline: none; }
+/* The subject (two lines at most, as in the reading pane) is part of the
+   bar's move area, like a window title. */
+.ax-mail-read-window-title {
+  flex: 0 1 auto; min-width: 0; margin: 4px auto 4px 0; font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+/* The subject is in the title bar: the conversation starts at the top. */
+.ax-mail-read-window .ax-mail-reading-scroll > :first-child { margin-top: 0; }
 
 /* compose hosting */
 .ax-mail-compose-host { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
@@ -517,8 +542,23 @@
   .ax-app:has(.ax-mail-print-target) * { visibility: hidden; }
   .ax-app:has(.ax-mail-print-target) .ax-mail-print-target,
   .ax-app:has(.ax-mail-print-target) .ax-mail-print-target * { visibility: visible; }
-  .ax-mail-print-target { position: fixed; inset: 0; overflow: visible; border-radius: 0; }
-  .ax-mail-print-target .ax-mail-reading-scroll { overflow: visible; }
+  /* The message flows on over as many pages as it needs: every box from the
+     page down to it is in normal flow and as tall as its content (the app
+     is a window-sized box that clips), and everything beside them is left out. */
+  :has(.ax-mail-print-target) {
+    display: block !important; position: static !important; width: auto !important; height: auto !important;
+    min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important;
+    margin: 0 !important; padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important;
+    overflow: visible !important; transform: none !important;
+  }
+  :has(.ax-mail-print-target) > :not(:has(.ax-mail-print-target)):not(.ax-mail-print-target) { display: none !important; }
+  /* At the page origin: also wins over the read window's surface box (kit.css). */
+  .ax-mail-print-target, .ax-app .ax-surface.ax-surface-float.ax-mail-print-target {
+    position: static !important; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important;
+    margin: 0 !important; overflow: visible !important; border: none; border-radius: 0; box-shadow: none; transform: none !important; animation: none;
+  }
+  .ax-mail-print-target .ax-mail-reading-scroll { flex: none; height: auto; overflow: visible; }
+  .ax-mail-print-target [data-ax-grip] { display: none; }
   .ax-mail-print-target .ax-icon-btn, .ax-mail-print-target .ax-mail-reply-bar, .ax-mail-print-target .ax-mail-attachment-more { display: none; }
 }
 

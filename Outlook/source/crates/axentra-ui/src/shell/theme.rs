@@ -137,7 +137,9 @@ const ALIASES: &[(&str, &str, &str)] = &[
     ("colorStatusDangerBackground3", "#c50f1f", "#c50f1f"),
     ("colorStatusDangerBackground3Hover", "#b10e1c", "#b10e1c"),
     ("colorStatusDangerBackground3Pressed", "#960b18", "#960b18"),
-    ("colorStatusDangerForeground1", "#b10e1c", "#dc626d"),
+    // Dark: lighter than Fluent's #dc626d, which is 4.2:1 on the dialog and
+    // pane background (error lines are small text: AA needs 4.5:1).
+    ("colorStatusDangerForeground1", "#b10e1c", "#e37d80"),
     ("colorStatusDangerForeground2", "#6e0811", "#eeacb2"),
     ("colorStatusDangerForeground3", "#c50f1f", "#eeacb2"),
     ("colorStatusDangerForegroundInverted", "#dc626d", "#b10e1c"),
@@ -531,6 +533,20 @@ mod tests {
             let bg = parse_hex(theme.key.unwrap_or(BRAND_WEB[7])).unwrap();
             let ratio = contrast((255, 255, 255), bg);
             assert!(ratio >= 4.5, "{} has {ratio:.2}:1", theme.id);
+        }
+    }
+
+    /// Error text (--ax-danger-fg: "isn't an email address", form errors)
+    /// meets WCAG AA for small text on panes, cards and dialogs.
+    #[test]
+    fn danger_text_is_readable_in_both_themes() {
+        let find = |n: &str| ALIASES.iter().find(|(a, _, _)| *a == n).copied().unwrap();
+        let (_, light, dark) = find("colorStatusDangerForeground1");
+        let (light, dark) = (parse_hex(light).unwrap(), parse_hex(dark).unwrap());
+        assert!(contrast(light, (255, 255, 255)) >= 4.5);
+        // Dark backgrounds 1 and 2 (grey 16 and 12) and the hover grey 20.
+        for bg in [(0x29, 0x29, 0x29), (0x1f, 0x1f, 0x1f), (0x33, 0x33, 0x33)] {
+            assert!(contrast(dark, bg) >= 4.5, "{:.2}:1 on {bg:?}", contrast(dark, bg));
         }
     }
 

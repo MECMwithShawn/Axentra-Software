@@ -115,7 +115,8 @@ pub fn CalendarModule() -> Element {
                     if !s.folder_pane_collapsed {
                         nav_pane::NavPane {}
                     }
-                    main { class: "ax-pane ax-grow ax-cal-surface", "aria-label": "Calendar",
+                    // F6 regions: the navigation pane and this surface.
+                    main { class: "ax-pane ax-grow ax-cal-surface", "aria-label": "Calendar", "data-ax-region": "true",
                         if searching {
                             search::SearchResults {}
                         } else {

@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use axentra_core::{ComposeKind, Draft, MessageId};
+use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
 
 use super::actions;
@@ -105,6 +106,8 @@ fn ComposeForm(request: ComposeRequest, saved_id: CopyValue<Option<MessageId>>) 
         Form::new(NEXT_UID.fetch_add(1, Ordering::Relaxed), draft, saved_id, expanded)
     });
     use_context_provider(|| form);
+    // After a pop-out or pop-in: the field that had focus in the old form.
+    let kept_focus = use_hook(super::state::take_focus_for_next_form);
     let first_focus = use_hook(|| {
         let d = form.draft.peek();
         let nobody = d.to.is_empty() && d.cc.is_empty() && d.bcc.is_empty();
@@ -118,10 +121,11 @@ fn ComposeForm(request: ComposeRequest, saved_id: CopyValue<Option<MessageId>>) 
     });
 
     // Initial focus (the body focuses itself once its content is loaded).
-    use_effect(move || match first_focus {
-        FirstFocus::To => form.focus(Field::To.key()),
-        FirstFocus::Subject => form.focus("subject"),
-        FirstFocus::Body => {}
+    use_effect(move || match (kept_focus, first_focus) {
+        (Some(part), _) => form.focus_end(part),
+        (None, FirstFocus::To) => form.focus(Field::To.key()),
+        (None, FirstFocus::Subject) => form.focus("subject"),
+        (None, FirstFocus::Body) => {}
     });
 
     // Autosave.
@@ -205,7 +209,7 @@ fn ComposeForm(request: ComposeRequest, saved_id: CopyValue<Option<MessageId>>) 
             }
         };
     }
-    let focus_body = first_focus == FirstFocus::Body;
+    let focus_body = kept_focus.is_none() && first_focus == FirstFocus::Body;
     if request.popout {
         rsx! {
             div { class: "ax-compose-placeholder",
@@ -229,43 +233,84 @@ fn ComposeForm(request: ComposeRequest, saved_id: CopyValue<Option<MessageId>>) 
 /// Save from a drop path, reading signals defensively (they may already
 /// be gone while the scope is torn down).
 fn save_on_drop(app: AppState, form: Form) {
+    // A send still reading its body goes out without the form.
+    if actions::hand_over_send(app, form) {
+        return;
+    }
     let Ok(closed) = form.closed.try_peek() else { return };
     if *closed {
         return;
     }
     drop(closed);
     let (Ok(dirty), Ok(saved)) = (form.dirty.try_peek().map(|v| *v), form.saved.try_peek().map(|v| *v)) else { return };
-    if dirty == saved {
-        return;
-    }
     let (Ok(draft), Ok(body)) = (form.draft.try_peek().map(|d| d.clone()), form.body.try_peek().map(|b| b.clone())) else { return };
+    let request = app.compose.try_peek().ok().and_then(|r| r.clone());
     let mut d = draft;
-    d.body_html = body.html;
+    d.body_html = body.html.clone();
+    // An address still being typed in a well is kept as a recipient.
+    let typed = super::recipients::add_typed_on_drop(form, &mut d);
     let has_content = !d.to.is_empty() || !d.cc.is_empty() || !d.bcc.is_empty() || !d.subject.trim().is_empty() || !d.attachments.is_empty() || !body.text.trim().is_empty();
-    if d.id.is_none() && !has_content {
-        return;
-    }
     let first = d.id.is_none();
-    match store().save_draft(&mut d) {
-        Ok(id) => {
-            let mut sid = form.saved_id;
-            if let Ok(mut s) = sid.try_write() {
-                *s = Some(id);
-            }
-            if first {
-                let mut compose = app.compose;
-                if let Ok(mut c) = compose.try_write()
-                    && let Some(r) = c.as_mut()
-                {
-                    r.draft = Some(id);
+    if (dirty != saved || typed) && (!first || has_content) {
+        match store().save_draft(&mut d) {
+            Ok(id) => {
+                let mut sid = form.saved_id;
+                if let Ok(mut s) = sid.try_write() {
+                    *s = Some(id);
                 }
+                if first {
+                    actions::point_request_at(app, request.clone(), id);
+                }
+                app.bump_mail();
+            }
+            Err(e) => {
+                app.error(format!("Couldn't save your draft: {e}"));
+                return;
+            }
+        }
+    }
+    resave_body_after_drop(app, form.dom("body"), d, body.html, request);
+}
+
+/// The editor reports the body a moment after typing stops, so what was
+/// just saved can miss the last words (or all of them, when the form went
+/// right after typing). The editor is gone from the page but still holds
+/// the text: read it once more and, when it differs from what the app knew
+/// (`known`), save it, unless the draft has changed since.
+fn resave_body_after_drop(app: AppState, editor: String, saved: Draft, known: String, request: Option<ComposeRequest>) {
+    let s = store();
+    // What the store keeps for the saved body (it may normalise it).
+    let stored = match saved.id {
+        Some(id) => match s.draft(id) {
+            Ok(Some(d)) => Some(d.body_html),
+            _ => return,
+        },
+        None => None,
+    };
+    spawn_forever(async move {
+        let read = document::eval(&actions::snapshot_js(&editor, false));
+        let Ok(Some(fresh)) = read.join::<Option<actions::Snapshot>>().await else { return };
+        if !actions::body_differs(&fresh, &known, saved.id.is_some()) {
+            return;
+        }
+        let s = store();
+        let mut d = match saved.id {
+            Some(id) => match s.draft(id) {
+                Ok(Some(d)) if Some(&d.body_html) == stored.as_ref() => d,
+                _ => return,
+            },
+            // Not saved yet: nothing but the body was typed.
+            None => saved,
+        };
+        let first = d.id.is_none();
+        actions::set_body(&mut d, fresh);
+        if let Ok(id) = s.save_draft(&mut d) {
+            if first {
+                actions::point_request_at(app, request, id);
             }
             app.bump_mail();
         }
-        Err(e) => {
-            app.error(format!("Couldn't save your draft: {e}"));
-        }
-    }
+    });
 }
 
 /// The form's own window (pop-out): title bar, compose ribbon, then the

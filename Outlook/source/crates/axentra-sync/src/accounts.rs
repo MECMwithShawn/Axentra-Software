@@ -329,7 +329,7 @@ pub async fn finish(inner: &Arc<Inner>, flow: u64) -> SyncResult<AccountId> {
         let resource = if cfg.auth == AuthMethod::OauthGraph { Resource::Graph } else { Resource::Imap };
         inner.cache_token(id, resource, p.tokens.access_token.clone(), p.tokens.expires_at);
         inner.notifier.bump();
-        inner.request(id, Scope::Full);
+        start_syncing(inner, id, account.kind);
         return Ok(id);
     }
     if duplicate(inner, &p.email)?.is_some() {
@@ -369,8 +369,36 @@ pub async fn finish(inner: &Arc<Inner>, flow: u64) -> SyncResult<AccountId> {
     let resource = if kind == AccountKind::Microsoft { Resource::Graph } else { Resource::Imap };
     inner.cache_token(id, resource, p.tokens.access_token.clone(), p.tokens.expires_at);
     inner.notifier.bump();
-    inner.request(id, Scope::Full);
+    start_syncing(inner, id, kind);
     Ok(id)
+}
+
+/// After a sign-in (new account or again): a Microsoft account's photo is
+/// checked at once (it may have changed while the account was signed out),
+/// before the full pass so the avatar doesn't wait for the mailbox.
+fn start_syncing(inner: &Arc<Inner>, id: AccountId, kind: AccountKind) {
+    if kind == AccountKind::Microsoft {
+        inner.check_photo(id, true);
+    }
+    inner.request(id, Scope::Full);
+}
+
+/// Park a finished sign-in as [`complete`] does, for tests of [`finish`].
+#[cfg(test)]
+pub(crate) fn park_sign_in(email: &str, kind: SignInKind, client: OAuthClient, tid: &str, access_token: &str) -> u64 {
+    let tokens = TokenSet {
+        access_token: Secret::new(access_token),
+        refresh_token: Some(Secret::new("refresh-token")),
+        expires_at: Utc::now() + chrono::Duration::hours(1),
+        id_token: None,
+        scope: String::new(),
+    };
+    let claims = IdClaims { tid: tid.into(), ..Default::default() };
+    let scopes = if client.microsoft { oauth::GRAPH_SCOPES } else { oauth::GOOGLE_SCOPES }.to_string();
+    let flow = next_flow();
+    let parked = Pending { tokens, email: email.into(), display_name: email.into(), claims, client, kind, scopes, created: Instant::now() };
+    pending().lock().unwrap_or_else(|e| e.into_inner()).insert(flow, parked);
+    flow
 }
 
 /// Remove an account, its keyring items and everything stored for it.

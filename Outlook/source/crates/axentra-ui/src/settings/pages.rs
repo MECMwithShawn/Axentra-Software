@@ -287,7 +287,8 @@ pub const INDEX: &[(PageId, &str, &str)] = &[
     (PageId::Contacts, "Contacts", "Display contacts as"),
 ];
 
-/// A search hit: page, "Page › Section" breadcrumb, option label.
+/// A search hit: page, breadcrumb ("Category › Page › Section" for an
+/// option, just the category for a page), option label.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Hit {
     pub page: PageId,
@@ -312,7 +313,11 @@ pub fn search(query: &str) -> Vec<Hit> {
     for (page, section, label) in INDEX {
         let hay = format!("{section} {label}").to_lowercase();
         if hay.contains(&q) && !out.iter().any(|h| h.page == *page && h.label == *label) {
-            out.push(Hit { page: *page, crumb: format!("{} › {section}", page.title()), label: (*label).into() });
+            let mut crumb = format!("{} › {}", page.category().label(), page.title());
+            if *section != page.title() {
+                crumb = format!("{crumb} › {section}");
+            }
+            out.push(Hit { page: *page, crumb, label: (*label).into() });
         }
     }
     out
@@ -345,6 +350,19 @@ mod tests {
         assert!(search("restore").iter().any(|h| h.page == PageId::Backup));
         assert!(search("title bar").iter().any(|h| h.page == PageId::Appearance));
         assert!(search("   ").is_empty());
+    }
+
+    #[test]
+    fn breadcrumbs_name_each_level_once() {
+        let hits = search("notif");
+        let page = hits.iter().find(|h| h.label == "Notifications").unwrap();
+        assert_eq!(page.crumb, "General");
+        let option = hits.iter().find(|h| h.label == "Mail notifications").unwrap();
+        assert_eq!(option.crumb, "General › Notifications › Notify me about");
+        for h in search("e") {
+            let parts: Vec<&str> = h.crumb.split(" › ").collect();
+            assert!(parts.windows(2).all(|w| w[0] != w[1]), "{}", h.crumb);
+        }
     }
 
     #[test]

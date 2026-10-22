@@ -126,9 +126,12 @@
 
 /* ------------------------------------------------------------ time grid */
 .ax-cal-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ax-cal-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative; outline: none; }
+/* Its own stacking context: the sticky day header and events layer inside
+   the grid, under the ribbon's drop-down menus. */
+.ax-cal-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative; isolation: isolate; outline: none; }
 /* The grids are composite widgets: the selected slot / focused event shows focus, not a ring round the whole grid. */
-.ax-app .ax-cal-scroll:focus-visible, .ax-app .ax-cal-month:focus-visible { outline: none; box-shadow: none; }
+.ax-app .ax-cal-scroll:focus-visible, .ax-app .ax-cal-month:focus-visible,
+:where(html[data-ax-kbd]) .ax-app .ax-cal-scroll:focus, :where(html[data-ax-kbd]) .ax-app .ax-cal-month:focus { outline: none; box-shadow: none; }
 .ax-cal-sticky { position: sticky; top: 0; z-index: 6; background: var(--ax-bg-1); }
 .ax-cal-dayheads { display: flex; height: 52px; }
 .ax-cal-gutter-head { width: 48px; flex: none; }
@@ -212,11 +215,16 @@
   font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
 }
 .ax-cal-ev::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--ev-bar); }
+/* Keyboard focus scrolls a timed event out from under the sticky day
+   headers and all-day row. The margin is on the events, not the scroller:
+   the sticky items themselves can never sit below it, so a scroll padding
+   would drag the grid up at every focus there. */
+.ax-cal-ev.ax-cal-timed { scroll-margin-top: var(--cal-sticky-h, 0px); }
 .ax-cal-ev * { pointer-events: none; }
 .ax-cal-ev:hover { filter: brightness(0.97); z-index: 3; }
 .ax-app.ax-theme-dark .ax-cal-ev:hover { filter: brightness(1.12); }
 @media (prefers-color-scheme: dark) { .ax-app.ax-theme-system .ax-cal-ev:hover { filter: brightness(1.12); } }
-.ax-cal-ev:focus-visible { z-index: 4; outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: 0; box-shadow: inset 0 0 0 1px var(--ax-stroke-focus-inner); }
+.ax-cal-ev:focus-visible, :where(html[data-ax-kbd]) .ax-cal-ev:focus { z-index: 4; outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: 0; box-shadow: inset 0 0 0 1px var(--ax-stroke-focus-inner); }
 .ax-cal-ev-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .ax-cal-ev-title { flex: 1 1 auto; min-width: 0; font-weight: var(--ax-weight-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ax-cal-ev-inline-time { font-weight: var(--ax-weight-regular); }
@@ -252,6 +260,11 @@
 .ax-cal-ev.ax-cal-declined { opacity: 0.6; }
 .ax-cal-ev.ax-cal-declined .ax-cal-ev-title, .ax-cal-canceled .ax-cal-ev-title, .ax-cal-canceled .ax-cal-chip-title { text-decoration: line-through; }
 .ax-cal-ev.ax-selected { background: var(--ev-sel-fill); color: var(--ev-sel-fg); --ev-fg2: var(--ev-sel-fg); box-shadow: var(--ax-shadow-4); z-index: 4; }
+/* Keyboard focus keeps the ring's inner line on a selected event and on a
+   free or working-elsewhere one (whose own outline is a box-shadow too). */
+.ax-cal-ev.ax-sa-free:focus-visible, .ax-cal-ev.ax-sa-elsewhere:focus-visible,
+:where(html[data-ax-kbd]) .ax-cal-ev.ax-sa-free:focus, :where(html[data-ax-kbd]) .ax-cal-ev.ax-sa-elsewhere:focus { box-shadow: inset 0 0 0 1px var(--ax-stroke-focus-inner); }
+.ax-cal-ev.ax-selected:focus-visible, :where(html[data-ax-kbd]) .ax-cal-ev.ax-selected:focus { box-shadow: inset 0 0 0 1px var(--ax-stroke-focus-inner), var(--ax-shadow-4); }
 .ax-cal-ev.ax-selected::after { display: none; }
 .ax-cal-ev.ax-cal-dragsrc, .ax-cal-chip.ax-cal-dragsrc { opacity: 0.4; }
 .ax-cal-ghost { z-index: 6; pointer-events: none; box-shadow: var(--ax-shadow-4); opacity: 0.95; }
@@ -261,7 +274,8 @@
 /* Bars in the all-day row and month weeks. */
 .ax-cal-bar { flex-direction: row; align-items: center; gap: 6px; height: 22px; padding: 0 6px 0 10px; }
 .ax-cal-bar .ax-cal-ev-title { flex: 0 1 auto; }
-.ax-cal-bar .ax-cal-ev-loc { flex: 1 1 auto; min-width: 0; }
+/* Short of room, the location gives way before the title. */
+.ax-cal-bar .ax-cal-ev-loc { flex: 1 1000 auto; min-width: 0; }
 .ax-cal-bar.ax-cont-before { border-top-left-radius: 0; border-bottom-left-radius: 0; padding-left: 6px; }
 .ax-cal-bar.ax-cont-before::before { display: none; }
 .ax-cal-bar.ax-cont-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -273,7 +287,7 @@
 .ax-cal-month-wd { flex: 1 1 0; min-width: 0; display: flex; align-items: center; padding: 0 8px; font-size: var(--ax-text-200); color: var(--ax-fg-2); overflow: hidden; white-space: nowrap; }
 .ax-cal-weeknum-head { width: 32px; flex: none; }
 .ax-cal-month-body { flex: 1; display: flex; flex-direction: column; }
-.ax-cal-month-row { flex: 1 1 0; min-height: 96px; display: flex; position: relative; border-bottom: 1px solid var(--ax-stroke-2); }
+.ax-cal-month-row { flex: 1 1 0; min-height: 94px; /* three 22px lanes under the date: MIN_ROW_H in month_view.rs */ display: flex; position: relative; border-bottom: 1px solid var(--ax-stroke-2); }
 .ax-app .ax-cal-weeknum {
   width: 32px; flex: none; border: none; background: transparent; color: var(--ax-fg-4); font-size: var(--ax-text-200);
   display: flex; align-items: flex-start; justify-content: center; padding-top: 6px;
@@ -316,6 +330,8 @@
 .ax-cal-chip.ax-cal-declined { opacity: 0.6; }
 .ax-cal-chip-time { font-weight: var(--ax-weight-semibold); flex: none; }
 .ax-cal-chip-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+/* Narrow days (MonthView's NARROW_DAY) leave the room to the title. */
+.ax-cal-month.ax-cal-narrow .ax-cal-chip .ax-cal-ev-icons { display: none; }
 
 /* ------------------------------------------------------------ popovers */
 .ax-cal-peek, .ax-cal-quick, .ax-cal-dayevents {
@@ -409,6 +425,9 @@
   position: absolute; top: 34px; left: 0; z-index: 1002; min-width: 100%; max-height: 240px; overflow-y: auto; padding: 4px;
   background: var(--ax-bg-1); border-radius: var(--ax-radius-l); box-shadow: var(--ax-shadow-16);
 }
+/* In the quick-create popover the list fits below the time fields, so the
+   popover neither scrolls nor clips it. */
+.ax-cal-quick .ax-cal-timelist { max-height: 176px; }
 .ax-cal-timeopt { height: 32px; display: flex; align-items: center; padding: 0 8px; border-radius: var(--ax-radius-m); white-space: nowrap; cursor: default; }
 .ax-cal-timeopt:hover, .ax-cal-timeopt.ax-active { background: var(--ax-bg-subtle-hover); }
 .ax-cal-timeopt.ax-selected { color: var(--ax-fg-brand); font-weight: var(--ax-weight-semibold); }
@@ -511,11 +530,16 @@
 .ax-cal-holiday-list { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
 
 /* ------------------------------------------------------------ reminders */
+/* Under menus and flyouts (--ax-z-menu), so a long menu isn't cut off
+   behind the card; above the compose and read windows (840-850). */
 .ax-cal-reminders {
-  position: fixed; right: 16px; bottom: 16px; z-index: 940; width: 380px; max-height: 460px; display: flex; flex-direction: column; overflow: hidden;
+  position: fixed; right: 16px; bottom: 16px; z-index: calc(var(--ax-z-menu) - 10); width: 380px; max-height: 460px; display: flex; flex-direction: column; overflow: hidden;
   background: var(--ax-bg-1); color: var(--ax-fg-1); border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28);
   animation: ax-slide var(--ax-duration-normal) var(--ax-ease-decelerate);
 }
+/* An open side pane (My Day, Notifications, Help) stays uncovered: the
+   cards move to its left. */
+.ax-app[data-side-pane] .ax-cal-reminders { right: calc(var(--ax-side-pane-w) + var(--ax-pane-gap) + 36px); }
 .ax-cal-reminders-head { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border-bottom: 1px solid var(--ax-stroke-2); }
 .ax-cal-reminders-head > .ax-icon { color: var(--ax-fg-brand); }
 .ax-cal-reminders-list { flex: 1; min-height: 0; overflow-y: auto; }

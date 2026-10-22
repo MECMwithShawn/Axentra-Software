@@ -49,6 +49,39 @@ pub fn focus(selector: &str) {
     ));
 }
 
+/// Scroll an element into view once it renders (a task just added, which
+/// may land below the fold), unless that would hide the text field being
+/// typed in. "Add a task" is sticky at the top of the list (tasks.css), so
+/// during quick entry both stay in view: the new task and the box.
+fn reveal(selector: &str) {
+    let sel = serde_json::to_string(selector).unwrap_or_default();
+    document::eval(&format!("({REVEAL_JS})({sel});"));
+}
+
+const REVEAL_JS: &str = r#"(sel) => {
+  const scrollers = (el) => {
+    const out = [];
+    for (let p = el.parentElement; p; p = p.parentElement) if (p.scrollHeight > p.clientHeight) out.push(p);
+    return out;
+  };
+  const shown = (el, box) => {
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    return r.top >= b.top - 1 && r.bottom <= b.bottom + 1;
+  };
+  // The row comes with the next render, which can be late on a busy machine.
+  const until = Date.now() + 3000;
+  (function f() {
+    const el = document.querySelector(sel);
+    if (!el) { if (Date.now() < until) requestAnimationFrame(f); return; }
+    const typing = document.activeElement;
+    const text = typing && typing.matches && typing.matches("input, textarea") ? typing : null;
+    const boxes = scrollers(el);
+    const before = boxes.map((b) => b.scrollTop);
+    el.scrollIntoView({ block: "nearest" });
+    if (text && boxes.some((b) => b.contains(text) && !shown(text, b))) boxes.forEach((b, i) => (b.scrollTop = before[i]));
+  })();
+}"#;
+
 /// Focus an element after the next render (e.g. a pane that is opening).
 pub fn focus_later(selector: &str, ms: u32) {
     let sel = serde_json::to_string(selector).unwrap_or_default();
@@ -57,9 +90,17 @@ pub fn focus_later(selector: &str, ms: u32) {
     ));
 }
 
+/// A title as a task keeps it: words separated by one space, no space at
+/// either end. Compare typed text with a saved title in this form only, and
+/// never put it back into the field being typed in (a space typed before a
+/// pause would vanish and the next word run into the last one).
+pub fn task_title(raw: &str) -> String {
+    raw.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Rename a task (newlines become spaces; empty titles are ignored).
 pub fn rename_task(app: AppState, id: TaskId, title: &str) {
-    let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+    let title = task_title(title);
     if title.is_empty() {
         return;
     }
@@ -157,6 +198,17 @@ pub fn complete(app: AppState, mut ctx: TodoCtx, id: TaskId, done: bool) {
             finish_complete(app, ctx, id);
         }
     });
+}
+
+/// Complete tasks whose completion was still animating, quietly (one may
+/// have been deleted meanwhile). True when any was completed.
+pub fn finish_completions(ids: &[TaskId]) -> bool {
+    let s = store();
+    let mut any = false;
+    for &id in ids {
+        any |= s.set_task_completed(id, true).is_ok();
+    }
+    any
 }
 
 fn finish_complete(app: AppState, _ctx: TodoCtx, id: TaskId) {
@@ -454,6 +506,17 @@ fn new_task(title: &str, list_id: Option<TaskListId>, view: super::ctx::View, dr
     t
 }
 
+/// Add `title` from a bar that is going away with To Do (no toast, no
+/// reveal, no selection): as Enter would have, in `view`, with the draft's
+/// dates.
+pub fn add_task_quietly(title: &str, list_id: Option<TaskListId>, view: super::ctx::View, draft: &Draft, today: NaiveDate, on_top: bool) -> Option<TaskId> {
+    if title.trim().is_empty() {
+        return None;
+    }
+    let mut t = new_task(title, list_id, view, draft, today);
+    store().insert_task_at(&mut t, on_top).ok()
+}
+
 /// Create a task from the "Add a task" bar in the current view. Returns
 /// the new id.
 pub fn add_task(app: AppState, ctx: TodoCtx, title: &str, list_id: Option<TaskListId>, view: super::ctx::View) -> Option<TaskId> {
@@ -481,6 +544,37 @@ pub fn add_tasks(app: AppState, mut ctx: TodoCtx, titles: &[String], list_id: Op
         ctx.draft.set(Draft::default());
         ctx.say(if ids.len() == 1 { "Task added".to_string() } else { format!("{} tasks added", ids.len()) });
         app.bump_tasks();
+        if let Some(id) = ids.last() {
+            reveal(&format!(".ax-todo [data-task-row=\"{id}\"]"));
+        }
     }
     ids
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::tasks::ctx::View;
+
+    /// "Add a task" left with a shortcut adds what was typed, as Enter
+    /// would: in the bar's list, with the view's and the draft's dates.
+    #[test]
+    fn a_task_typed_when_leaving_to_do_is_added_as_enter_would() {
+        crate::state::init(Arc::new(axentra_core::Store::open_in_memory().unwrap()), None);
+        let s = store();
+        // Its own account and list (the store is shared by the tests).
+        let mut acct = Account { kind: AccountKind::Local, email: "quiet-add@example.test".into(), ..Default::default() };
+        let account_id = s.add_account(&mut acct).unwrap();
+        let list = s.insert_task_list(&mut TaskList { name: "Quiet add".into(), account_id, ..Default::default() }).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap();
+        let draft = Draft { due: Some(today), ..Default::default() };
+        let id = add_task_quietly("  Post the parcel ", Some(list), View::List(list), &draft, today, false).expect("added");
+        let t = s.task(id).unwrap().unwrap();
+        assert_eq!((t.title.as_str(), t.list_id, t.due), ("Post the parcel", list, Some(today)));
+        let id = add_task_quietly("Buy stamps", Some(list), View::Smart(SmartList::MyDay), &Draft::default(), today, true).unwrap();
+        assert_eq!(s.task(id).unwrap().unwrap().my_day, Some(today));
+        assert_eq!(add_task_quietly("   ", Some(list), View::List(list), &Draft::default(), today, false), None);
+    }
 }

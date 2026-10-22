@@ -4,9 +4,12 @@
 //! Cadence (estimates from §4.12 / §5.5): Graph quick pass (Inbox + push)
 //! every 60 s, IMAP every 2 min without IDLE; a full pass (folders, all
 //! mail, calendar, To Do) every 5 min; contacts every 30 min; Outbox and
-//! local edits are checked every 5 s.
+//! local edits are checked every 5 s. A Graph account's own profile photo
+//! is checked beside the passes (`graph::photo`): at sign-in, then at most
+//! every 6 hours.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -19,9 +22,10 @@ use tokio::task::JoinHandle;
 use crate::config::{AccountConfig, AccountState, AuthMethod, Provider, SentCopyPolicy};
 use crate::error::{KeyringError, SyncError, SyncResult, copy};
 use crate::graph::calendar::GraphCalendar;
+use crate::graph::client::GRAPH_BASE;
 use crate::graph::mail::GraphMail;
 use crate::graph::todo::GraphTodo;
-use crate::graph::{Graph, TokenSource, contacts};
+use crate::graph::{Graph, TokenSource, contacts, photo};
 use crate::imap::sync::MailSync;
 use crate::imap::{self, Credential};
 use crate::notify::Notifier;
@@ -77,6 +81,31 @@ struct Sched {
     idle_unsupported: bool,
     progress: Option<String>,
     first_pass_done: bool,
+    /// The running profile photo check, if any.
+    photo: Option<PhotoCheck>,
+}
+
+/// A profile photo check in the background (one per account at a time).
+struct PhotoCheck {
+    /// Tells this check from one started later for another account that
+    /// reused the id.
+    ticket: u64,
+    /// Aborted when the account is removed.
+    handle: JoinHandle<()>,
+    /// A sign-in asked for a check while this one ran: check again after it.
+    again: bool,
+}
+
+impl Sched {
+    /// Stop the account's background tasks (IDLE watcher, photo check).
+    fn stop_tasks(&mut self) {
+        if let Some(h) = self.idle.take() {
+            h.abort();
+        }
+        if let Some(c) = self.photo.take() {
+            c.handle.abort();
+        }
+    }
 }
 
 /// Outbox retry bookkeeping (1, 5, 15, 60 min, §5.9).
@@ -98,6 +127,8 @@ pub struct Inner {
     outbox_retry: Mutex<HashMap<i64, OutboxRetry>>,
     notices: Mutex<Vec<Notice>>,
     last_total_changes: Mutex<u64>,
+    /// Microsoft Graph endpoint (tests point it at a fake server).
+    graph_base: String,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -114,6 +145,11 @@ pub fn http_client() -> reqwest::Client {
 
 impl Inner {
     pub fn new(store: Arc<Store>, notifier: Notifier, status: Arc<Mutex<SyncStatus>>, keyring: Keyring) -> Arc<Self> {
+        Self::with_graph_base(store, notifier, status, keyring, GRAPH_BASE)
+    }
+
+    /// The engine against another Graph endpoint.
+    pub(crate) fn with_graph_base(store: Arc<Store>, notifier: Notifier, status: Arc<Mutex<SyncStatus>>, keyring: Keyring, graph_base: &str) -> Arc<Self> {
         Arc::new(Inner {
             store,
             notifier,
@@ -126,6 +162,7 @@ impl Inner {
             outbox_retry: Mutex::new(HashMap::new()),
             notices: Mutex::new(Vec::new()),
             last_total_changes: Mutex::new(0),
+            graph_base: graph_base.to_string(),
         })
     }
 
@@ -435,8 +472,8 @@ impl Inner {
             let mut sched = lock(&self.sched);
             sched.retain(|id, s| {
                 let keep = ids.contains(id);
-                if !keep && let Some(h) = s.idle.take() {
-                    h.abort();
+                if !keep {
+                    s.stop_tasks();
                 }
                 keep
             });
@@ -537,7 +574,7 @@ impl Inner {
 
     // ------------------------------------------------------------ passes
 
-    async fn pass(self: &Arc<Self>, id: AccountId, scope: Scope) -> SyncResult<()> {
+    pub(crate) async fn pass(self: &Arc<Self>, id: AccountId, scope: Scope) -> SyncResult<()> {
         let Some(account) = self.store.account(id)? else { return Err(SyncError::Cancelled) };
         let cfg = AccountConfig::of(&account);
         match account.kind {
@@ -731,11 +768,60 @@ impl Inner {
     }
 
     fn graph_for(self: &Arc<Self>, account_id: AccountId) -> Graph {
-        Graph::new(self.http.clone(), Arc::new(AccountTokens { inner: self.clone(), account_id }))
+        Graph::with_base(self.http.clone(), Arc::new(AccountTokens { inner: self.clone(), account_id }), &self.graph_base)
+    }
+
+    /// Check a Graph account's own profile photo in the background when it
+    /// is due (or now, with `force`: right after sign-in). One check per
+    /// account at a time; a forced check asked for while one runs follows
+    /// it. Its outcome never reaches the pass or the account's state, and
+    /// the UI hears about a new or removed photo through the notifier.
+    pub fn check_photo(self: &Arc<Self>, account_id: AccountId, force: bool) {
+        static TICKETS: AtomicU64 = AtomicU64::new(1);
+        if !force && !photo::due(self.store.account_photo(account_id).ok().flatten().as_ref(), Utc::now()) {
+            return;
+        }
+        let mut sched = lock(&self.sched);
+        let s = sched.entry(account_id).or_default();
+        if let Some(running) = s.photo.as_mut().filter(|c| !c.handle.is_finished()) {
+            running.again |= force;
+            return;
+        }
+        let ticket = TICKETS.fetch_add(1, Ordering::Relaxed);
+        // Registered before the task can look for it: it waits for this lock.
+        let handle = tokio::spawn(self.clone().photo_checks(account_id, ticket, force));
+        s.photo = Some(PhotoCheck { ticket, handle, again: false });
+    }
+
+    /// The body of [`Inner::check_photo`]'s task.
+    async fn photo_checks(self: Arc<Self>, account_id: AccountId, ticket: u64, mut force: bool) {
+        loop {
+            let graph = self.graph_for(account_id);
+            if photo::refresh(&graph, &self.store, account_id, Utc::now(), force).await.changed() {
+                self.notifier.bump();
+            }
+            let again = {
+                let mut sched = lock(&self.sched);
+                // Only this check's own entry, never one of a later account with the same id.
+                let Some(s) = sched.get_mut(&account_id).filter(|s| s.photo.as_ref().is_some_and(|c| c.ticket == ticket)) else { return };
+                let again = s.photo.as_mut().is_some_and(|c| std::mem::take(&mut c.again));
+                if !again {
+                    s.photo = None;
+                }
+                again
+            };
+            if !again {
+                return;
+            }
+            force = true;
+        }
     }
 
     async fn graph_pass(self: &Arc<Self>, account: &Account, cfg: &AccountConfig, scope: Scope) -> SyncResult<()> {
         let graph = self.graph_for(account.id);
+        if scope >= Scope::Quick {
+            self.check_photo(account.id, false);
+        }
         self.graph_outbox(&graph, account).await?;
         if scope == Scope::Outbox {
             return Ok(());
@@ -853,10 +939,8 @@ impl Inner {
 
     pub async fn forget_account(&self, account: &Account) -> SyncResult<()> {
         let cfg = AccountConfig::of(account);
-        if let Some(s) = lock(&self.sched).get_mut(&account.id)
-            && let Some(h) = s.idle.take()
-        {
-            h.abort();
+        if let Some(s) = lock(&self.sched).get_mut(&account.id) {
+            s.stop_tasks();
         }
         lock(&self.tokens).retain(|(id, _), _| *id != account.id);
         if !cfg.uuid.is_empty() {

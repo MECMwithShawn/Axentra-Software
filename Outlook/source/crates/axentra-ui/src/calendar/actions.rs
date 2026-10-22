@@ -57,11 +57,12 @@ pub fn focus_surface() {
 pub fn restore_focus(cal: Cal) {
     let sel = (*cal.selected.peek()).map(|k| k.dom_id()).unwrap_or_default();
     // Runs after the closed surface has left the DOM (the patch may land
-    // after this script in liveview).
+    // after this script in liveview). Focus the shell parked on the app root
+    // when the surface's field left the page counts as lost too.
     document::eval(&format!(
-        "setTimeout(()=>{{const a=document.activeElement;if(a&&a!==document.body&&a.isConnected)return;\
+        "setTimeout(()=>{{const a=document.activeElement;if(a&&a!==document.body&&a.isConnected&&!a.classList.contains('ax-app'))return;\
          const el=('{sel}'&&document.querySelector('[data-occ=\"{sel}\"]'))||document.querySelector('.ax-cal-scroll, .ax-cal-month');\
-         if(el)el.focus({{preventScroll:true}});}},60)"
+         if(el)el.focus({{preventScroll:true,focusVisible:document.documentElement.hasAttribute('data-ax-kbd')}});}},60)"
     ));
 }
 

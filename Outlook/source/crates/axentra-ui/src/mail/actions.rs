@@ -99,20 +99,18 @@ pub fn open_row(mut app: AppState, mut ctx: MailCtx, model: &ListModel, key: &Ro
     ctx.open.set(Some(open));
 }
 
-fn toast_moves(app: AppState, ctx: MailCtx, text: String, records: Vec<MoveRecord>) {
+fn toast_moves(app: AppState, text: String, records: Vec<MoveRecord>) {
     if records.is_empty() {
         app.toast(text);
     } else {
-        app.toast_with_undo(text, UndoAction::Moves(records.clone()));
-        ctx.push_undo(UndoAction::Moves(records));
+        app.toast_with_undo(text, UndoAction::Moves(records));
     }
 }
 
-/// Snapshot messages before a change so it can be undone.
-fn snapshot(ctx: MailCtx, ids: &[MessageId]) -> UndoAction {
-    let undo = UndoAction::RestoreMessages(messages(ids));
-    ctx.push_undo(undo.clone());
-    undo
+/// Snapshot messages before a change so it can be undone (with its undo
+/// bar, or `app.push_undo` when the change shows none).
+fn snapshot(ids: &[MessageId]) -> UndoAction {
+    UndoAction::RestoreMessages(messages(ids))
 }
 
 fn folder_name(id: FolderId) -> String {
@@ -126,7 +124,7 @@ pub fn move_to(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageI
     let name = folder_name(folder);
     let text = if records.len() == 1 { format!("Moved to {name}") } else { format!("Moved {} to {name}", items(records.len())) };
     select_after_removal(app, ctx, model, &ids);
-    toast_moves(app, ctx, text, records);
+    toast_moves(app, text, records);
     app.bump_mail();
 }
 
@@ -154,7 +152,7 @@ pub fn delete(app: AppState, mut ctx: MailCtx, model: &ListModel, ids: Vec<Messa
     }
     let Some(records) = app.check(s.delete_messages(&ids)) else { return };
     select_after_removal(app, ctx, model, &ids);
-    toast_moves(app, ctx, format!("Deleted {}", items(records.len())), records);
+    toast_moves(app, format!("Deleted {}", items(records.len())), records);
     app.bump_mail();
 }
 
@@ -179,7 +177,7 @@ pub fn archive(app: AppState, mut ctx: MailCtx, model: &ListModel, ids: Vec<Mess
     }
     let Some(records) = app.check(s.archive_messages(&ids)) else { return };
     select_after_removal(app, ctx, model, &ids);
-    toast_moves(app, ctx, format!("Archived {}", items(records.len())), records);
+    toast_moves(app, format!("Archived {}", items(records.len())), records);
     app.bump_mail();
 }
 
@@ -198,7 +196,7 @@ pub fn report(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId
     let Some(records) = app.check(result) else { return };
     select_after_removal(app, ctx, model, &ids);
     let text = if phishing { "Reported as phishing" } else { "Reported as junk" };
-    toast_moves(app, ctx, text.into(), records);
+    toast_moves(app, text.into(), records);
     app.bump_mail();
 }
 
@@ -214,47 +212,50 @@ pub fn restore(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageI
         many => format!("Restored {}", items(many.len())),
     };
     select_after_removal(app, ctx, model, &ids);
-    toast_moves(app, ctx, text, records);
+    toast_moves(app, text, records);
     app.bump_mail();
 }
 
-pub fn set_read(app: AppState, ctx: MailCtx, ids: Vec<MessageId>, read: bool) {
+pub fn set_read(app: AppState, ids: Vec<MessageId>, read: bool) {
     if ids.is_empty() {
         return;
     }
-    let undo = snapshot(ctx, &ids);
+    let undo = snapshot(&ids);
     if app.check(store().set_read(&ids, read)).is_some() {
         if ids.len() > 1 {
             app.toast_with_undo(if read { "Marked as read" } else { "Marked as unread" }, undo);
+        } else {
+            app.push_undo(undo);
         }
         app.bump_mail();
     }
 }
 
-pub fn set_pinned(app: AppState, ctx: MailCtx, ids: Vec<MessageId>, pinned: bool) {
-    let undo = snapshot(ctx, &ids);
+pub fn set_pinned(app: AppState, ids: Vec<MessageId>, pinned: bool) {
+    let undo = snapshot(&ids);
     if app.check(store().set_pinned(&ids, pinned)).is_some() {
         app.toast_with_undo(if pinned { "Pinned" } else { "Unpinned" }, undo);
         app.bump_mail();
     }
 }
 
-pub fn flag(app: AppState, ctx: MailCtx, ids: Vec<MessageId>, status: FlagStatus, due: Option<chrono::NaiveDate>) {
-    snapshot(ctx, &ids);
+pub fn flag(app: AppState, ids: Vec<MessageId>, status: FlagStatus, due: Option<chrono::NaiveDate>) {
+    let undo = snapshot(&ids);
     if app.check(store().set_flag(&ids, status, due)).is_some() {
+        app.push_undo(undo);
         app.bump_mail();
         app.bump_tasks();
     }
 }
 
-fn flag_preset(app: AppState, ctx: MailCtx, ids: Vec<MessageId>, preset: FlagPreset) {
+fn flag_preset(app: AppState, ids: Vec<MessageId>, preset: FlagPreset) {
     let s = app.settings.peek().clone();
     let due = dates::flag_due(preset, Local::now().date_naive(), s.week_start, &s.work_days);
-    flag(app, ctx, ids, FlagStatus::Flagged, due);
+    flag(app, ids, FlagStatus::Flagged, due);
 }
 
 pub fn snooze(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId>, until: chrono::DateTime<Utc>) {
-    let undo = snapshot(ctx, &ids);
+    let undo = snapshot(&ids);
     if app.check(store().snooze(&ids, Some(until))).is_some() {
         select_after_removal(app, ctx, model, &ids);
         let when = dates::short_when(until, Local::now(), app.settings.peek().use_24h_time);
@@ -263,16 +264,17 @@ pub fn snooze(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId
     }
 }
 
-pub fn toggle_category(app: AppState, ctx: MailCtx, ids: Vec<MessageId>, name: &str) {
-    snapshot(ctx, &ids);
+pub fn toggle_category(app: AppState, ids: Vec<MessageId>, name: &str) {
+    let undo = snapshot(&ids);
     if app.check(store().toggle_category(&ids, name)).is_some() {
+        app.push_undo(undo);
         app.bump_mail();
     }
 }
 
 pub fn set_inference(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId>, class: InferenceClass, always: bool) {
     let s = store();
-    let undo = snapshot(ctx, &ids);
+    let undo = snapshot(&ids);
     let mut all = ids.clone();
     if always {
         let senders: HashSet<String> = messages(&ids).into_iter().map(|m| m.from.address.to_lowercase()).collect();
@@ -455,21 +457,6 @@ fn still_in_folder(mut m: FolderMemory, folder: FolderId) -> FolderMemory {
     m
 }
 
-/// Undo the most recent list action (Ctrl+Z).
-pub fn undo_last(app: AppState, mut ctx: MailCtx) {
-    let action = ctx.undo.write().pop();
-    match action {
-        Some(a) => {
-            app.run_undo(&a);
-            app.toasts.peek().iter().filter(|t| t.undo.as_ref() == Some(&a)).map(|t| t.id).collect::<Vec<_>>().into_iter().for_each(|id| app.dismiss_toast(id));
-            app.toast("Undone");
-        }
-        None => {
-            app.toast("Nothing to undo");
-        }
-    }
-}
-
 /// Run a command id on `ids` (see the module docs). Returns false for
 /// unknown ids.
 pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, ids: Vec<MessageId>) -> bool {
@@ -528,48 +515,49 @@ pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, id
         "move_other" => set_inference(app, ctx, model, ids, InferenceClass::Other, false),
         "always_focused" => set_inference(app, ctx, model, ids, InferenceClass::Focused, true),
         "always_other" => set_inference(app, ctx, model, ids, InferenceClass::Other, true),
-        "read" => set_read(app, ctx, ids, true),
-        "unread" => set_read(app, ctx, ids, false),
+        "read" => set_read(app, ids, true),
+        "unread" => set_read(app, ids, false),
         "toggle_read" => {
             let all_read = messages(&ids).iter().all(|m| m.is_read);
-            set_read(app, ctx, ids, !all_read);
+            set_read(app, ids, !all_read);
         }
-        "pin" => set_pinned(app, ctx, ids, true),
-        "unpin" => set_pinned(app, ctx, ids, false),
+        "pin" => set_pinned(app, ids, true),
+        "unpin" => set_pinned(app, ids, false),
         "toggle_pin" => {
             let all_pinned = messages(&ids).iter().all(|m| m.is_pinned);
-            set_pinned(app, ctx, ids, !all_pinned);
+            set_pinned(app, ids, !all_pinned);
         }
         // Quick flag: flags for today, or clears a flagged item.
         "flag_toggle" => {
             if messages(&ids).iter().all(|m| m.flag == FlagStatus::Flagged) {
-                flag(app, ctx, ids, FlagStatus::NotFlagged, None);
+                flag(app, ids, FlagStatus::NotFlagged, None);
             } else {
-                flag_preset(app, ctx, ids, FlagPreset::Today);
+                flag_preset(app, ids, FlagPreset::Today);
             }
         }
         // Insert: flags, or marks a flagged item complete.
         "flag_insert" => {
             if messages(&ids).iter().all(|m| m.flag == FlagStatus::Flagged) {
-                flag(app, ctx, ids, FlagStatus::Complete, None);
+                flag(app, ids, FlagStatus::Complete, None);
             } else {
-                flag_preset(app, ctx, ids, FlagPreset::Today);
+                flag_preset(app, ids, FlagPreset::Today);
             }
         }
-        "flag_complete" => flag(app, ctx, ids, FlagStatus::Complete, None),
-        "flag_clear" => flag(app, ctx, ids, FlagStatus::NotFlagged, None),
+        "flag_complete" => flag(app, ids, FlagStatus::Complete, None),
+        "flag_clear" => flag(app, ids, FlagStatus::NotFlagged, None),
         "flag_custom" => ctx.dialog.set(Some(MailDialog::FlagCustom(ids))),
         "cat_new" => ctx.dialog.set(Some(MailDialog::NewCategory(ids))),
         "cat_manage" => ctx.dialog.set(Some(MailDialog::ManageCategories)),
         "cat_clear" => {
-            snapshot(ctx, &ids);
+            let undo = snapshot(&ids);
             if app.check(s.set_categories(&ids, &[])).is_some() {
+                app.push_undo(undo);
                 app.bump_mail();
             }
         }
         "snooze_custom" => ctx.dialog.set(Some(MailDialog::SnoozeUntil(ids))),
         "unsnooze" => {
-            let undo = snapshot(ctx, &ids);
+            let undo = snapshot(&ids);
             if app.check(s.snooze(&ids, None)).is_some() {
                 select_after_removal(app, ctx, model, &ids);
                 app.toast_with_undo("Unsnoozed", undo);
@@ -580,12 +568,12 @@ pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, id
             if let Some(m) = first.and_then(|id| s.message(id).ok().flatten()) {
                 if s.is_conversation_ignored(&m.conversation_id).unwrap_or(false) {
                     if let Some(records) = app.check(s.stop_ignoring_conversation(&m.conversation_id)) {
-                        toast_moves(app, ctx, "Stopped ignoring the conversation".into(), records);
+                        toast_moves(app, "Stopped ignoring the conversation".into(), records);
                         app.bump_mail();
                     }
                 } else if super::dialogs::ignore_without_confirm() {
                     let conv_ids: Vec<MessageId> = s.conversation(&m.conversation_id).unwrap_or_default().iter().map(|x| x.id).collect();
-                    super::dialogs::ignore_now(app, ctx, &m.conversation_id);
+                    super::dialogs::ignore_now(app, &m.conversation_id);
                     select_after_removal(app, ctx, model, &conv_ids);
                 } else {
                     ctx.dialog.set(Some(MailDialog::Ignore(m.conversation_id)));
@@ -628,16 +616,18 @@ pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, id
         "help" => ctx.dialog.set(Some(MailDialog::Help)),
         "view_settings" => app.settings_dialog.set(Some(crate::state::SettingsPage::Mail)),
         "manage_accounts" => app.settings_dialog.set(Some(crate::state::SettingsPage::Accounts)),
-        "undo" => undo_last(app, ctx),
+        // One stack for the whole app: the most recent action goes first,
+        // a send included (compose::send_queue::undo).
+        "undo" => super::compose::send_queue::undo(app, false),
         other => {
             if let Some(f) = other.strip_prefix("move:").and_then(|v| v.parse().ok()) {
                 move_to(app, ctx, model, ids, f);
             } else if let Some(f) = other.strip_prefix("copy:").and_then(|v| v.parse().ok()) {
                 copy_to(app, ids, f);
             } else if let Some(name) = other.strip_prefix("cat:") {
-                toggle_category(app, ctx, ids, name);
+                toggle_category(app, ids, name);
             } else if let Some(p) = other.strip_prefix("flag:").and_then(FlagPreset::parse) {
-                flag_preset(app, ctx, ids, p);
+                flag_preset(app, ids, p);
             } else if let Some(p) = other.strip_prefix("snooze:").and_then(SnoozePreset::parse) {
                 if let Some(until) = dates::snooze_until(p, Local::now()) {
                     snooze(app, ctx, model, ids, until);

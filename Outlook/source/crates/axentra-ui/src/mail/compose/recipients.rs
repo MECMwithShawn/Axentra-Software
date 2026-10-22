@@ -82,8 +82,61 @@ fn pick_match(typed: &str, found: Vec<EmailAddress>) -> Option<EmailAddress> {
 }
 
 fn commit_text(form: Form, field: Field, text: &str) {
+    add(form, field, typed_entries(text));
+}
+
+/// The recipients typed text stands for (resolved as Enter would).
+fn typed_entries(text: &str) -> Vec<EmailAddress> {
     let (entries, _) = address::parse_list(text, true);
-    add(form, field, entries.into_iter().map(resolve).collect());
+    entries.into_iter().map(resolve).collect()
+}
+
+/// Turn what is still typed in the wells (no Enter, Tab or ";" yet) into
+/// recipients, as leaving a well does: Send (Ctrl+Enter, Alt+S), Esc and
+/// Ctrl+S do this first, so an address typed after the last chip is sent
+/// to or kept, never dropped. An invalid one becomes a red chip, which
+/// Send then points at.
+pub fn commit_typed(form: Form) {
+    for field in Field::ALL {
+        let mut text = form.typed(field);
+        let t = text.peek().clone();
+        if !t.trim().is_empty() {
+            commit_text(form, field, &t);
+            text.set(String::new());
+        }
+    }
+}
+
+/// [`commit_typed`] for a form that is going (leaving Mail): what the wells
+/// hold, added to `d` without touching the form. True when it added any.
+pub fn add_typed_on_drop(form: Form, d: &mut axentra_core::Draft) -> bool {
+    let mut added = false;
+    for field in Field::ALL {
+        let Ok(t) = form.typed(field).try_peek().map(|t| t.clone()) else { continue };
+        if t.trim().is_empty() {
+            continue;
+        }
+        let list = field.list_mut(d);
+        for e in typed_entries(&t) {
+            if !list.iter().any(|x| x.address.trim().eq_ignore_ascii_case(e.address.trim())) {
+                list.push(e);
+                added = true;
+            }
+        }
+    }
+    added
+}
+
+/// Address book suggestions for typed text, without the people already in
+/// the well.
+fn suggestions_for(query: &str, list: &[EmailAddress]) -> Vec<(EmailAddress, bool)> {
+    store()
+        .recipient_suggestions(query, 16)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(a, _)| !list.iter().any(|l| l.address.eq_ignore_ascii_case(&a.address)))
+        .take(8)
+        .collect()
 }
 
 /// Case-insensitive match of `q` in `s`, split for highlighting.
@@ -169,7 +222,7 @@ pub fn RecipientRow(field: Field, #[props(default)] trailing: Option<Element>) -
 fn RecipientWell(field: Field) -> Element {
     let app = use_app();
     let form = use_context::<Form>();
-    let mut text = use_signal(String::new);
+    let mut text = form.typed(field);
     let mut open = use_signal(|| false);
     let mut hi = use_signal(|| 0usize);
     // The selected chip lives on the form, so Send can point at an invalid one.
@@ -194,19 +247,14 @@ fn RecipientWell(field: Field) -> Element {
     let suggestions: Vec<(EmailAddress, bool)> = if open() && !query.is_empty() {
         let _ = forgot();
         let _ = app.mail_rev();
-        store()
-            .recipient_suggestions(&query, 16)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(a, _)| !list.iter().any(|l| l.address.eq_ignore_ascii_case(&a.address)))
-            .take(8)
-            .collect()
+        suggestions_for(&query, &list)
     } else {
         Vec::new()
     };
     let showing = !suggestions.is_empty();
     let hi_now = hi().min(suggestions.len().saturating_sub(1));
     let input_id = form.dom(field.key());
+    let blur_sel = format!("#{input_id}");
     let list_id = form.dom(&format!("{}-suggest", field.key()));
     let count = list.len();
 
@@ -238,6 +286,21 @@ fn RecipientWell(field: Field) -> Element {
         open.set(false);
         hi.set(0);
         form.focus(field.key());
+    };
+    // What Enter or Tab picks: the highlighted suggestion for the text in
+    // the box now. Keys can outrun the render that listed suggestions, and
+    // a pick from an older list would add someone the user never meant.
+    let shown_for = query.clone();
+    let shown: Vec<EmailAddress> = suggestions.iter().map(|(a, _)| a.clone()).collect();
+    let pick_now = move || -> Option<EmailAddress> {
+        let typed = text.peek().trim().to_string();
+        if typed.is_empty() {
+            return None;
+        }
+        if typed == shown_for {
+            return shown.get(hi_now).cloned();
+        }
+        suggestions_for(&typed, field.list(&form.draft.peek())).into_iter().next().map(|(a, _)| a)
     };
     let picks = suggestions.clone();
 
@@ -322,6 +385,11 @@ fn RecipientWell(field: Field) -> Element {
                     "aria-autocomplete": "list",
                     "aria-expanded": if showing { "true" } else { "false" },
                     "aria-controls": "{list_id}",
+                    // Enter, Tab and a separator typed at the end commit the
+                    // entry; the page empties the box as the key goes down
+                    // (kit/typed_text.js), so the next address never lands
+                    // behind the one just added.
+                    "data-ax-address-list": "split",
                     value: "{text}",
                     oninput: move |e| {
                         let v = e.value();
@@ -339,13 +407,22 @@ fn RecipientWell(field: Field) -> Element {
                     },
                     onfocus: move |_| open.set(!text.peek().trim().is_empty()),
                     onblur: move |_| {
-                        // Leaving the well commits what was typed (mail spec 6.3).
-                        let t = text.peek().clone();
-                        if !t.trim().is_empty() {
-                            commit_text(form, field, &t);
-                            text.set(String::new());
-                        }
+                        // Leaving the well commits what was typed (mail spec
+                        // 6.3), once keys typed before the click that took
+                        // focus have landed here (a busy page delivers the
+                        // click first), unless focus came back meanwhile.
                         open.set(false);
+                        let sel = blur_sel.clone();
+                        spawn(async move {
+                            if crate::kit::dom::keys_landed(&sel).await {
+                                return;
+                            }
+                            let t = text.peek().clone();
+                            if !t.trim().is_empty() {
+                                commit_text(form, field, &t);
+                                text.set(String::new());
+                            }
+                        });
                     },
                     onkeydown: move |e: KeyboardEvent| {
                         keys::stop_typing_keys(&e);
@@ -365,8 +442,8 @@ fn RecipientWell(field: Field) -> Element {
                                 hi.set((hi_now + picks.len() - 1) % picks.len());
                             }
                             Key::Enter if chord == "Enter" => {
-                                if showing {
-                                    accept(picks[hi_now].0.clone());
+                                if let Some(a) = pick_now() {
+                                    accept(a);
                                 } else if let Some(i) = sel() {
                                     edit(i);
                                 } else if !empty {
@@ -377,9 +454,9 @@ fn RecipientWell(field: Field) -> Element {
                                 }
                             }
                             Key::Tab if chord == "Tab" => {
-                                if showing {
+                                if let Some(a) = pick_now() {
                                     e.prevent_default();
-                                    accept(picks[hi_now].0.clone());
+                                    accept(a);
                                 } else if !empty {
                                     let t = text.peek().clone();
                                     commit_text(form, field, &t);
@@ -572,6 +649,60 @@ mod tests {
         assert_eq!(pick_match("hannah okafor", vec![priya.clone(), hannah.clone()]), Some(hannah.clone()));
         assert_eq!(pick_match("priya.raman", vec![hannah, priya.clone()]), Some(priya));
         assert_eq!(pick_match("nobody", vec![]), None);
+    }
+
+    /// An address typed after the last chip (no Enter, Tab or ";") goes out
+    /// with Ctrl+Enter or Alt+S and is kept by Esc, Ctrl+S and leaving Mail,
+    /// as a click on Send (which blurs the well) always did.
+    #[test]
+    fn typed_addresses_are_never_dropped() {
+        use std::cell::Cell;
+        thread_local! {
+            static FORM: Cell<Option<Form>> = const { Cell::new(None) };
+        }
+        fn root() -> Element {
+            crate::state::provide_app_state();
+            let draft = axentra_core::Draft { to: vec![EmailAddress::new("", "first@example.org")], ..Default::default() };
+            let form = use_hook(|| Form::new(1, draft, CopyValue::new(None), true));
+            FORM.with(|f| f.set(Some(form)));
+            rsx! {}
+        }
+        crate::state::init(std::sync::Arc::new(axentra_core::Store::open_in_memory().unwrap()), None);
+        let mut dom = VirtualDom::new(root);
+        dom.rebuild_in_place();
+        let form = FORM.with(|f| f.get()).expect("the form");
+        dom.in_runtime(|| {
+            let addrs = |l: &Vec<EmailAddress>| l.iter().map(|a| a.address.clone()).collect::<Vec<_>>();
+            // Leaving Mail: what the wells hold is added to the draft that is saved.
+            let set = |field: Field, text: &str| {
+                let mut t = form.typed(field);
+                t.set(text.into());
+            };
+            set(Field::To, "second@example.org");
+            set(Field::Cc, "a@example.org; b@example.org");
+            let mut d = form.draft.peek().clone();
+            assert!(add_typed_on_drop(form, &mut d));
+            assert_eq!(addrs(&d.to), ["first@example.org", "second@example.org"]);
+            assert_eq!(addrs(&d.cc), ["a@example.org", "b@example.org"]);
+            assert!(!add_typed_on_drop(form, &mut d), "already there");
+            // Send, Esc, Ctrl+S: the wells become chips and are emptied.
+            let before = *form.dirty.peek();
+            commit_typed(form);
+            let d = form.draft.peek().clone();
+            assert_eq!(addrs(&d.to), ["first@example.org", "second@example.org"]);
+            assert_eq!(addrs(&d.cc), ["a@example.org", "b@example.org"]);
+            assert!(form.typed(Field::To).peek().is_empty() && form.typed(Field::Cc).peek().is_empty());
+            assert!(*form.dirty.peek() > before, "an edit to save");
+            // An invalid one becomes a chip too, which Send then points at.
+            set(Field::Bcc, "nobody@");
+            commit_typed(form);
+            let d = form.draft.peek().clone();
+            assert_eq!(addrs(&d.bcc), ["nobody@"]);
+            assert_eq!(
+                super::super::actions::problem(&d, "", Default::default(), false),
+                Some(super::super::actions::Problem::InvalidAddress(Field::Bcc, 0))
+            );
+        });
     }
 
     #[test]

@@ -6,7 +6,6 @@
 
 use dioxus::prelude::*;
 
-use super::use_shell;
 use crate::kit::{Icon, IconButton, Intent};
 use crate::state::{Toast, use_app};
 
@@ -56,7 +55,6 @@ pub fn Toasts() -> Element {
 #[component]
 fn ToastItem(toast: Toast) -> Element {
     let app = use_app();
-    let mut shell = use_shell();
     let id = toast.id;
     let mut hovered = use_signal(|| false);
     let mut focused = use_signal(|| false);
@@ -121,15 +119,13 @@ fn ToastItem(toast: Toast) -> Element {
                     "{label}"
                 }
             }
-            if let Some(undo) = toast.undo.clone() {
+            if toast.undo.is_some() {
                 button {
                     r#type: "button",
                     class: "ax-toast-action",
                     "aria-keyshortcuts": "Control+Z",
                     onclick: move |_| {
-                        app.run_undo(&undo);
-                        shell.undo.write().retain(|(t, _)| *t != id);
-                        app.dismiss_toast(id);
+                        app.undo_toast(id);
                         crate::kit::dom::announce("Undone", false);
                     },
                     "Undo"

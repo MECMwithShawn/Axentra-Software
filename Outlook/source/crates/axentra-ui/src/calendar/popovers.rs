@@ -483,8 +483,18 @@ fn QuickCreate(sel: SlotSel, x: f64, y: f64) -> Element {
     let et = d.end.with_timezone(&chrono::Local).time();
     let send = !d.attendees.is_empty();
     let cal_color = ramp(&cals.iter().find(|c| c.id == d.calendar_id).map(|c| c.color.clone()).unwrap_or_default()).primary;
-    let mut save = move |send_it: bool| {
+    // What is typed in the attendee box and not added yet.
+    let typed = use_signal(String::new);
+    // Sends when the event has attendees, an address only typed so far
+    // included (it is added first).
+    let mut save = move || {
+        let added = super::fields::commit_typed(draft, &[(AttendeeKind::Required, typed)]);
+        if added.iter().any(|a| !valid_address(&a.address)) {
+            error.set(Some("Check the highlighted addresses".into()));
+            return;
+        }
         let mut e = draft.peek().clone();
+        let send_it = !e.attendees.is_empty();
         if send_it && e.attendees.iter().any(|a| !valid_address(&a.email.address)) {
             error.set(Some("Check the highlighted addresses".into()));
             return;
@@ -552,7 +562,7 @@ fn QuickCreate(sel: SlotSel, x: f64, y: f64) -> Element {
                     keys::stop_typing_keys(&e);
                     if e.key() == Key::Enter {
                         e.prevent_default();
-                        save(!draft.peek().attendees.is_empty());
+                        save();
                     }
                 },
             }
@@ -591,6 +601,7 @@ fn QuickCreate(sel: SlotSel, x: f64, y: f64) -> Element {
                     attendees: d.attendees.clone(),
                     kind: AttendeeKind::Required,
                     placeholder: "Invite required attendees",
+                    typed,
                     onchange: move |list: Vec<Attendee>| draft.write().attendees = list,
                 }
             }
@@ -620,12 +631,24 @@ fn QuickCreate(sel: SlotSel, x: f64, y: f64) -> Element {
                 Button {
                     label: "More options",
                     onclick: move |_| {
+                        super::fields::commit_typed(draft, &[(AttendeeKind::Required, typed)]);
                         let e = draft.peek().clone();
                         cal.slot.set(None);
                         cal.open_editor(e, EditMode::New);
                     },
                 }
-                Button { label: if send { "Send" } else { "Save" }, variant: Variant::Primary, onclick: move |_| save(send) }
+                Button {
+                    label: if send { "Send" } else { "Save" },
+                    variant: Variant::Primary,
+                    // Once keys typed just before the click have landed.
+                    onclick: move |_| {
+                        let mut save = save;
+                        spawn(async move {
+                            crate::kit::dom::keys_landed("body").await;
+                            save();
+                        });
+                    },
+                }
             }
             if confirm() {
                 div { class: "ax-cal-confirm", role: "alertdialog", "aria-label": "Discard this event?",

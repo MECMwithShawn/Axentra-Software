@@ -108,7 +108,7 @@ pub fn Header() -> Element {
                     "aria-expanded": if flyout == Some(Flyout::Account) { "true" } else { "false" },
                     onclick: move |_| shell.toggle_flyout(Flyout::Account),
                     if let Some(a) = &account {
-                        Avatar { name: a.display_name.clone(), email: a.email.clone(), size: 32 }
+                        Avatar { name: a.display_name.clone(), email: a.email.clone(), size: 32, photo: app.account_photo(a.id) }
                     } else {
                         Icon { name: "person_circle", size: 24 }
                     }

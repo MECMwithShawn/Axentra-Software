@@ -290,6 +290,7 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
             class: if columns { "ax-columns" },
             role: "region",
             "aria-label": "Message list",
+            "data-ax-region": "true",
             style: "{style}",
             onresize: move |e: ResizeEvent| {
                 if let Ok(size) = e.data().get_border_box_size() {
@@ -306,6 +307,7 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
                     class: "ax-mail-scroll",
                     role: list_role,
                     tabindex: "0",
+                    "data-ax-default-focus": "true",
                     "aria-label": "{label}",
                     "aria-multiselectable": "true",
                     "aria-activedescendant": active_id.unwrap_or_default(),

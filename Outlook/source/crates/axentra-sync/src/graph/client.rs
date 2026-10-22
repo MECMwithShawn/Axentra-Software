@@ -84,6 +84,23 @@ pub fn graph_error(status: u16, body: &[u8]) -> SyncError {
     }
 }
 
+/// A response body of at most `max` bytes, or `None` as soon as it is
+/// longer (or says it will be). Bodies arrive decompressed, so the limit is
+/// on what would be kept, whatever the transfer encoding.
+async fn read_at_most(mut resp: reqwest::Response, max: usize) -> SyncResult<Option<Vec<u8>>> {
+    if resp.content_length().is_some_and(|n| n > max as u64) {
+        return Ok(None);
+    }
+    let mut out = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| from_reqwest(&e))? {
+        if out.len().saturating_add(chunk.len()) > max {
+            return Ok(None);
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(Some(out))
+}
+
 impl Graph {
     pub fn new(http: reqwest::Client, tokens: Arc<dyn TokenSource>) -> Self {
         Self::with_base(http, tokens, GRAPH_BASE)
@@ -103,6 +120,29 @@ impl Graph {
 
     /// One request with retries. Returns status and body.
     pub async fn request(&self, method: Method, path: &str, body: Option<RequestBody>, prefer: &[&str]) -> SyncResult<(StatusCode, Vec<u8>)> {
+        let (status, bytes) = self.request_status(method, path, body, prefer).await?;
+        if status.is_success() { Ok((status, bytes)) } else { Err(graph_error(status.as_u16(), &bytes)) }
+    }
+
+    /// [`Graph::request`] (same retries, throttling and token refresh) that
+    /// returns a final error status with its body instead of mapping it to
+    /// a [`SyncError`], for callers that tell one status from another.
+    pub async fn request_status(&self, method: Method, path: &str, body: Option<RequestBody>, prefer: &[&str]) -> SyncResult<(StatusCode, Vec<u8>)> {
+        let (status, bytes) = self.exchange(method, path, body, prefer, None).await?;
+        Ok((status, bytes.unwrap_or_default()))
+    }
+
+    /// [`Graph::request_status`] that reads at most `max` body bytes when
+    /// given: the body is `None` when it is longer (the rest isn't read, and
+    /// a declared `Content-Length` over the limit isn't read at all).
+    async fn exchange(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<RequestBody>,
+        prefer: &[&str],
+        max: Option<usize>,
+    ) -> SyncResult<(StatusCode, Option<Vec<u8>>)> {
         let url = self.url(path);
         let mut forced = false;
         let mut attempt = 0;
@@ -131,7 +171,10 @@ impl Graph {
             let resp = req.send().await.map_err(|e| from_reqwest(&e))?;
             let status = resp.status();
             let retry_after = resp.headers().get("Retry-After").and_then(|v| v.to_str().ok()).and_then(|v| parse_retry_after(v, Utc::now()));
-            let bytes = resp.bytes().await.map_err(|e| from_reqwest(&e))?.to_vec();
+            let bytes = match max {
+                None => Some(resp.bytes().await.map_err(|e| from_reqwest(&e))?.to_vec()),
+                Some(max) => read_at_most(resp, max).await?,
+            };
             drop(permit);
             if status.is_success() {
                 return Ok((status, bytes));
@@ -149,7 +192,7 @@ impl Graph {
                     tracing::debug!("Graph {} {status}; retrying in {:?}", method, wait);
                     tokio::time::sleep(wait).await;
                 }
-                code => return Err(graph_error(code, &bytes)),
+                _ => return Ok((status, bytes)),
             }
         }
     }
@@ -168,6 +211,20 @@ impl Graph {
 
     pub async fn get_bytes(&self, path: &str) -> SyncResult<Vec<u8>> {
         Ok(self.request(Method::GET, path, None, &[]).await?.1)
+    }
+
+    /// GET returning the final HTTP status and body, errors included
+    /// (transport failures and exhausted retries are still `Err`).
+    pub async fn get_status(&self, path: &str) -> SyncResult<(u16, Vec<u8>)> {
+        let (status, body) = self.request_status(Method::GET, path, None, &[]).await?;
+        Ok((status.as_u16(), body))
+    }
+
+    /// [`Graph::get_status`] for a body of at most `max` bytes: `None` for a
+    /// longer one, which is not downloaded past the limit.
+    pub async fn get_status_max(&self, path: &str, max: usize) -> SyncResult<(u16, Option<Vec<u8>>)> {
+        let (status, body) = self.exchange(Method::GET, path, None, &[], Some(max)).await?;
+        Ok((status.as_u16(), body))
     }
 
     /// Every item of a collection, following `@odata.nextLink` verbatim.

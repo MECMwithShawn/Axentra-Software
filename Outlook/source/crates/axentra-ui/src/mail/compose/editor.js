@@ -372,8 +372,10 @@ const ops = {
   right: () => exec("justifyRight"),
   justify: () => exec("justifyFull"),
   clear: () => { exec("removeFormat"); exec("formatBlock", "div"); },
-  undo: () => exec("undo"),
-  redo: () => exec("redo"),
+  // This body's own steps only (WebKit's stack is shared with the other
+  // fields of the page; kit/typed_text.js).
+  undo: () => (window.axTypedText && axTypedText.history ? axTypedText.history(el, "undo") : exec("undo")),
+  redo: () => (window.axTypedText && axTypedText.history ? axTypedText.history(el, "redo") : exec("redo")),
   font: (v) => withCss(true, () => exec("fontName", v)),
   size: (v) => setFontSize(v),
   color: (v) => v === "auto" ? clearColor("color", "foreColor") : withCss(true, () => exec("foreColor", v)),
@@ -474,6 +476,7 @@ function onKey(e) {
     if (sh && letter === "j") return go("justify");
     if (!sh && letter === "t") return go("indent");
     if (sh && letter === "t") return go("outdent");
+    if (!sh && letter === "z") return go("undo");
     if (!sh && letter === "y") return go("redo");
     if (sh && letter === "z") return go("redo");
     if (!sh && e.code === "Space") return go("clear");
@@ -483,7 +486,8 @@ function onKey(e) {
     if (sh && (e.key === "<" || e.code === "Comma")) return go("size", nextSize(false));
     if (sh && letter === "v") { state.plainNext = true; return; }
   }
-  if (e.key === "Tab" && !ctrl && !alt && inList()) return go(sh ? "outdent" : "indent");
+  // By code too: WebKitGTK reports Shift+Tab as key "Unidentified".
+  if ((e.key === "Tab" || e.code === "Tab") && !ctrl && !alt && inList()) return go(sh ? "outdent" : "indent");
 }
 const SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
 function nextSize(up) {
@@ -609,7 +613,9 @@ function teardown() {
   if (media && media.removeEventListener) media.removeEventListener("change", themeChanged);
   document.removeEventListener("selectionchange", onSelectionChange);
   clearInterval(state.timer);
-  if (window.axComposeEditors && window.axComposeEditors[cfg.id] === api) delete window.axComposeEditors[cfg.id];
+  // Kept a little longer: a form that has just gone reads its body once
+  // more (the editor is detached but still holds the text).
+  setTimeout(() => { if (window.axComposeEditors && window.axComposeEditors[cfg.id] === api) delete window.axComposeEditors[cfg.id]; }, 10000);
   if (state.finish) state.finish();
 }
 

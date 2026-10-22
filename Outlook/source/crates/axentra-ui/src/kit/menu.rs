@@ -111,8 +111,11 @@ pub fn Menu(
     let id = dom::use_unique_id("ax-menu");
     let nested = has_submenus(&items);
     let shift_x = if anchor_end { "-100%".to_string() } else { format!("min(0px, calc(100vw - {x}px - 100% - 8px))") };
+    // Lifted to fit above the window's bottom edge, but never above its top.
+    // A menu with submenus taller than the window scrolls its items in an
+    // inner box (dom.js `fit`), so the submenus aren't clipped.
     let style = format!(
-        "left:{x}px;top:{y}px;min-width:{min_width}px;transform:translate({shift_x}, min(0px, calc(100vh - {y}px - 100% - 8px)))"
+        "left:{x}px;top:{y}px;min-width:{min_width}px;transform:translate({shift_x}, max(calc(8px - {y}px), min(0px, calc(100vh - {y}px - 100% - 8px))))"
     );
     rsx! {
         div {
@@ -140,13 +143,19 @@ pub fn Menu(
             // global shortcuts (keyboard spec §2.1 scope 2).
             onkeydown: move |e: KeyboardEvent| {
                 e.stop_propagation();
-                if matches!(e.key(), Key::Escape | Key::Tab) {
+                if e.key() == Key::Escape || super::keys::is_tab(&e) {
                     on_close.call(());
                 }
             },
             oncontextmenu: move |e| e.prevent_default(),
             onclick: move |e| e.stop_propagation(),
-            MenuItems { items: items.clone(), on_select, on_close }
+            if nested {
+                div { class: "ax-menu-scroller",
+                    MenuItems { items: items.clone(), on_select, on_close }
+                }
+            } else {
+                MenuItems { items: items.clone(), on_select, on_close }
+            }
         }
     }
 }

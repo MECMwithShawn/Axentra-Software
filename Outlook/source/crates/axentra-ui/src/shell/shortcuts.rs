@@ -91,7 +91,7 @@ pub fn ShortcutsDialog() -> Element {
     let typed = query();
     use_effect(use_reactive((&count, &typed), move |(n, typed)| {
         if !typed.is_empty() {
-            dom::announce(&format!("{n} shortcuts found"), false);
+            dom::announce(&if n == 1 { "1 shortcut found".to_string() } else { format!("{n} shortcuts found") }, false);
         }
     }));
     let close = move |_| shell.shortcuts_open.set(false);

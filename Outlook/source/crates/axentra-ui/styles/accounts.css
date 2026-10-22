@@ -21,13 +21,14 @@
   background: var(--ax-bg-1);
 }
 .ax-acct-row {
-  display: flex; align-items: center; gap: var(--ax-space-m);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--ax-space-m);
   padding: var(--ax-density-pad-y) var(--ax-space-l);
   transition: background var(--ax-duration-fast) var(--ax-ease);
 }
 .ax-acct-row + .ax-acct-row { border-top: 1px solid var(--ax-stroke-2); }
 .ax-acct-row:hover { background: var(--ax-bg-subtle-hover); }
-.ax-acct-row-target { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: var(--ax-space-m); border-radius: var(--ax-radius-m); }
+/* In a narrow dialog the buttons move under the account instead of squeezing it. */
+.ax-acct-row-target { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: var(--ax-space-m); border-radius: var(--ax-radius-m); }
 .ax-app .ax-acct-row-target:focus-visible { outline-offset: 2px; box-shadow: none; }
 .ax-acct-row-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .ax-acct-row-name { display: flex; align-items: center; gap: var(--ax-space-s); min-width: 0; font-weight: var(--ax-weight-semibold); }
@@ -38,7 +39,7 @@
 }
 .ax-acct-provider-name { flex: none; }
 .ax-acct-dot { flex: none; }
-.ax-acct-row-actions { display: flex; align-items: center; gap: var(--ax-space-xs); flex: none; }
+.ax-acct-row-actions { display: flex; align-items: center; gap: var(--ax-space-xs); flex: none; margin-left: auto; }
 .ax-acct-btn-row { min-width: 96px; }
 
 .ax-acct-pill {

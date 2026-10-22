@@ -84,8 +84,20 @@
 /* Submenus open beside their item, first row level with it (the menu's
    4px padding and 1px border); dom.js flips them left at the screen edge. */
 .ax-submenu { position: absolute; left: calc(100% + 4px); top: -5px; }
-/* Menus with submenus don't scroll: overflow would clip the submenu. */
-.ax-menu.ax-menu-nested { overflow: visible; }
+/* Menus with submenus don't scroll (overflow would clip the submenu), so
+   they aren't capped either: the open position keeps them on screen. One
+   taller than the window (dom.js `fit` adds .ax-menu-scroll) scrolls its
+   items in the inner box instead, and its submenus hang off the menu
+   itself, placed level with their item by `fit`. */
+.ax-menu.ax-menu-nested { overflow: visible; max-height: none; }
+.ax-menu-scroller { display: contents; }
+.ax-menu.ax-menu-nested.ax-menu-scroll { max-height: calc(100vh - 16px); }
+.ax-menu-scroll > .ax-menu-scroller {
+  display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; margin: -4px; padding: 4px;
+}
+.ax-menu-scroll > .ax-menu-scroller > .ax-menu-item-wrap { position: static; }
+.ax-menu-scroll > .ax-menu-scroller > .ax-menu-item-wrap > .ax-submenu { left: 100%; }
+.ax-menu-scroll > .ax-menu-scroller > .ax-menu-item-wrap > .ax-submenu:not([data-ax-placed]) { visibility: hidden; }
 @keyframes ax-pop { from { opacity: 0; transform: translateY(-4px); } }
 .ax-menu-item-wrap { position: relative; }
 .ax-menu-item {
@@ -115,7 +127,11 @@
   border-radius: 50%; color: #fff; font-weight: var(--ax-weight-semibold);
   user-select: none;
 }
-.ax-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.ax-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; -webkit-user-drag: none; }
+/* The user's own account photo: the picture is the whole circle (no persona colour behind it,
+   which would fringe its edge); see-through parts show a neutral fill inside that circle. */
+.ax-avatar-photo { background: transparent; }
+.ax-avatar-photo img { background: var(--ax-bg-3); }
 .ax-presence { position: absolute; right: -1px; bottom: -1px; border-radius: 50%; border: 1.5px solid var(--ax-bg-1); box-sizing: content-box; }
 .ax-presence.ax-available { background: var(--colorStatusSuccessBackground3); }
 .ax-presence.ax-busy, .ax-presence.ax-dnd { background: var(--colorStatusDangerBackground3); }
@@ -126,6 +142,8 @@
 .ax-field { display: flex; flex-direction: column; gap: 4px; }
 .ax-field-label { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
 .ax-field-hint { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
+.ax-field-hint.ax-danger { color: var(--ax-danger-fg); }
+.ax-input.ax-invalid, .ax-textarea.ax-invalid { border-bottom-color: var(--ax-danger-fg); }
 .ax-input, .ax-select, .ax-textarea {
   height: 32px; padding: 0 10px; border: 1px solid var(--ax-stroke-1); border-bottom-color: var(--ax-stroke-accessible);
   border-radius: var(--ax-radius-m); background: var(--ax-bg-1); color: var(--ax-fg-1); outline: none;
@@ -291,8 +309,10 @@
   position: relative; left: auto; top: auto; margin-right: auto;
   margin-left: clamp(var(--ax-surface-margin), var(--ax-sx), calc(100vw - var(--ax-surface-margin) - min(var(--ax-sw), 100vw - 2 * var(--ax-surface-margin))));
 }
-/* In-app windows (pop-outs) are fixed and open centred. */
-.ax-app .ax-surface.ax-surface-float { position: fixed; }
+/* In-app windows (pop-outs) are fixed and open centred, always below the
+   header: they don't cover the app's own commands (search, account) when
+   the system draws the title bar either. */
+.ax-app .ax-surface.ax-surface-float { position: fixed; --ax-surface-top: var(--ax-header-h); }
 .ax-app .ax-surface.ax-surface-float:not([data-ax-placed]) {
   left: calc((100vw - min(var(--ax-sw), 100vw - 2 * var(--ax-surface-margin))) / 2);
   top: max(var(--ax-surface-top), calc((100vh - min(var(--ax-sh), 100vh - var(--ax-surface-top) - var(--ax-surface-margin))) / 2));

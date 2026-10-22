@@ -8,7 +8,7 @@ use super::actions;
 use super::ctx::{MailCtx, MailDialog};
 use super::list::select;
 use super::model::ListModel;
-use crate::kit::keys;
+use crate::kit::{dom, keys};
 use crate::state::{AppState, store};
 
 /// Command chords of the "Outlook" set (none of these work with shortcuts off).
@@ -110,13 +110,16 @@ pub fn module_key(app: AppState, mut ctx: MailCtx, model: &ListModel, e: &Keyboa
         _ => {}
     }
     // F6 cycles the regions (keyboard spec §12.1); not a shortcut, always on.
+    // Mail's panes are regions of the shell's cycle (data-ax-region), so the
+    // order is the app's: header, app bar, ribbon, folders, list, reading
+    // pane, then an open side pane.
     match chord.as_str() {
         "F6" | "Ctrl+F6" => {
-            cycle_region(1);
+            dom::cycle_regions(1);
             return true;
         }
         "Shift+F6" | "Ctrl+Shift+F6" => {
-            cycle_region(-1);
+            dom::cycle_regions(-1);
             return true;
         }
         _ => {}
@@ -171,29 +174,6 @@ pub fn module_key(app: AppState, mut ctx: MailCtx, model: &ListModel, e: &Keyboa
     }
     actions::run(app, ctx, model, cmd, targets);
     true
-}
-
-/// Move focus to the next (`dir` 1) or previous (-1) region: ribbon, app
-/// bar, folder pane, message list, reading pane. Each region focuses its
-/// selected tab / module / tree / list / message (keyboard spec §12.1).
-fn cycle_region(dir: i32) {
-    document::eval(&format!(
-        "const pick = (sels) => sels.map((q) => document.querySelector(q)).find(Boolean);
-         const regions = [
-           ['.ax-mail .ax-ribbon', ['.ax-mail .ax-ribbon-tab.ax-selected']],
-           ['.ax-rail', ['.ax-rail-btn.ax-selected']],
-           ['.ax-mail-folders', ['.ax-mail-tree']],
-           ['.ax-mail-list', ['.ax-mail-scroll', '.ax-mail-list']],
-           ['.ax-mail-reading', ['.ax-mail-reading .ax-mail-reading-scroll', '.ax-mail-reading']],
-         ].map(([area, targets]) => [area, pick(targets)]).filter(([, el]) => el);
-         const a = document.activeElement;
-         const cur = regions.findIndex(([area]) => a && a.closest && a.closest(area));
-         const n = regions.length;
-         if (n) {{
-           const next = cur < 0 ? ({dir} > 0 ? 0 : n - 1) : (cur + {dir} + n) % n;
-           regions[next][1].focus();
-         }}"
-    ));
 }
 
 /// Browser defaults to suppress inside the Mail module (the liveview

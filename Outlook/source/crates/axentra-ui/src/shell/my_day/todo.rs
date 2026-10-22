@@ -89,10 +89,13 @@ pub fn TodoTab() -> Element {
                 placeholder: "Add a task",
                 "aria-label": "Add a task",
                 value: "{draft}",
+                "data-ax-enter-clears": "true",
                 oninput: move |e| draft.set(e.value()),
                 onkeydown: move |e: KeyboardEvent| {
                     keys::stop_typing_keys(&e);
+                    // Taken (so the page empties the input) only when added.
                     if e.key() == Key::Enter && add_task(app, &draft(), today) {
+                        e.prevent_default();
                         draft.set(String::new());
                     }
                 },

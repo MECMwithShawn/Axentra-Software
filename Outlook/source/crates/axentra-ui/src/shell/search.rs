@@ -110,7 +110,8 @@ fn suggestions(module: Module, query: &str, recent: &[String]) -> Vec<Suggestion
     out
 }
 
-fn submit(mut app: AppState, query: String) {
+/// Run a search; returns its serial.
+fn submit(mut app: AppState, query: String) -> u64 {
     let q = query.trim().to_string();
     remember(&q);
     let mut s = app.search.write();
@@ -120,23 +121,52 @@ fn submit(mut app: AppState, query: String) {
     if s.active {
         dom::announce(&format!("Searching for {q}"), false);
     }
+    s.serial
 }
 
-fn exit_search(mut app: AppState) {
+/// Leave search; returns the new search serial.
+fn exit_search(mut app: AppState) -> u64 {
     let serial = app.search.read().serial + 1;
     app.search.set(SearchState { serial, ..Default::default() });
+    serial
 }
 
 #[component]
 pub fn SearchBox() -> Element {
-    let mut app = use_app();
+    let app = use_app();
     let module = (app.module)();
     let search = app.search.read().clone();
+    // The text being typed lives here and in the input, which is not
+    // written back while typing (a render that lags behind the keys would
+    // put back an older value and drop the newer ones). app.search takes it
+    // on submit; a search set or cleared elsewhere replaces both.
+    let mut text = use_signal(|| search.query.clone());
+    // The search the box itself just ran (Enter) or ended (Escape, which the
+    // page applied as the key went down): the box already shows it, and
+    // keys typed since must stay, so it is not written back.
+    let mut from_box = use_hook(|| CopyValue::new(None::<u64>));
+    use_effect(move || {
+        let search = app.search.read();
+        if from_box.take() == Some(search.serial) {
+            return;
+        }
+        let q = search.query.clone();
+        drop(search);
+        let js = serde_json::to_string(&q).unwrap_or_default();
+        document::eval(&format!("const i = document.querySelector({INPUT_SELECTOR:?}); if (i && i.value !== {js}) i.value = {js};"));
+        text.set(q);
+    });
     let mut focused = use_signal(|| false);
     let mut list_open = use_signal(|| false);
     let mut active = use_signal(|| None::<usize>);
     let mut filters_open = use_signal(|| false);
-    let items = if list_open() && focused() { suggestions(module, &search.query, &recent_searches()) } else { Vec::new() };
+    // Bumped on every focus move into the box: a pending "focus left" check
+    // from an earlier move inside it (input -> Filters) stands down.
+    let mut focus_gen = use_signal(|| 0u64);
+    // Bumped each time the input takes focus: a pending close from an
+    // earlier blur stands down.
+    let mut input_gen = use_signal(|| 0u64);
+    let items = if list_open() && focused() { suggestions(module, &text(), &recent_searches()) } else { Vec::new() };
     let n = items.len();
     let active_id = active().filter(|i| *i < n).map(|i| format!("ax-search-opt-{i}"));
     let show_list = !items.is_empty();
@@ -144,11 +174,17 @@ pub fn SearchBox() -> Element {
         let mut app = app;
         list_open.set(false);
         match item {
-            Suggestion::Recent(q) => submit(app, q),
+            Suggestion::Recent(q) => {
+                submit(app, q);
+            }
             Suggestion::Person { name, address, contact } => match ((app.module)(), contact) {
                 (Module::People, Some(id)) => app.navigate(NavRequest::Contact(id)),
-                (Module::Mail, _) if !address.is_empty() => submit(app, format!("from:\"{address}\"")),
-                _ => submit(app, name),
+                (Module::Mail, _) if !address.is_empty() => {
+                    submit(app, format!("from:\"{address}\""));
+                }
+                _ => {
+                    submit(app, name);
+                }
             },
             Suggestion::Message { id, .. } => {
                 app.search.write().query.clear();
@@ -165,15 +201,28 @@ pub fn SearchBox() -> Element {
             class: if search.active { "ax-searching" },
             role: "search",
             onfocusin: move |_| {
+                let next = *focus_gen.peek() + 1;
+                focus_gen.set(next);
                 focused.set(true);
-                list_open.set(true);
             },
             onfocusout: move |_| {
-                // Let a click on a suggestion land before the list closes.
+                // Let a click on a suggestion land before the list closes;
+                // focus that moved on inside the box keeps it open.
+                let left_at = *focus_gen.peek();
                 spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(180)).await;
-                    focused.set(false);
+                    if *focus_gen.peek() == left_at {
+                        focused.set(false);
+                    }
                 });
+            },
+            // Escape on Clear or Filters closes the filter panel (the input
+            // and the panel handle their own).
+            onkeydown: move |e: KeyboardEvent| {
+                if e.key() == Key::Escape && filters_open() {
+                    e.stop_propagation();
+                    filters_open.set(false);
+                }
             },
             div { class: "ax-search",
                 if search.active {
@@ -182,7 +231,9 @@ pub fn SearchBox() -> Element {
                         class: "ax-search-icon-btn",
                         title: "Exit search",
                         "aria-label": "Exit search",
-                        onclick: move |_| exit_search(app),
+                        onclick: move |_| {
+                            exit_search(app);
+                        },
                         Icon { name: "arrow_left", size: 16 }
                     }
                 } else {
@@ -201,9 +252,32 @@ pub fn SearchBox() -> Element {
                     "aria-autocomplete": "list",
                     "aria-activedescendant": active_id,
                     "data-ax-default-focus": "true",
-                    value: "{search.query}",
+                    // Emptied by the page as Escape goes down, when the
+                    // handler took the key (kit/typed_text.js), so letters
+                    // typed right after it are kept.
+                    "data-ax-escape-clears": "true",
+                    // Enter moves focus to the results (§7.5); keys typed
+                    // straight on still refine the search (kit/typed_text.js).
+                    "data-ax-enter-keeps-typing": "true",
+                    // Suggestions belong to the input: they show while it has
+                    // focus, not while focus is on Clear or Filters. They close
+                    // a beat after it leaves, so a click on one lands first.
+                    onfocus: move |_| {
+                        let next = *input_gen.peek() + 1;
+                        input_gen.set(next);
+                        list_open.set(true);
+                    },
+                    onblur: move |_| {
+                        let left_at = *input_gen.peek();
+                        spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_millis(180)).await;
+                            if *input_gen.peek() == left_at {
+                                list_open.set(false);
+                            }
+                        });
+                    },
                     oninput: move |e| {
-                        app.search.write().query = e.value();
+                        text.set(e.value());
                         list_open.set(true);
                         active.set(None);
                     },
@@ -226,8 +300,8 @@ pub fn SearchBox() -> Element {
                                         Some(item) => pick(item),
                                         None => {
                                             list_open.set(false);
-                                            let q = app.search.read().query.clone();
-                                            submit(app, q);
+                                            let q = text();
+                                            from_box.set(Some(submit(app, q)));
                                         }
                                     }
                                     active.set(None);
@@ -237,8 +311,10 @@ pub fn SearchBox() -> Element {
                                     if show_list || filters_open() {
                                         list_open.set(false);
                                         filters_open.set(false);
-                                    } else if !app.search.read().query.is_empty() || app.search.read().active {
-                                        exit_search(app);
+                                    } else if !text().is_empty() || app.search.read().active {
+                                        e.prevent_default();
+                                        text.set(String::new());
+                                        from_box.set(Some(exit_search(app)));
                                     } else {
                                         dom::enter_region(".ax-module [data-ax-region], .ax-module .ax-panes > .ax-pane");
                                     }
@@ -248,7 +324,7 @@ pub fn SearchBox() -> Element {
                         }
                     },
                 }
-                if !search.query.is_empty() {
+                if !text().is_empty() {
                     button {
                         r#type: "button",
                         class: "ax-search-icon-btn",
@@ -293,7 +369,7 @@ pub fn SearchBox() -> Element {
             }
             if filters_open() {
                 FilterPanel {
-                    query: search.query.clone(),
+                    query: text(),
                     on_close: move |_| filters_open.set(false),
                     on_search: move |q: String| {
                         filters_open.set(false);

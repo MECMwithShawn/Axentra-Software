@@ -28,10 +28,14 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
 /* Focus (§1.12, keyboard spec §19): keyboard focus only, 2px ring in
    colorStrokeFocus2 drawn inside the control (never clipped by scrolling
    parents), with a 1px colorStrokeFocus1 line so it reads on brand fills.
-   Text inputs show the brand underline instead. */
+   Text inputs show the brand underline instead. The keyboard-mode rule
+   weighs no more than `.ax-app :focus-visible`, so a component's own
+   :focus-visible rule (no ring on a composite's container, another offset)
+   wins in keyboard mode too. Dialogs, menus and panes that hold focus
+   themselves get no ring, and keep their own shadow (their elevation). */
 .ax-app :focus { outline: none; }
-.ax-app :focus-visible,
-html[data-ax-kbd] .ax-app :focus:not(input):not(textarea):not(select):not([contenteditable="true"]) {
+.ax-app :focus-visible:where(:not([role="dialog"]):not([role="alertdialog"]):not([role="menu"]):not(.ax-pane)),
+:where(html[data-ax-kbd]) .ax-app :focus:where(:not(input):not(textarea):not(select):not([contenteditable="true"]):not([role="dialog"]):not([role="alertdialog"]):not([role="menu"]):not(.ax-pane)) {
   outline: var(--ax-stroke-thick) solid var(--ax-stroke-focus-outer);
   outline-offset: -2px;
   box-shadow: inset 0 0 0 3px var(--ax-stroke-focus-inner);
@@ -39,8 +43,6 @@ html[data-ax-kbd] .ax-app :focus:not(input):not(textarea):not(select):not([conte
 .ax-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):focus-visible,
 .ax-app textarea:focus-visible, .ax-app select:focus-visible,
 .ax-app [contenteditable="true"]:focus-visible { outline: none; box-shadow: none; }
-.ax-app [role="dialog"]:focus-visible, .ax-app [role="alertdialog"]:focus-visible,
-.ax-app [role="menu"]:focus-visible, .ax-app .ax-pane:focus-visible { outline: none; box-shadow: none; }
 
 /* Scrollbars: thin, visible on hover. */
 .ax-app ::-webkit-scrollbar { width: 12px; height: 12px; }

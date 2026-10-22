@@ -127,6 +127,11 @@ fn count(hay: &str, needle: &str) -> usize {
     hay.matches(needle).count()
 }
 
+/// Height in px of a blocked picture with alt text and no declared height
+/// (the frame's style sheet). WebKitGTK would otherwise size its box by the
+/// alt text's proportions: 480x140 for "Brand board" at width 480.
+const BLOCKED_ALT_H: f64 = 24.0;
+
 /// Height estimate in px for the frame: text lines at the available width,
 /// paragraph spacing and images (explicit heights scaled to the width).
 pub fn estimate_height(html: &str, width: f64, zoom: u32) -> u32 {
@@ -152,8 +157,15 @@ pub fn estimate_height(html: &str, width: f64, zoom: u32) -> u32 {
             tag[p..].split('"').next()?.trim_end_matches("px").parse().ok()
         };
         let (w, h) = (num("width"), num("height"));
+        // As the frame's style sheet picks them: no source, alt text, no height.
+        let alt_box = !tag.contains(" src=") && !tag.contains(" height=") && tag.find(" alt=\"").is_some_and(|p| !tag[p + 6..].starts_with('"'));
+        // A blocked picture (no source) counts at its declared size too: the
+        // frame can't be measured, so too short would clip the end of the
+        // message. With alt text and no height it is a one-line box (the
+        // frame's style sheet), not a picture-sized one.
         images += match (w, h) {
             (_, Some(h)) if h <= 2.0 => 0.0,
+            _ if alt_box => BLOCKED_ALT_H * z,
             (Some(w), Some(h)) => h * (usable / (w * z)).min(1.0) * z,
             (Some(w), None) => 0.6 * w.min(usable / z) * z,
             (None, Some(h)) => h * z,
@@ -199,7 +211,7 @@ pub fn build(body: &MessageBody, allow_remote: bool, theme: BodyTheme, zoom: u32
 html,body{{margin:0;padding:0;background:{bg};}}\
 body{{color:{fg};font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Selawik,Inter,\"Noto Sans\",sans-serif;font-size:14px;line-height:20px;\
 overflow-wrap:anywhere;zoom:{zoom}%;padding:2px 2px 8px}}\
-a{{color:{link}}}img{{max-width:100%;height:auto}}table{{max-width:100%}}\
+a{{color:{link}}}img{{max-width:100%;height:auto}}img:not([src]):not([height])[alt]:not([alt=\"\"]){{height:24px}}table{{max-width:100%}}\
 blockquote{{margin:0 0 0 8px;padding-left:12px;border-left:3px solid {link}}}\
 p{{margin:0 0 12px}}pre{{white-space:pre-wrap}}\
 </style></head><body>{main_html}</body></html>"
@@ -265,7 +277,41 @@ mod tests {
         let long = estimate_height(&"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>".repeat(20), 600.0, 100);
         let zoomed = estimate_height(&"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>".repeat(20), 600.0, 150);
         assert!(short < long && long < zoomed);
-        let img = estimate_height("<img width=\"1200\" height=\"400\">", 600.0, 100);
+        let img = estimate_height("<img src=\"cid:a\" width=\"1200\" height=\"400\">", 600.0, 100);
         assert!((150..=260).contains(&img), "{img}");
+    }
+
+    #[test]
+    fn blocked_pictures_keep_their_declared_room() {
+        // The sanitiser drops a blocked picture's source but keeps the tag,
+        // and WebKitGTK draws it as a box of its declared size (with or
+        // without alt text): the frame must not come out shorter than that.
+        let text = "<p>Hi Alex, the board is below.</p><p>Thanks, Elena</p>";
+        let plain = estimate_height(text, 600.0, 100);
+        for img in [
+            "<img src=\"https://cdn.example/b.png\" width=\"480\" height=\"320\">",
+            "<img src=\"https://cdn.example/b.png\" width=\"480\" height=\"320\" alt=\"\">",
+            "<img src=\"https://cdn.example/b.png\" width=\"480\" height=\"320\" alt=\"Brand board\">",
+        ] {
+            let body = MessageBody { html: Some(format!("<p>{img}</p>{text}")), ..Default::default() };
+            let blocked = build(&body, false, BodyTheme::Light, 100, false, 600.0);
+            assert!(blocked.blocked, "{img}");
+            assert!(!blocked.srcdoc.contains("cdn.example/b.png"), "{img}");
+            assert!(blocked.height >= plain + 320, "{img}: {} vs {plain}", blocked.height);
+            let shown = build(&body, true, BodyTheme::Light, 100, false, 600.0);
+            assert_eq!(shown.height, blocked.height, "{img}");
+        }
+        // Width only, with alt text (Elena's brand board): a one-line box
+        // while blocked, a picture once shown.
+        let body = MessageBody { html: Some(format!("<p><img src=\"https://cdn.example/b.png\" width=\"480\" alt=\"Brand board\"></p>{text}")), ..Default::default() };
+        let blocked = build(&body, false, BodyTheme::Light, 100, false, 600.0);
+        assert!(blocked.srcdoc.contains("img:not([src]):not([height])[alt]:not([alt=\"\"]){height:24px}"));
+        assert!(blocked.height >= plain + BLOCKED_ALT_H as u32, "{} vs {plain}", blocked.height);
+        assert!(blocked.height < plain + 100, "{} vs {plain}", blocked.height);
+        let shown = build(&body, true, BodyTheme::Light, 100, false, 600.0);
+        assert!(shown.height >= plain + 280, "{} vs {plain}", shown.height);
+        // No alt text: the estimate keeps room for a picture-sized box.
+        let body = MessageBody { html: Some(format!("<p><img src=\"https://cdn.example/b.png\" width=\"480\"></p>{text}")), ..Default::default() };
+        assert!(build(&body, false, BodyTheme::Light, 100, false, 600.0).height >= plain + 280);
     }
 }

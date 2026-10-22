@@ -380,6 +380,18 @@ pub fn JunkPage() -> Element {
     }
 }
 
+/// The line under a sender box: what to type, or, once Enter was refused,
+/// why (marked invalid), or that the entry is listed already.
+fn sender_hint(text: &str, ok: bool, dup: bool, rejected: bool) -> (String, bool) {
+    if !text.is_empty() && ok && dup {
+        ("That's already on the list.".into(), rejected)
+    } else if rejected && !text.is_empty() && !ok {
+        (format!("\u{201c}{text}\u{201d} isn't an email address or a domain."), true)
+    } else {
+        ("Enter an email address, like name@example.com, or a domain, like example.com.".into(), false)
+    }
+}
+
 /// A sender list with an add field and a remove button per row.
 #[component]
 fn SenderList(
@@ -393,45 +405,64 @@ fn SenderList(
     on_remove: EventHandler<String>,
 ) -> Element {
     let mut draft = use_signal(String::new);
+    // Enter found the entry invalid (or listed already); until it is edited.
+    let mut rejected = use_signal(|| false);
     let text = draft().trim().to_lowercase();
     let ok = valid_sender(&text);
     let dup = items.iter().any(|(a, _)| a.eq_ignore_ascii_case(&text));
-    let hint = if text.is_empty() || (ok && !dup) {
-        ""
-    } else if dup {
-        "That's already on the list."
-    } else {
-        "Enter an email address, like name@example.com, or a domain, like example.com."
-    };
-    let mut add = move || {
+    let (hint, invalid) = sender_hint(&text, ok, dup, rejected());
+    let hint_id = crate::kit::dom::use_unique_id("ax-sender-hint");
+    // True when the address was added (the page then empties the box).
+    let mut add = move || -> bool {
         let text = draft().trim().to_lowercase();
         if valid_sender(&text) && !dup {
             on_add.call(text);
             draft.set(String::new());
+            return true;
         }
+        false
     };
     rsx! {
         Section { title: title.clone(), description,
-            div { class: "ax-row ax-sender-add", style: "gap:8px;align-items:flex-end",
-                TextField {
-                    label: add_label.clone(),
-                    placeholder: "name@example.com or example.com",
-                    value: draft(),
-                    hint,
-                    oninput: move |v| draft.set(v),
-                    onkeydown: move |e: KeyboardEvent| {
-                        if e.key() == Key::Enter {
+            // The hint is always there, under the row, so typing the first
+            // character (or a hint changing) doesn't move the box, the Add
+            // button or the next section.
+            div { class: "ax-sender-add-wrap",
+                div { class: "ax-row ax-sender-add", style: "gap:8px;align-items:flex-end",
+                    TextField {
+                        label: add_label.clone(),
+                        placeholder: "name@example.com or example.com",
+                        value: draft(),
+                        invalid,
+                        describedby: hint_id.clone(),
+                        enter_clears: true,
+                        oninput: move |v| {
+                            draft.set(v);
+                            rejected.set(false);
+                        },
+                        onkeydown: move |e: KeyboardEvent| {
+                            // Taken only when added: an invalid entry stays for a
+                            // fix, marked, with the reason under it.
+                            if e.key() == Key::Enter {
+                                if add() {
+                                    e.prevent_default();
+                                } else if !draft.peek().trim().is_empty() {
+                                    rejected.set(true);
+                                }
+                            }
+                        },
+                    }
+                    Button {
+                        label: "Add",
+                        icon: "add",
+                        disabled: !ok || dup,
+                        title: if ok && !dup { "Add to the list" } else { "Type an address or domain first" },
+                        onclick: move |_| {
                             add();
-                        }
-                    },
+                        },
+                    }
                 }
-                Button {
-                    label: "Add",
-                    icon: "add",
-                    disabled: !ok || dup,
-                    title: if ok && !dup { "Add to the list" } else { "Type an address or domain first" },
-                    onclick: move |_| add(),
-                }
+                span { id: "{hint_id}", class: "ax-field-hint ax-sender-hint", class: if invalid { "ax-danger" }, "aria-live": "polite", "{hint}" }
             }
             if items.is_empty() {
                 Note { text: empty }
@@ -522,6 +553,20 @@ mod tests {
         for bad in ["", "ana", "@example.com", "ana@", "a b@example.com", "ana@@example.com", ".com", "example."] {
             assert!(!valid_sender(bad), "{bad}");
         }
+    }
+
+    /// The line under a sender box: the same helper while typing (so the
+    /// layout never jumps), a reason once Enter refused the entry.
+    #[test]
+    fn sender_hints_explain_a_refused_entry() {
+        let helper = sender_hint("", false, false, false);
+        assert!(!helper.1 && helper.0.starts_with("Enter an email address"));
+        assert_eq!(sender_hint("m", false, false, false), helper, "typing: no error yet");
+        let refused = sender_hint("mtypo", false, false, true);
+        assert!(refused.1 && refused.0.contains("\u{201c}mtypo\u{201d} isn't an email address or a domain"), "{refused:?}");
+        assert_eq!(sender_hint("a@b.example", true, true, false), ("That's already on the list.".to_string(), false));
+        assert!(sender_hint("a@b.example", true, true, true).1);
+        assert_eq!(sender_hint("a@b.example", true, false, false), helper);
     }
 
     #[test]

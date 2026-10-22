@@ -39,8 +39,14 @@ impl ImapForm {
         let (provider, imap, smtp) = match detection {
             Some(d) => (d.provider, d.imap.clone(), d.smtp.clone()),
             None => {
-                let domain = axentra_sync::config::domain_of(email).unwrap_or_default();
-                let (i, s) = axentra_sync::config::guess_servers(&domain);
+                // Without an address there is nothing to guess from: the
+                // host fields stay empty (their placeholders show the form).
+                let domain = axentra_sync::config::domain_of(email);
+                let (mut i, mut s) = axentra_sync::config::guess_servers(domain.as_deref().unwrap_or_default());
+                if domain.is_none() {
+                    i.host.clear();
+                    s.host.clear();
+                }
                 (Provider::Imap, i, s)
             }
         };
@@ -154,6 +160,10 @@ pub fn ImapFormView(form: Signal<ImapForm>, errors: Signal<Errors>, onenter: Eve
     let err = errors.read().clone();
     let e = |k: &str| err.get(k).cloned();
     let pw_label = if f.app_password_url().is_some() { "App password" } else { "Password" };
+    // Focus starts on the first field still to fill: the password once the
+    // address is known, else the name or the address.
+    let no_email = f.email.trim().is_empty();
+    let no_name = f.display_name.trim().is_empty();
     let mut set = move |mutate: &dyn Fn(&mut ImapForm), key: &'static str| {
         form.with_mut(|f| mutate(f));
         if errors.read().contains_key(key) {
@@ -167,6 +177,7 @@ pub fn ImapFormView(form: Signal<ImapForm>, errors: Signal<Errors>, onenter: Eve
                 value: f.display_name.clone(),
                 placeholder: "Name that people see",
                 autocomplete: "name",
+                autofocus: no_email && no_name,
                 oninput: move |v: String| set(&|f| f.display_name = v.clone(), "display_name"),
                 onenter,
             }
@@ -176,6 +187,7 @@ pub fn ImapFormView(form: Signal<ImapForm>, errors: Signal<Errors>, onenter: Eve
                 placeholder: "someone@example.com",
                 input_type: "email",
                 autocomplete: "email",
+                autofocus: no_email && !no_name,
                 error: e("email"),
                 oninput: move |v: String| set(&|f| f.email = v.clone(), "email"),
                 onenter,
@@ -185,7 +197,7 @@ pub fn ImapFormView(form: Signal<ImapForm>, errors: Signal<Errors>, onenter: Eve
                 value: f.password.clone(),
                 input_type: "password",
                 autocomplete: "current-password",
-                autofocus: true,
+                autofocus: !no_email,
                 error: e("password"),
                 hint: "Use an app password if your provider requires one",
                 oninput: move |v: String| set(&|f| f.password = v.clone(), "password"),
@@ -310,6 +322,10 @@ mod tests {
         assert!(errs.contains_key("password") && !errs.contains_key("email"));
         let mut g = ImapForm::new("ana@example.org", "", None);
         assert_eq!(g.imap_host, "imap.example.org");
+        // No address yet: no half-made "imap." / "smtp." hosts, standard ports.
+        let blank = ImapForm::for_provider(Provider::Imap, "", "");
+        assert_eq!((blank.imap_host.as_str(), blank.smtp_host.as_str()), ("", ""));
+        assert_eq!((blank.imap_port.as_str(), blank.smtp_port.as_str()), ("993", "465"));
         g.password = "pw".into();
         g.imap_port = "99999".into();
         assert!(g.validate().contains_key("imap_port"));

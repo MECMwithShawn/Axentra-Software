@@ -10,7 +10,6 @@ use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
 use crate::kit::MenuItem;
-use crate::state::UndoAction;
 
 use super::model::ListModel;
 
@@ -296,8 +295,6 @@ pub struct MailCtx {
     pub zoom: Signal<u32>,
     /// The OS prefers dark (for the System theme), reported by the webview.
     pub system_dark: Signal<bool>,
-    /// Undo stack for Ctrl+Z (newest last).
-    pub undo: Signal<Vec<UndoAction>>,
     pub folder_edit: Signal<Option<FolderEdit>>,
     /// Keyboard focus in the folder tree (DOM id of the node).
     pub tree_focus: Signal<Option<String>>,
@@ -353,7 +350,6 @@ impl MailCtx {
             light_body: Signal::new(false),
             zoom: Signal::new(100),
             system_dark: Signal::new(false),
-            undo: Signal::new(Vec::new()),
             folder_edit: Signal::new(None),
             tree_focus: Signal::new(None),
             today: Signal::new(Local::now().date_naive()),
@@ -410,13 +406,6 @@ impl MailCtx {
         let t = *self.typing.peek();
         self.typing.set(None);
         t.is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(100))
-    }
-
-    pub fn push_undo(mut self, action: UndoAction) {
-        let mut stack = self.undo.write();
-        stack.push(action);
-        let excess = stack.len().saturating_sub(20);
-        stack.drain(..excess);
     }
 
     pub fn clear_selection(mut self) {

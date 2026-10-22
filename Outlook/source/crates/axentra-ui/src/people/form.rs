@@ -264,6 +264,36 @@ fn save(app: AppState, form: &FormState) -> Option<ContactId> {
 
 // ---------------------------------------------------------------- frames
 
+/// The form's fields remember which was focused last (see `keep_editing`).
+const TRACK_FIELD_JS: &str = r#"
+if (!window.__axPeopleFieldTrack) {
+  window.__axPeopleFieldTrack = true;
+  document.addEventListener("focusin", (e) => {
+    const t = e.target;
+    const form = t && t.closest && t.closest(".ax-people-form");
+    if (form && t.matches("input, textarea, select")) form.__axLastField = t;
+  }, true);
+}
+"#;
+
+/// "Keep editing" in "Discard changes?": once the prompt has gone, focus
+/// goes back to the field edited last (else the first), not to the form's
+/// first button (its Close), where the next letter typed was lost.
+const KEEP_EDITING_JS: &str = r#"
+(function back(n) {
+  if (document.querySelector(".ax-people-confirm") && n < 50) return setTimeout(() => back(n + 1), 20);
+  const form = document.querySelector(".ax-people-form");
+  if (!form) return;
+  const last = form.__axLastField;
+  const el = last && last.isConnected && form.contains(last) && !last.disabled ? last : form.querySelector("input:not([disabled]), textarea:not([disabled])");
+  if (el) el.focus();
+})(0);
+"#;
+
+fn keep_editing() {
+    document::eval(KEEP_EDITING_JS);
+}
+
 /// The modal "New contact" form (600 px, 2.8).
 #[component]
 pub fn NewContactDialog(initial: Contact) -> Element {
@@ -331,7 +361,10 @@ pub fn NewContactDialog(initial: Contact) -> Element {
                     confirm.set(false);
                     ctx.close_dialog();
                 },
-                on_cancel: move |_| confirm.set(false),
+                on_cancel: move |_| {
+                    confirm.set(false);
+                    keep_editing();
+                },
             }
         }
     }
@@ -419,7 +452,10 @@ fn InlineEditorInner(contact: Contact) -> Element {
                     ctx.edit_dirty.set(false);
                     ctx.editing.set(None);
                 },
-                on_cancel: move |_| confirm.set(false),
+                on_cancel: move |_| {
+                    confirm.set(false);
+                    keep_editing();
+                },
             }
         }
     }
@@ -474,14 +510,17 @@ fn Input(
 #[component]
 fn TypeSelect(#[props(into)] label: String, value: String, options: Vec<&'static str>, onchange: EventHandler<String>) -> Element {
     rsx! {
-        select {
-            class: "ax-select ax-people-type",
-            "aria-label": "{label}",
-            onchange: move |e| onchange.call(e.value()),
-            onkeydown: move |e| field_keys(&e),
-            for o in options {
-                option { key: "{o}", value: "{o}", selected: o == value, "{o}" }
+        div { class: "ax-select-wrap",
+            select {
+                class: "ax-select ax-people-type",
+                "aria-label": "{label}",
+                onchange: move |e| onchange.call(e.value()),
+                onkeydown: move |e| field_keys(&e),
+                for o in options {
+                    option { key: "{o}", value: "{o}", selected: o == value, "{o}" }
+                }
             }
+            Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
         }
     }
 }
@@ -508,6 +547,9 @@ pub fn ContactFormFields(form: Signal<FormState>, show_errors: bool) -> Element 
     let ctx = use_context::<PeopleCtx>();
     let mut form = form;
     let mut more = use_signal(|| false);
+    use_hook(|| {
+        document::eval(TRACK_FIELD_JS);
+    });
     // An uploaded image waiting for the crop step (2.6.4).
     let mut cropping = use_signal(|| None::<io::PickedImage>);
     let f = form.read().clone();
@@ -664,25 +706,31 @@ pub fn ContactFormFields(form: Signal<FormState>, show_errors: bool) -> Element 
             div { class: "ax-people-form-group",
                 span { class: "ax-field-label", "Birthday" }
                 div { class: "ax-people-form-row ax-people-bday",
-                    select {
-                        class: "ax-select",
-                        "aria-label": "Month",
-                        onchange: move |e| form.write().bday_month = e.value().parse().unwrap_or(0),
-                        onkeydown: move |e| field_keys(&e),
-                        option { value: "0", selected: f.bday_month == 0, "Month" }
-                        for (m, name) in MONTHS.iter().enumerate() {
-                            option { key: "{m}", value: "{m + 1}", selected: f.bday_month == m as u32 + 1, "{name}" }
+                    div { class: "ax-select-wrap",
+                        select {
+                            class: "ax-select",
+                            "aria-label": "Month",
+                            onchange: move |e| form.write().bday_month = e.value().parse().unwrap_or(0),
+                            onkeydown: move |e| field_keys(&e),
+                            option { value: "0", selected: f.bday_month == 0, "Month" }
+                            for (m, name) in MONTHS.iter().enumerate() {
+                                option { key: "{m}", value: "{m + 1}", selected: f.bday_month == m as u32 + 1, "{name}" }
+                            }
                         }
+                        Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                     }
-                    select {
-                        class: "ax-select",
-                        "aria-label": "Day",
-                        onchange: move |e| form.write().bday_day = e.value().parse().unwrap_or(0),
-                        onkeydown: move |e| field_keys(&e),
-                        option { value: "0", selected: f.bday_day == 0, "Day" }
-                        for d in 1..=31u32 {
-                            option { key: "{d}", value: "{d}", selected: f.bday_day == d, "{d}" }
+                    div { class: "ax-select-wrap",
+                        select {
+                            class: "ax-select",
+                            "aria-label": "Day",
+                            onchange: move |e| form.write().bday_day = e.value().parse().unwrap_or(0),
+                            onkeydown: move |e| field_keys(&e),
+                            option { value: "0", selected: f.bday_day == 0, "Day" }
+                            for d in 1..=31u32 {
+                                option { key: "{d}", value: "{d}", selected: f.bday_day == d, "{d}" }
+                            }
                         }
+                        Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                     }
                     Input { label: "Year (optional)", hide_label: true, value: f.bday_year.clone(), placeholder: "Year (optional)", oninput: move |v| form.write().bday_year = v }
                 }

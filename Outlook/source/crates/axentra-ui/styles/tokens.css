@@ -162,6 +162,9 @@
 .ax-app, .ax-surface-light {
   /* surfaces */
   --ax-bg-canvas: var(--colorNeutralBackground3);    /* behind the floating panes */
+  /* Hover on the canvas (subtle hover is the canvas colour in light): half a
+     step, so it stays apart from the selected fill (Background3Hover). */
+  --ax-bg-canvas-hover: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--colorNeutralBackground3Hover));
   --ax-canvas: var(--colorNeutralBackground3);
   --ax-pane-bg: var(--colorNeutralBackground1);
   --ax-bg-1: var(--colorNeutralBackground1);         /* panes, cards, menus, dialogs */
@@ -281,10 +284,11 @@
   --ax-shadow-64-darker: 0 0 8px var(--colorNeutralShadowAmbientDarker), 0 32px 64px var(--colorNeutralShadowKeyDarker);
 }
 
-/* Dark mode: floating panes drop the shadow for a hairline border (§1.9). */
-.ax-app.ax-theme-dark { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; }
+/* Dark mode: floating panes drop the shadow for a hairline border (§1.9);
+   hover on the canvas keeps the subtle hover, which stands out there. */
+.ax-app.ax-theme-dark { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; --ax-bg-canvas-hover: var(--colorSubtleBackgroundHover); }
 @media (prefers-color-scheme: dark) {
-  .ax-app.ax-theme-system { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; }
+  .ax-app.ax-theme-system { --ax-pane-shadow: none; --ax-pane-border: 1px solid var(--colorNeutralStroke3); color-scheme: dark; --ax-bg-canvas-hover: var(--colorSubtleBackgroundHover); }
 }
 .ax-app.ax-theme-light, .ax-surface-light { color-scheme: light; }
 

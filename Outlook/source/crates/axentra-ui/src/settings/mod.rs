@@ -222,7 +222,7 @@ pub fn SettingsDialog(page: SettingsPage) -> Element {
                                         }
                                     },
                                     span { class: "ax-settings-hit-label", "{h.label}" }
-                                    span { class: "ax-settings-hit-crumb", "{h.page.category().label()} › {h.crumb}" }
+                                    span { class: "ax-settings-hit-crumb", "{h.crumb}" }
                                 }
                             }
                         }
@@ -305,7 +305,7 @@ fn flash_later(anchor: String) {
 fn PageBody(page: PageId) -> Element {
     use PageId::*;
     match page {
-        EmailAccounts => rsx! { accounts::AccountsPage {} },
+        EmailAccounts => rsx! { accounts::AccountsPage { show_title: false } },
         Signatures => rsx! { account_pages::SignaturesPage {} },
         Categories => rsx! { account_pages::CategoriesPage {} },
         AutomaticReplies => rsx! { account_pages::AutomaticRepliesPage {} },

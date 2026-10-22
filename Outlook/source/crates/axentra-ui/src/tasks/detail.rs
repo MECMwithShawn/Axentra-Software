@@ -16,6 +16,62 @@ use crate::state::{AppState, NavRequest, store, use_app};
 
 const TITLE_ID: &str = "ax-todo-detail-title";
 
+/// Prefix of this pane's `data-ax-late-keys` tags (kit::dom::use_late_keys).
+pub const LATE_PREFIX: &str = "todo";
+
+/// A field of the pane, by its late-keys tag after `todo:`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LateField {
+    Title(TaskId),
+    Note(TaskId),
+    Step(TaskId, i64),
+}
+
+impl LateField {
+    fn tag(self) -> String {
+        match self {
+            LateField::Title(id) => format!("{LATE_PREFIX}:title:{id}"),
+            LateField::Note(id) => format!("{LATE_PREFIX}:note:{id}"),
+            LateField::Step(id, sid) => format!("{LATE_PREFIX}:step:{id}:{sid}"),
+        }
+    }
+
+    fn parse(rest: &str) -> Option<LateField> {
+        let mut it = rest.split(':');
+        let f = match (it.next()?, it.next()?.parse().ok()?) {
+            ("title", id) => LateField::Title(id),
+            ("note", id) => LateField::Note(id),
+            ("step", id) => LateField::Step(id, it.next()?.parse().ok()?),
+            _ => return None,
+        };
+        it.next().is_none().then_some(f)
+    }
+}
+
+/// Keys pressed in a title, note or step before a click that opened another
+/// task, delivered by a busy page after the card went (its `use_drop` saved
+/// what had landed): `value` is the field with them, saved as the card
+/// would have. Quietly, as the task may be gone.
+pub fn late_typed(app: AppState, rest: &str, value: &str) {
+    let s = store();
+    let changed = match LateField::parse(rest) {
+        Some(LateField::Title(id)) => {
+            let title = value.replace('\n', " ");
+            let current = s.task(id).ok().flatten().map(|t| t.title);
+            if !title.trim().is_empty() && current.is_some_and(|c| c != actions::task_title(&title)) {
+                actions::rename_task(app, id, &title);
+            }
+            false
+        }
+        Some(LateField::Note(id)) => s.task(id).ok().flatten().is_some_and(|t| t.notes != value) && s.set_task_notes(id, value).is_ok(),
+        Some(LateField::Step(id, sid)) => !value.trim().is_empty() && s.update_task_step(id, sid, Some(value), None).is_ok(),
+        None => false,
+    };
+    if changed {
+        app.bump_tasks();
+    }
+}
+
 /// Grow a textarea to fit its content.
 fn autosize(id: &str) {
     document::eval(&format!(
@@ -79,15 +135,30 @@ pub fn DetailPane(id: TaskId) -> Element {
     }
 }
 
+/// Typed text and a saved title say the same, as the task keeps titles.
+fn same(typed: &str, kept: &str) -> bool {
+    actions::task_title(typed) == actions::task_title(kept)
+}
+
+/// Whether the title field follows a change made elsewhere (a row rename,
+/// undo): the task's `stored` title is not the one last `saved` here, and
+/// the field still says what was saved (`typed`, not being edited). The
+/// card's own autosave is not such a change, so the field keeps the
+/// user's spaces ("milk " stays while "and eggs" is still to come).
+fn follows_elsewhere(typed: &str, saved: &str, stored: &str) -> bool {
+    !same(saved, stored) && same(typed, saved)
+}
+
 #[component]
 fn TitleCard(task: Task) -> Element {
     let app = use_app();
     let ctx = use_todo();
     let id = task.id;
+    // The field as typed, and the title last saved from it as the task
+    // keeps it (`actions::task_title`: single spaces, trimmed).
     let mut title = use_signal(|| task.title.clone());
     let mut saved = use_signal(|| task.title.clone());
-    // Follow changes made elsewhere (row rename, undo) while not editing.
-    if *saved.peek() != task.title && *title.peek() == *saved.peek() {
+    if follows_elsewhere(&title.peek(), &saved.peek(), &task.title) {
         title.set(task.title.clone());
         saved.set(task.title.clone());
     }
@@ -98,12 +169,23 @@ fn TitleCard(task: Task) -> Element {
         let t = title();
         if t.trim().is_empty() {
             title.set(saved());
-        } else if t != saved() {
-            saved.set(t.clone());
+        } else if !same(&t, &saved()) {
+            saved.set(actions::task_title(&t));
             actions::rename_task(app, id, &t);
         }
     };
     use_effect(move || autosize(TITLE_ID));
+    crate::kit::dom::use_late_tag(LateField::Title(id).tag());
+    // Leaving To Do (Ctrl+1) removes the field without a blur, and the
+    // autosave goes with the module: save what was typed.
+    use_drop(move || {
+        if let (Ok(t), Ok(s)) = (title.try_peek().map(|t| t.clone()), saved.try_peek().map(|s| s.clone()))
+            && !same(&t, &s)
+            && !t.trim().is_empty()
+        {
+            actions::rename_task(app, id, &t);
+        }
+    });
     let step_drag = use_signal(StepDrag::default);
     let steps = task.steps.clone();
     let check_label = if checked { "Mark as not completed" } else { "Mark as completed" };
@@ -128,16 +210,20 @@ fn TitleCard(task: Task) -> Element {
                     rows: "1",
                     maxlength: "255",
                     "aria-label": "Rename task",
+                    // Keys typed just before a click on another task are
+                    // still saved here (`late_typed`).
+                    "data-ax-late-keys": LateField::Title(id).tag(),
                     value: "{title}",
                     oninput: move |e| {
                         let v = e.value().replace('\n', " ");
                         title.set(v.clone());
                         autosize(TITLE_ID);
-                        // Autosave after a pause in typing.
-                        ctx.spawn(async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                            if *title.peek() == v && v != *saved.peek() && !v.trim().is_empty() {
-                                saved.set(v.clone());
+                        // Autosave after a pause in typing, as this card's
+                        // task: opening another task removes the card, and
+                        // `use_drop` above saves what was typed instead.
+                        crate::kit::after(1000, move || {
+                            if *title.peek() == v && !same(&v, &saved.peek()) && !v.trim().is_empty() {
+                                saved.set(actions::task_title(&v));
                                 actions::rename_task(app, id, &v);
                             }
                         });
@@ -219,7 +305,11 @@ fn StepRow(task_id: TaskId, step: TaskStep, drag: Signal<StepDrag>) -> Element {
     let dragging = d.dragging == Some(sid);
     let over = d.dragging.is_some() && !dragging && d.over == Some(Some(sid));
     let original = step.title.clone();
+    // Typed in and not saved yet (or put back) since.
+    let mut edited = use_hook(|| CopyValue::new(false));
+    crate::kit::dom::use_late_tag(LateField::Step(task_id, sid).tag());
     let save = move || {
+        edited.set(false);
         let t = text();
         if t.trim().is_empty() {
             text.set(original.clone());
@@ -229,6 +319,17 @@ fn StepRow(task_id: TaskId, step: TaskStep, drag: Signal<StepDrag>) -> Element {
     };
     let mut save_key = save.clone();
     let mut save_blur = save;
+    // Removed without a blur (leaving To Do with a key): keep the edit. The
+    // step may be gone with its task, so quietly.
+    use_drop(move || {
+        if edited.try_peek().is_ok_and(|e| *e)
+            && let Ok(t) = text.try_peek().map(|t| t.clone())
+            && !t.trim().is_empty()
+            && store().update_task_step(task_id, sid, Some(&t), None).is_ok()
+        {
+            app.bump_tasks();
+        }
+    });
     let check_label = if done { "Mark as not completed" } else { "Mark as completed" };
     let menu = vec![
         MenuItem::new("toggle", check_label).icon(if done { "circle" } else { "checkmark_circle" }),
@@ -284,7 +385,11 @@ fn StepRow(task_id: TaskId, step: TaskStep, drag: Signal<StepDrag>) -> Element {
                 value: "{text}",
                 "aria-label": "Step",
                 maxlength: "255",
-                oninput: move |e| text.set(e.value()),
+                "data-ax-late-keys": LateField::Step(task_id, sid).tag(),
+                oninput: move |e| {
+                    text.set(e.value());
+                    edited.set(true);
+                },
                 onkeydown: move |e: KeyboardEvent| {
                     keys::stop_typing_keys(&e);
                     if e.key() == Key::Enter {
@@ -292,6 +397,7 @@ fn StepRow(task_id: TaskId, step: TaskStep, drag: Signal<StepDrag>) -> Element {
                         save_key();
                     } else if e.key() == Key::Escape {
                         e.stop_propagation();
+                        edited.set(false);
                         text.set(step.title.clone());
                     }
                 },
@@ -319,19 +425,67 @@ fn StepRow(task_id: TaskId, step: TaskStep, drag: Signal<StepDrag>) -> Element {
     }
 }
 
+/// After a step is added from "Add step": the new step lands above the box
+/// and pushes it down, out of the details pane at its bottom edge, so the
+/// next key would jump the pane to centre it. Scroll it just into view now
+/// and once more when the step has rendered (late on a busy machine), while
+/// it still has focus.
+const REVEAL_ADD_STEP_JS: &str = r#"(() => {
+  const sel = ".ax-todo-detail .ax-todo-add-step input";
+  const first = document.querySelector(sel);
+  const box = first && first.closest(".ax-todo-detail-scroll");
+  if (!box) return;
+  const h0 = box.scrollHeight;
+  const until = Date.now() + 3000;
+  // Scrolling the pane by hand meanwhile ends it.
+  let user = false;
+  const mine = () => (user = true);
+  box.addEventListener("wheel", mine, { once: true, passive: true });
+  box.addEventListener("pointerdown", mine, { once: true, passive: true });
+  const show = () => {
+    const el = document.querySelector(sel);
+    if (user || !el || document.activeElement !== el) return false;
+    const row = el.closest(".ax-todo-add-step") || el;
+    const r = row.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (r.bottom > b.bottom + 1 || r.top < b.top - 1) row.scrollIntoView({ block: "nearest" });
+    return true;
+  };
+  (function f() {
+    if (show() && box.scrollHeight === h0 && Date.now() < until) return requestAnimationFrame(f);
+    box.removeEventListener("wheel", mine);
+    box.removeEventListener("pointerdown", mine);
+  })();
+})();"#;
+
 #[component]
 fn AddStep(task_id: TaskId, has_steps: bool, drag: Signal<StepDrag>) -> Element {
     let app = use_app();
     let mut drag = drag;
     let mut text = use_signal(String::new);
     let over = drag().dragging.is_some() && drag().over == Some(None);
-    let mut add = move || {
+    // True when the step was added (the page then empties the input).
+    let mut add = move || -> bool {
         let t = text();
         if !t.trim().is_empty() && app.check(store().add_task_step(task_id, &t)).is_some() {
             text.set(String::new());
             app.bump_tasks();
+            // The new step pushes the box down: keep it in view.
+            document::eval(REVEAL_ADD_STEP_JS);
+            return true;
         }
+        false
     };
+    // Removed without a blur (leaving To Do with Ctrl+1 or Ctrl+2): add
+    // what was typed, as leaving it by a click does. The task may be gone
+    // with the card, so quietly.
+    use_drop(move || {
+        if let Ok(t) = text.try_peek().map(|t| t.clone())
+            && !t.trim().is_empty()
+            && store().add_task_step(task_id, &t).is_ok()
+        {
+            app.bump_tasks();
+        }
+    });
     rsx! {
         label {
             class: "ax-todo-add-step",
@@ -349,20 +503,26 @@ fn AddStep(task_id: TaskId, has_steps: bool, drag: Signal<StepDrag>) -> Element 
                 class: "ax-todo-step-input",
                 placeholder: if has_steps { "Next step" } else { "Add step" },
                 "aria-label": "Add step",
+                "data-ax-enter-clears": "true",
                 maxlength: "255",
                 value: "{text}",
                 oninput: move |e| text.set(e.value()),
                 onkeydown: move |e: KeyboardEvent| {
                     keys::stop_typing_keys(&e);
+                    // Taken only when the step was added: a failed add
+                    // keeps the text for a retry.
                     if e.key() == Key::Enter {
-                        e.prevent_default();
-                        add();
+                        if add() {
+                            e.prevent_default();
+                        }
                     } else if e.key() == Key::Escape && !text().is_empty() {
                         e.stop_propagation();
                         text.set(String::new());
                     }
                 },
-                onblur: move |_| add(),
+                onblur: move |_| {
+                    add();
+                },
             }
         }
     }
@@ -533,7 +693,6 @@ fn open_email(app: AppState, id: MessageId) {
 #[component]
 fn NoteCard(task: Task) -> Element {
     let app = use_app();
-    let ctx = use_todo();
     let id = task.id;
     let mut note = use_signal(|| task.notes.clone());
     let mut saved = use_signal(|| task.notes.clone());
@@ -549,6 +708,17 @@ fn NoteCard(task: Task) -> Element {
             }
         }
     };
+    // Removed without a blur (leaving To Do with a key): keep the note. The
+    // task may have been deleted, so quietly.
+    use_drop(move || {
+        if let (Ok(n), Ok(s)) = (note.try_peek().map(|n| n.clone()), saved.try_peek().map(|s| s.clone()))
+            && n != s
+            && store().set_task_notes(id, &n).is_ok()
+        {
+            app.bump_tasks();
+        }
+    });
+    crate::kit::dom::use_late_tag(LateField::Note(id).tag());
     let updated = task.notes_updated_at.filter(|_| !task.notes.is_empty()).map(|t| dates::updated_label(t, Utc::now()));
     rsx! {
         div { class: "ax-todo-detail-card ax-todo-note",
@@ -556,13 +726,14 @@ fn NoteCard(task: Task) -> Element {
                 class: "ax-todo-note-input",
                 placeholder: "Add a note",
                 "aria-label": "Add a note",
+                "data-ax-late-keys": LateField::Note(id).tag(),
                 value: "{note}",
                 oninput: move |e| {
                     let v = e.value();
                     note.set(v.clone());
-                    // Autosave after a second without typing.
-                    ctx.spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                    // Autosave after a second without typing, as this
+                    // card's task (`use_drop` saves when the card goes).
+                    crate::kit::after(1000, move || {
                         if *note.peek() == v {
                             save(v);
                         }
@@ -580,6 +751,85 @@ fn NoteCard(task: Task) -> Element {
             if let Some(u) = updated {
                 div { class: "ax-todo-note-updated", "{u}" }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::state::provide_app_state;
+
+    /// Keys the page still had for a title, note or step after its card
+    /// went (another task was clicked) are saved; a gone task is left be.
+    #[test]
+    fn late_keys_are_saved_where_the_card_would_have() {
+        thread_local! {
+            static APP: Cell<Option<AppState>> = const { Cell::new(None) };
+        }
+        fn root() -> Element {
+            let app = provide_app_state();
+            APP.with(|a| a.set(Some(app)));
+            rsx! {}
+        }
+        crate::state::init(Arc::new(axentra_core::Store::open_in_memory().unwrap()), None);
+        let mut dom = VirtualDom::new(root);
+        dom.rebuild_in_place();
+        let app = APP.with(|a| a.get()).expect("the app state");
+        dom.in_runtime(|| {
+            let s = store();
+            // Its own account and list (the store is shared by the tests).
+            let mut acct = Account { kind: AccountKind::Local, email: "late-keys@example.test".into(), ..Default::default() };
+            let account_id = s.add_account(&mut acct).unwrap();
+            let list = s.insert_task_list(&mut TaskList { name: "Late keys".into(), account_id, ..Default::default() }).unwrap();
+            let mut t = Task { title: "Review Q4 launch plan rena".into(), list_id: list, ..Default::default() };
+            let id = s.insert_task_at(&mut t, false).unwrap();
+            let sid = s.add_task_step(id, "Book the ro").unwrap();
+            let rest = |f: LateField| f.tag().strip_prefix("todo:").unwrap().to_string();
+            late_typed(app, &rest(LateField::Title(id)), "Review Q4 launch plan rena ra170");
+            late_typed(app, &rest(LateField::Note(id)), "call the venue first");
+            late_typed(app, &rest(LateField::Step(id, sid)), "Book the room");
+            let t = s.task(id).unwrap().unwrap();
+            assert_eq!(t.title, "Review Q4 launch plan rena ra170");
+            assert_eq!(t.notes, "call the venue first");
+            assert_eq!(t.steps.iter().map(|x| x.title.as_str()).collect::<Vec<_>>(), ["Book the room"]);
+            // An emptied title is not saved; a task deleted meanwhile is not brought back.
+            late_typed(app, &rest(LateField::Title(id)), "   ");
+            assert_eq!(s.task(id).unwrap().unwrap().title, "Review Q4 launch plan rena ra170");
+            s.delete_task(id).ok();
+            late_typed(app, &rest(LateField::Title(id)), "Brought back");
+            late_typed(app, &rest(LateField::Note(id)), "Brought back");
+            assert!(s.task(id).unwrap().is_none_or(|t| t.title != "Brought back" && t.notes != "Brought back"));
+        });
+    }
+
+    /// The title autosave stores "… milk" for a field showing "… milk ":
+    /// that must not be written back into the field being typed in (the
+    /// next word ran into the last: "milkand eggs"); a rename elsewhere is.
+    #[test]
+    fn the_title_field_keeps_its_spaces_after_an_autosave() {
+        let typed = "Send interview feedback milk ";
+        let stored = actions::task_title(typed);
+        assert_eq!(stored, "Send interview feedback milk");
+        assert!(!follows_elsewhere(typed, &stored, &stored), "its own autosave");
+        assert!(!follows_elsewhere(typed, typed, &stored), "saved as typed, stored trimmed");
+        assert!(!follows_elsewhere("Send  interview feedback", "Send interview feedback", "Send interview feedback"));
+        assert!(follows_elsewhere("Oat milk", "Oat milk", "Oat milk renamed"), "renamed from its row");
+        assert!(!follows_elsewhere("Oat milk and", "Oat milk", "Oat milk renamed"), "being edited: the typing wins");
+    }
+
+    #[test]
+    fn late_field_tags_round_trip() {
+        for f in [LateField::Title(42), LateField::Note(7), LateField::Step(42, 9)] {
+            let tag = f.tag();
+            let rest = tag.strip_prefix("todo:").unwrap();
+            assert_eq!(LateField::parse(rest), Some(f), "{tag}");
+        }
+        for bad in ["", "title", "title:x", "step:1", "note:1:2", "title:1:2", "other:1"] {
+            assert_eq!(LateField::parse(bad), None, "{bad}");
         }
     }
 }

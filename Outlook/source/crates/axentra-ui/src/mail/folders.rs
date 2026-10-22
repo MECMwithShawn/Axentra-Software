@@ -513,12 +513,13 @@ pub fn FolderPane(width: u32) -> Element {
         }
     };
     rsx! {
-        nav { class: "ax-mail-folders", style: "width:{width}px", "aria-label": "Navigation pane",
+        nav { class: "ax-mail-folders", style: "width:{width}px", "aria-label": "Navigation pane", "data-ax-region": "true",
             div {
                 class: "ax-mail-tree",
                 role: "tree",
                 "aria-label": "Folders",
                 tabindex: "0",
+                "data-ax-default-focus": "true",
                 "aria-activedescendant": active.clone().unwrap_or_default(),
                 onmounted: move |e| tree_el.set(Some(e.data())),
                 onfocus: move |_| {
@@ -893,7 +894,7 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                 style: "padding-left:{indent + 16}px",
                 onclick: move |_| ctx.folder_edit.set(Some(FolderEdit::Create { account, parent: None })),
                 Icon { name: "add", size: 20 }
-                span { class: "ax-mail-node-name", "Create new folder" }
+                span { class: "ax-mail-node-name ax-ellipsis", title: "Create new folder", "Create new folder" }
             }
         },
         NodeKind::NewFolder { account, parent } => rsx! {

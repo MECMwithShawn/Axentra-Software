@@ -5,7 +5,7 @@
 .ax-people { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--ax-pane-gap); outline: none; }
 /* The module root only holds focus as a fallback (so shortcuts keep
    working); it is not a visible stop. */
-.ax-app .ax-people:focus-visible { outline: none; box-shadow: none; }
+.ax-app .ax-people:focus-visible, :where(html[data-ax-kbd]) .ax-app .ax-people:focus { outline: none; box-shadow: none; }
 .ax-people-panes { gap: 0; }
 /* Buttons styled as text: `.ax-app` raises these above base.css's
    `.ax-app button { color: inherit }`. */
@@ -258,6 +258,8 @@
 .ax-people-source { font-size: var(--ax-text-200); line-height: var(--ax-lh-200); color: var(--ax-fg-3); }
 
 /* ------------------------------------------------------------ forms */
+/* Opens at most 85% of the window high; a grip resize may make it taller. */
+.ax-app .ax-dialog.ax-people-form-dialog:not([data-ax-sized]) { max-height: min(85vh, calc(100vh - var(--ax-surface-top) - var(--ax-surface-margin))); }
 .ax-people-form { display: flex; flex-direction: column; gap: 16px; padding: 4px 4px 4px 0; }
 .ax-people-form-photo { display: flex; align-items: center; gap: 12px; }
 .ax-people-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
@@ -271,8 +273,9 @@
 .ax-people-input .ax-input, .ax-people-input .ax-textarea, .ax-people-input .ax-select { width: 100%; }
 .ax-input.ax-invalid { border-bottom-color: var(--ax-danger-fg); }
 .ax-select.ax-people-type { width: 120px; flex: none; }
-.ax-people-bday .ax-select:first-child { width: 160px; }
-.ax-people-bday .ax-select:nth-child(2) { width: 88px; }
+/* Selects sit in an .ax-select-wrap (for the chevron), which keeps their width. */
+.ax-people-form-row > .ax-select-wrap { flex: none; }
+.ax-people-bday .ax-select { width: 160px; }
 .ax-people-bday .ax-people-input { flex: 1; }
 .ax-people-form-address { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-xl); }
 .ax-people-add-link { align-self: flex-start; }
@@ -318,8 +321,8 @@
 .ax-dialog[data-ax-sized] > .ax-dialog-body .ax-people-members { max-height: none; }
 .ax-people-members .ax-people-member { margin: 0; width: auto; }
 
-/* Confirmations sit above other dialogs */
-.ax-people-confirm-overlay { z-index: 950; }
+/* Confirmations sit above other dialogs ("Discard changes?" over the contact form) */
+.ax-people-confirm-overlay { z-index: calc(var(--ax-z-dialog) + 2); }
 .ax-people-confirm .ax-dialog-body { font-size: var(--ax-text-300); line-height: var(--ax-lh-300); color: var(--ax-fg-1); }
 
 /* Import / export */

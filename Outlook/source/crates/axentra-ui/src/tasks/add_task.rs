@@ -10,7 +10,7 @@ use super::dates;
 use super::menus::{self, MenuAnchor};
 use super::task_row::CHECK_SVG;
 use crate::kit::{Button, Dialog, Icon, Variant, keys};
-use crate::state::use_app;
+use crate::state::{Module, use_app};
 
 /// Title length limit; the counter shows from [`COUNTER_FROM`].
 const MAX_TITLE: usize = 255;
@@ -75,12 +75,30 @@ pub fn AddTaskBar(view: View, list_id: Option<TaskListId>, #[props(into)] list_n
     let len = text().chars().count();
     let active = focused() || !text().is_empty() || draft != Draft::default() || menu_open();
     let empty = text().trim().is_empty();
-    let mut commit = move || {
+    // True when the task was added (the page then empties the input).
+    let mut commit = move || -> bool {
         let title = text().trim().to_string();
         if !title.is_empty() && actions::add_task(app, ctx, &title, list_id, view).is_some() {
             text.set(String::new());
+            return true;
         }
+        false
     };
+    // Leaving To Do with a shortcut (Ctrl+1, Ctrl+2) removes the bar with
+    // no Enter: add what was typed, as Enter would have. Switching lists
+    // inside To Do replaces the bar without adding, as before.
+    use_drop(move || {
+        let Ok(title) = text.try_peek().map(|t| t.trim().to_string()) else { return };
+        if title.is_empty() || app.module.try_peek().is_ok_and(|m| *m == Module::Tasks) {
+            return;
+        }
+        let draft = ctx.draft.try_peek().map(|d| d.clone()).unwrap_or_default();
+        let today = ctx.today.try_peek().map(|d| *d).unwrap_or_else(|_| dates::today());
+        let on_top = ctx.prefs.try_peek().map(|p| p.add_on_top).unwrap_or(false);
+        if actions::add_task_quietly(&title, list_id, view, &draft, today, on_top).is_some() {
+            app.bump_tasks();
+        }
+    });
     let run = move |id: String| actions::run(app, ctx, Target::NewTask, &id);
     rsx! {
         div {
@@ -91,10 +109,12 @@ pub fn AddTaskBar(view: View, list_id: Option<TaskListId>, #[props(into)] list_n
                 focused.set(true);
             },
             onfocusout: move |_| {
-                // Focus may be moving to a toolbar button; decide a moment later.
+                // Focus may be moving to a toolbar button; decide a moment
+                // later. The check reads this bar's own state, so it is the
+                // bar's task: a click on another list removes the bar (and
+                // the check with it) instead of ending the app.
                 let token = *focus_token.peek();
-                ctx.spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                crate::kit::after(150, move || {
                     if *focus_token.peek() == token {
                         focused.set(false);
                     }
@@ -115,6 +135,9 @@ pub fn AddTaskBar(view: View, list_id: Option<TaskListId>, #[props(into)] list_n
                     placeholder: "Add a task",
                     "aria-label": "Add a task in {list_name}",
                     "aria-keyshortcuts": "Control+N",
+                    // Emptied by the page as Enter goes down, when the
+                    // handler took the key (kit/typed_text.js).
+                    "data-ax-enter-clears": "true",
                     maxlength: "{MAX_TITLE}",
                     autocomplete: "off",
                     value: "{text}",
@@ -122,9 +145,12 @@ pub fn AddTaskBar(view: View, list_id: Option<TaskListId>, #[props(into)] list_n
                     onkeydown: move |e: KeyboardEvent| {
                         keys::stop_typing_keys(&e);
                         match e.key() {
+                            // Taken only when the task was added: a failed
+                            // add keeps the title in the input for a retry.
                             Key::Enter => {
-                                e.prevent_default();
-                                commit();
+                                if commit() {
+                                    e.prevent_default();
+                                }
                             }
                             Key::Escape => {
                                 e.stop_propagation();
@@ -218,7 +244,9 @@ pub fn AddTaskBar(view: View, list_id: Option<TaskListId>, #[props(into)] list_n
                         variant: if empty { Variant::Secondary } else { Variant::Primary },
                         disabled: empty,
                         title: if empty { "Type a task name first" } else { "Add task (Enter)" },
-                        onclick: move |_| commit(),
+                        onclick: move |_| {
+                            commit();
+                        },
                     }
                 }
             }

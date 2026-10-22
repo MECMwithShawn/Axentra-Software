@@ -270,6 +270,9 @@ pub fn TimeGrid() -> Element {
     let hour_h = 60.0 * ppm;
     let body_h = 24.0 * hour_h;
     let dragging = (cal.drag)().is_some();
+    // The sticky day headers (52px) and all-day row: keyboard focus scrolls
+    // an event out from under them.
+    let sticky_h = 52.0 + allday_layout(&data.bars, data.lanes, n, (cal.allday_expanded)()).2;
     let label = range::grid_label(view, anchor, &days);
     let work = (s.work_start_hour as i64 * 60, s.work_end_hour as i64 * 60);
     let slot_lines: Vec<(f64, &'static str)> = (1..(24 * 60 / scale as i64))
@@ -286,7 +289,7 @@ pub fn TimeGrid() -> Element {
             class: if dragging { "ax-cal-dragging" },
             role: "grid",
             "aria-label": "{label}",
-            style: "--cal-cols:{n};--cal-hour-h:{hour_h}px",
+            style: "--cal-cols:{n};--cal-hour-h:{hour_h}px;--cal-sticky-h:{sticky_h}px",
             div {
                 class: "ax-cal-scroll",
                 tabindex: "-1",
@@ -380,6 +383,16 @@ fn DayHeader(date: NaiveDate, today: bool, single: bool) -> Element {
 /// Collapsed all-day rows (more go behind "+N").
 const ALLDAY_ROWS: usize = 3;
 
+/// The all-day row's lanes on show, the per-day count of bars hidden behind
+/// "+N", and the row's height.
+fn allday_layout(bars: &[Bar], lanes: usize, n: usize, expanded: bool) -> (usize, Vec<usize>, f64) {
+    let overflow = lanes > ALLDAY_ROWS;
+    let shown = if expanded || !overflow { lanes } else { ALLDAY_ROWS };
+    let hidden: Vec<usize> = (0..n).map(|i| bars.iter().filter(|b| b.lane >= shown && b.first <= i && b.last >= i).count()).collect();
+    let rows = shown + usize::from(hidden.iter().any(|h| *h > 0));
+    (shown, hidden, (rows as f64 * 24.0 + 4.0).max(28.0))
+}
+
 #[component]
 fn AllDayRow(days: Vec<NaiveDate>, bars: Vec<Bar>, lanes: usize) -> Element {
     let app = use_app();
@@ -387,11 +400,7 @@ fn AllDayRow(days: Vec<NaiveDate>, bars: Vec<Bar>, lanes: usize) -> Element {
     let expanded = (cal.allday_expanded)();
     let n = days.len().max(1);
     let overflow = lanes > ALLDAY_ROWS;
-    let shown = if expanded || !overflow { lanes } else { ALLDAY_ROWS };
-    // Per-day count of hidden bars.
-    let hidden: Vec<usize> = (0..n).map(|i| bars.iter().filter(|b| b.lane >= shown && b.first <= i && b.last >= i).count()).collect();
-    let rows = shown + usize::from(hidden.iter().any(|h| *h > 0));
-    let height = (rows as f64 * 24.0 + 4.0).max(28.0);
+    let (shown, hidden, height) = allday_layout(&bars, lanes, n, expanded);
     let selected = (cal.selected)();
     let sel = (cal.slot)();
     let h24 = app.settings.read().use_24h_time;

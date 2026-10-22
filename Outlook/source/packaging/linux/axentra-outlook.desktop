@@ -11,3 +11,4 @@ Categories=Office;Email;Calendar;ContactManagement;
 Keywords=mail;email;outlook;calendar;contacts;people;tasks;todo;microsoft;imap;
 StartupNotify=true
 StartupWMClass=axentra-outlook
+SingleMainWindow=true

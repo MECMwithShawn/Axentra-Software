@@ -28,7 +28,7 @@ mod pane;
 mod recipients;
 mod ribbon;
 mod schedule;
-mod send_queue;
+pub mod send_queue;
 mod state;
 
 pub use actions::forward_as_attachment;

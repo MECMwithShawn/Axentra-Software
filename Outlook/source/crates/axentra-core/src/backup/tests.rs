@@ -420,6 +420,32 @@ fn secrets_and_server_data_never_reach_the_payload() {
 }
 
 #[test]
+fn account_photos_stay_out_of_backups() {
+    let store = demo();
+    let acct = primary(&store);
+    let photo = AccountPhoto {
+        etag: "PHOTO-ETAG".into(),
+        data_url: Some("data:image/png;base64,UEhPVE8tQllURVM=".into()),
+        checked_at: Some(now()),
+        ..Default::default()
+    };
+    assert!(store.set_account_photo(&store.account(acct).unwrap().unwrap(), &photo).unwrap());
+    let text = String::from_utf8(plaintext(&store, now()).unwrap().to_vec()).unwrap();
+    assert!(!text.contains("UEhPVE8tQllURVM") && !text.contains("PHOTO-ETAG"), "the photo is server data, fetched again");
+
+    // A restore brings the account back without one.
+    let dir = TempDir::new();
+    let w = create_backup_with(&store, &dir.0, PW, now(), 12, TEST_KDF).unwrap();
+    let dst = Store::open_in_memory().unwrap();
+    restore(&dst, &open_backup(&w.path, PW).unwrap(), RestoreOptions::default(), now()).unwrap();
+    assert_eq!(dst.accounts().unwrap().len(), 1);
+    assert!(dst.account_photos().unwrap().is_empty());
+    // Restoring over the original store keeps the photo it has.
+    restore(&store, &open_backup(&w.path, PW).unwrap(), RestoreOptions::default(), now()).unwrap();
+    assert_eq!(store.account_photo(acct).unwrap(), Some(photo));
+}
+
+#[test]
 fn strip_secrets_handles_nesting_and_case() {
     let v = serde_json::json!({
         "Password": 1, "smtp_password": 2, "refreshToken": 3, "x": { "ACCESS": 4, "y": [ { "SessionCookie": 5, "ok": 6 } ] },

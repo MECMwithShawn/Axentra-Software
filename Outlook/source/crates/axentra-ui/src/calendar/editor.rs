@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 
 use super::actions::{can_edit_calendar, join_url, open_external, request_delete};
 use super::colors::ramp;
-use super::fields::{AttendeePicker, DateField, TimeField, valid_address};
+use super::fields::{AttendeePicker, DateField, TimeField, commit_typed, valid_address};
 use super::popovers::{set_end_time, set_start_time, toggle_all_day};
 use super::repeat::{RepeatDialog, RepeatMenu};
 use super::state::*;
@@ -24,6 +24,16 @@ use crate::state::{store, use_app};
 enum Confirm {
     Discard,
     ResetExceptions,
+}
+
+/// What a save does: save, or send (validates the title and addresses).
+/// The toolbar's first button does what it says when pressed: Send once
+/// the event has attendees, else Save (an address still typed in a box is
+/// added either way).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SaveAs {
+    Save,
+    Send,
 }
 
 /// Plain text from the description box as simple HTML paragraphs.
@@ -56,6 +66,12 @@ pub fn EventEditor(req: EditorRequest) -> Element {
     let mut end_date_open = use_signal(|| false);
     // "End time was adjusted" after an end at or before the start.
     let mut end_adjusted = use_signal(|| false);
+    // What is typed in the attendee boxes and not added yet.
+    let typed_required = use_signal(String::new);
+    let typed_optional = use_signal(String::new);
+    // Saves from the toolbar run as this form's tasks (see `on_command`).
+    let scope = dioxus::core::current_scope_id();
+    let alive = use_hook(|| CopyValue::new(()));
 
     let d = draft();
     let me = my_address();
@@ -67,6 +83,7 @@ pub fn EventEditor(req: EditorRequest) -> Element {
     let dirty = d != *original.read() || body() != *body0.read();
     let has_attendees = !d.attendees.is_empty();
     let send = has_attendees && organizer && !d.is_cancelled;
+    let cancelled = d.is_cancelled;
     let writable: Vec<Calendar> = store().calendars().unwrap_or_default().into_iter().filter(|c| c.can_edit).collect();
     let cats = store().categories().unwrap_or_default();
     let start_date = local_date(d.start);
@@ -78,7 +95,15 @@ pub fn EventEditor(req: EditorRequest) -> Element {
     let calendar_color = writable.iter().find(|c| c.id == d.calendar_id).map(|c| ramp(&c.color).primary).unwrap_or_default();
 
     // ---------------------------------------------------------------- save
-    let mut do_save = move |send_it: bool, reset_ok: bool| {
+    let mut do_save = move |how: SaveAs, reset_ok: bool| {
+        // An address typed in an attendee box without Enter, Tab or ";" is
+        // added first (a click on Save adds it too, as the box loses focus).
+        let added = commit_typed(draft, &[(AttendeeKind::Required, typed_required), (AttendeeKind::Optional, typed_optional)]);
+        if added.iter().any(|a| !valid_address(&a.address)) {
+            error.set(Some("Check the highlighted addresses".into()));
+            return;
+        }
+        let send_it = how == SaveAs::Send;
         let mut e = draft.peek().clone();
         let original = original.peek().clone();
         let text = body.peek().clone();
@@ -139,7 +164,8 @@ pub fn EventEditor(req: EditorRequest) -> Element {
         cal.editor.set(None);
     };
     let mut discard = move |dirty: bool| {
-        if dirty {
+        let typed = !typed_required.peek().trim().is_empty() || !typed_optional.peek().trim().is_empty();
+        if dirty || typed {
             confirm.set(Some(Confirm::Discard));
         } else {
             close();
@@ -206,8 +232,19 @@ pub fn EventEditor(req: EditorRequest) -> Element {
     } else if readonly {
         groups.push(vec![Command::new("close", "Close", "dismiss")]);
     } else {
-        let (cmd, label) = if send { ("send", "Send") } else { ("save", "Save") };
-        let mut first = vec![Command::new(cmd, label, if send { "send" } else { "save" }).primary().tooltip(if send { "Send (Ctrl+Enter)" } else { "Save (Ctrl+S)" })];
+        // One command id for Save and Send: the button stays the same
+        // element when attendees turn it into Send. (A new element in its
+        // place took the click that blurred an attendee box and added
+        // the chips, and the attendee menu opened instead of saving.) A
+        // press keeps focus in the attendee box, so the address typed
+        // there isn't added, turning Save into Send, under the pointer.
+        let label = if send { "Send" } else { "Save" };
+        let mut first = vec![
+            Command::new("primary", label, if send { "send" } else { "save" })
+                .primary()
+                .keep_focus()
+                .tooltip(if send { "Send (Ctrl+Enter)" } else { "Save (Ctrl+S)" }),
+        ];
         if is_new {
             first.push(Command::new("discard", "Discard", "delete"));
         } else if has_attendees && !original.read().is_cancelled {
@@ -251,8 +288,18 @@ pub fn EventEditor(req: EditorRequest) -> Element {
             return;
         }
         match id.as_str() {
-            "save" => do_save(false, false),
-            "send" => do_save(true, false),
+            // A click: keys typed just before it may still be on their way
+            // to an attendee box (a busy page delivers the click first).
+            // Save once they have landed, so the address is whole.
+            "primary" | "save" => {
+                // What the button said when it was clicked.
+                let how = if id == "primary" && send { SaveAs::Send } else { SaveAs::Save };
+                let mut save = do_save;
+                crate::kit::spawn_in(scope, alive, async move {
+                    crate::kit::dom::keys_landed("body").await;
+                    save(how, false);
+                });
+            }
             "discard" => discard(dirty),
             "close" => close(),
             "delete" | "cancelmeeting" => {
@@ -300,12 +347,15 @@ pub fn EventEditor(req: EditorRequest) -> Element {
                     "Ctrl+S" => {
                         e.prevent_default();
                         e.stop_propagation();
-                        if !readonly || invitation { do_save(false, false) }
+                        if !readonly || invitation { do_save(SaveAs::Save, false) }
                     }
-                    "Ctrl+Enter" | "Alt+S" if send && !readonly => {
+                    // Also with an attendee only typed so far (added on send).
+                    "Ctrl+Enter" | "Alt+S" if organizer && !readonly && !cancelled
+                        && (send || !typed_required.peek().trim().is_empty() || !typed_optional.peek().trim().is_empty()) =>
+                    {
                         e.prevent_default();
                         e.stop_propagation();
-                        do_save(true, false);
+                        do_save(SaveAs::Send, false);
                     }
                     "Escape" => {
                         e.stop_propagation();
@@ -436,6 +486,7 @@ pub fn EventEditor(req: EditorRequest) -> Element {
                             kind: AttendeeKind::Required,
                             placeholder: "Invite required attendees",
                             disabled: readonly,
+                            typed: typed_required,
                             onchange: move |list: Vec<Attendee>| draft.write().attendees = list,
                         }
                         if !show_optional() && !readonly {
@@ -449,6 +500,7 @@ pub fn EventEditor(req: EditorRequest) -> Element {
                                 kind: AttendeeKind::Optional,
                                 placeholder: "Invite optional attendees",
                                 disabled: readonly,
+                                typed: typed_optional,
                                 onchange: move |list: Vec<Attendee>| draft.write().attendees = list,
                             }
                         }
@@ -597,8 +649,10 @@ pub fn EventEditor(req: EditorRequest) -> Element {
                         width: 400,
                         on_close: move |_| confirm.set(None),
                         actions: rsx! {
-                            Button { label: "Discard", variant: Variant::Primary, onclick: move |_| { confirm.set(None); close() } }
-                            Button { label: "Cancel", onclick: move |_| confirm.set(None) }
+                            // Opens on Cancel (as kit::ConfirmDialog does): an Enter
+                            // right after Esc keeps the event.
+                            Button { label: "Discard", variant: Variant::Primary, default_action: true, onclick: move |_| { confirm.set(None); close() } }
+                            Button { label: "Cancel", autofocus: true, onclick: move |_| confirm.set(None) }
                         },
                         p { "Your changes to this event haven't been saved." }
                     }
@@ -609,7 +663,7 @@ pub fn EventEditor(req: EditorRequest) -> Element {
                         width: 420,
                         on_close: move |_| confirm.set(None),
                         actions: rsx! {
-                            Button { label: if send { "Send" } else { "Save" }, variant: Variant::Primary, onclick: move |_| { confirm.set(None); do_save(send, true) } }
+                            Button { label: if send { "Send" } else { "Save" }, variant: Variant::Primary, default_action: true, onclick: move |_| { confirm.set(None); do_save(if send { SaveAs::Send } else { SaveAs::Save }, true) } }
                             Button { label: "Cancel", onclick: move |_| confirm.set(None) }
                         },
                         p { "Changing the series will remove changes made to individual occurrences." }
@@ -647,6 +701,19 @@ fn set_end_date(mut draft: Signal<Event>, nd: NaiveDate) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The toolbar's first button saves or sends as its label said when it
+    /// was clicked, and a press on it keeps focus in the attendee box (no
+    /// blur adds the typed address and turns Save into Send under the
+    /// pointer); the address is added by the save.
+    #[test]
+    fn the_first_button_does_what_it_says() {
+        let src = include_str!("editor.rs");
+        assert!(src.contains(".keep_focus()"));
+        assert!(src.contains(r#"let how = if id == "primary" && send { SaveAs::Send } else { SaveAs::Save };"#));
+        let cmd = include_str!("../shell/ribbon/command.rs");
+        assert_eq!(cmd.matches("if keep_focus { e.prevent_default() }").count(), 2, "plain and split buttons");
+    }
 
     #[test]
     fn description_to_html() {

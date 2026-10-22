@@ -4,10 +4,11 @@
 use axentra_core::EmailAddress;
 
 /// Split recipient text into entries. Entries end at `;`, `,` or a line
-/// break outside quotes and angle brackets. With `all = false` the text
-/// after the last separator is returned as still being typed; with
-/// `all = true` it becomes an entry too. Group syntax (`Team: a@x, b@y;`)
-/// yields its members.
+/// break outside quotes and angle brackets, and an entry of addresses
+/// separated by spaces only ("a@x b@y", a column copied from a sheet) is
+/// one entry each. With `all = false` the text after the last separator
+/// is returned as still being typed; with `all = true` it becomes an entry
+/// too. Group syntax (`Team: a@x, b@y;`) yields its members.
 pub fn parse_list(text: &str, all: bool) -> (Vec<EmailAddress>, String) {
     let mut entries = Vec::new();
     let mut current = String::new();
@@ -42,18 +43,14 @@ pub fn parse_list(text: &str, all: bool) -> (Vec<EmailAddress>, String) {
                 current.clear();
             }
             ';' | ',' | '\n' | '\r' if !quoted && !angle => {
-                if let Some(e) = parse_one(&current) {
-                    entries.push(e);
-                }
+                entries.extend(entries_in(&current));
                 current.clear();
             }
             _ => current.push(c),
         }
     }
     if all {
-        if let Some(e) = parse_one(&current) {
-            entries.push(e);
-        }
+        entries.extend(entries_in(&current));
         current.clear();
     }
     (entries, current.trim_start().to_string())
@@ -66,11 +63,22 @@ pub fn parse_list(text: &str, all: bool) -> (Vec<EmailAddress>, String) {
 pub fn split_typed(prev: &str, now: &str) -> (Vec<EmailAddress>, String) {
     let pasted = now.chars().count() > prev.chars().count() + 1;
     let (mut entries, rest) = parse_list(now, false);
-    if pasted && let Some(last) = parse_one(&rest).filter(|e| is_valid(&e.address)) {
-        entries.push(last);
+    let last = entries_in(&rest);
+    if pasted && !last.is_empty() && last.iter().all(|e| is_valid(&e.address)) {
+        entries.extend(last);
         return (entries, String::new());
     }
     (entries, rest)
+}
+
+/// The entries in one entry's text: itself, or each address of a list
+/// separated by spaces only (every word an address, no names).
+fn entries_in(s: &str) -> Vec<EmailAddress> {
+    let words: Vec<&str> = s.split_whitespace().collect();
+    if words.len() > 1 && words.iter().all(|w| w.contains('@') && !w.contains(['<', '>', '"'])) {
+        return words.into_iter().filter_map(parse_one).collect();
+    }
+    parse_one(s).into_iter().collect()
 }
 
 /// One entry: `Name <addr>`, `"Last, First" <addr>`, `<addr>`, `addr` or
@@ -154,6 +162,30 @@ mod tests {
             vec![("Priya Raman", "priya@northwind.example"), ("", "marcus@axentra.example"), ("Bowen, Megan", "megan@contoso.example")]
         );
         assert_eq!(rest, "");
+    }
+
+    /// A column of addresses copied from a sheet (lines, tabs or spaces):
+    /// one recipient each, not one merged address.
+    #[test]
+    fn splits_lists_separated_by_spaces_or_lines() {
+        let (list, rest) = parse_list("a1@example.org\na2@example.org\r\na3@example.org", true);
+        assert_eq!(addrs(&list), vec![("", "a1@example.org"), ("", "a2@example.org"), ("", "a3@example.org")]);
+        assert_eq!(rest, "");
+        let (list, _) = parse_list("a1@example.org a2@example.org\ta3@example.org", true);
+        assert_eq!(list.len(), 3);
+        // Names keep their spaces; a word that isn't an address keeps the entry whole.
+        let (list, _) = parse_list("Priya Raman <priya@northwind.example>", true);
+        assert_eq!(addrs(&list), vec![("Priya Raman", "priya@northwind.example")]);
+        let (list, _) = parse_list("dan eve@example.org", true);
+        assert_eq!(addrs(&list), vec![("", "dan eve@example.org")]);
+        // Pasted (WebKit puts spaces for the lines in a text box): every one a chip.
+        let (list, rest) = split_typed("", "a1@example.org a2@example.org a3@example.org");
+        assert_eq!((list.len(), rest.as_str()), (3, ""));
+        // Typed, the last one waits for Enter as before; an invalid one in a paste stays to fix.
+        let (list, rest) = split_typed("a1@example.org a2@example.or", "a1@example.org a2@example.org");
+        assert_eq!((list.len(), rest.as_str()), (0, "a1@example.org a2@example.org"));
+        let (list, rest) = split_typed("", "a1@example.org a2@");
+        assert_eq!((list.len(), rest.as_str()), (0, "a1@example.org a2@"));
     }
 
     #[test]

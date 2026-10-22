@@ -510,7 +510,7 @@ Minimum window size: 640 × 480 (estimate).
 | 8 | **Notifications** | Tooltip "Notifications" | 40×48, 20px bell icon with count badge | Toggles the Notifications pane (§3.5). A red badge shows the unread count [D/3P] | [D] |
 | 9 | **Settings** | Tooltip "Settings" | 40×48, 20px gear icon | Opens the Settings dialog (§7) at the last-visited page. Gear at the top right [D] | [D] |
 | 10 | **More** (overflow) | Tooltip "More options" | 40×48, `…` icon | Menu: **Sync** (manual mailbox refresh [D, October 2026]), **Help**, **Feedback**, **What's new**, **Keyboard shortcuts**, **About Axentra Outlook** | [D]/[U] |
-| 11 | **Account avatar** | Tooltip: account display name plus email | 32px circle in a 48×48 hit area | Opens the **Account Manager** flyout (§3.6) [D: release notes June 18, 2026; roadmap 497546, launched] | [D]/[U] |
+| 11 | **Account avatar** | Tooltip: account display name plus email | 32px circle in a 48×48 hit area; the account's own profile photo for Microsoft accounts (protocols §4.5), else initials | Opens the **Account Manager** flyout (§3.6) [D: release notes June 18, 2026; roadmap 497546, launched] | [D]/[U] |
 | 12 | Window controls | "Minimize", "Maximize"/"Restore", "Close" | 46×48 each (estimate) | Follow the desktop's button layout (GNOME `button-layout`, which can put them on the left) | [U] |
 
 Help: in the reference product, Help mostly lives on the ribbon's **Help** tab. The Tips pane moved from the header to the Help tab in January 2025 [D]. Axentra keeps Help in both places: the More menu and the Help tab.
@@ -567,7 +567,7 @@ In dark mode (neutral header `#1F1F1F`), use subtle tokens: hover `#383838`, pre
 ### 3.6 Account Manager flyout
 
 - Anchored under the avatar, 320px wide (estimate), `shadow16`, radius 8px.
-- Content: the current account (avatar 48px, display name, email, nickname if set [D: account nicknames]); a list of other accounts with avatars and unread totals; **Add account**; **Manage accounts** (opens Settings > Accounts > Email accounts) [D: the Account Manager lets you view your profile and picture, manage accounts, and add accounts when the organization's policy allows it]. Axentra equivalent of that policy: hide **Add account** when a system policy file forbids extra accounts (estimate).
+- Content: the current account (avatar 48px: the profile photo when the account has one, as in the header; display name, email, nickname if set [D: account nicknames]); a list of other accounts with avatars and unread totals; **Add account**; **Manage accounts** (opens Settings > Accounts > Email accounts) [D: the Account Manager lets you view your profile and picture, manage accounts, and add accounts when the organization's policy allows it]. Axentra equivalent of that policy: hide **Add account** when a system policy file forbids extra accounts (estimate).
 - No Microsoft sign-in links. Axentra does not offer "Sign out" for the app. Per-account removal lives in Settings.
 
 ### 3.7 Header keyboard

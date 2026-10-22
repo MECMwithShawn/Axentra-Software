@@ -68,8 +68,6 @@ pub struct ShellCtx {
     pub settings_last: Signal<Option<PageId>>,
     /// Appearance being previewed by the open Settings dialog.
     pub preview: Signal<Option<Settings>>,
-    /// Undo stack for Ctrl+Z (toast id, action), newest last, at most 20.
-    pub undo: Signal<Vec<(u64, crate::state::UndoAction)>>,
     /// Wall clock, refreshed every 30 s (agenda, reminders, midnight reset).
     pub now: Signal<DateTime<Local>>,
     /// Notification read / seen / dismissed keys.
@@ -102,7 +100,6 @@ fn provide_shell() -> ShellCtx {
         settings_page: Signal::new(None),
         settings_last: Signal::new(None),
         preview: Signal::new(None),
-        undo: Signal::new(Vec::new()),
         now: Signal::new(Local::now()),
         notices: Signal::new(notifications::NoticeState::load(store())),
         online: Signal::new(true),
@@ -138,19 +135,6 @@ impl ShellCtx {
     pub fn toggle_flyout(mut self, f: Flyout) {
         let open = (self.flyout)() == Some(f);
         self.flyout.set(if open { None } else { Some(f) });
-    }
-
-    /// Undo the most recent reversible action (Ctrl+Z, §8.1).
-    pub fn undo_last(mut self, app: AppState) {
-        let last = self.undo.write().pop();
-        match last {
-            Some((toast, action)) => {
-                app.run_undo(&action);
-                app.dismiss_toast(toast);
-                dom::announce("Undone", false);
-            }
-            None => dom::announce("Nothing to undo", false),
-        }
     }
 }
 
@@ -259,30 +243,6 @@ pub fn Shell() -> Element {
         }
     });
 
-    // Every undoable toast also goes on the Ctrl+Z stack. An Undo send bar
-    // only counts while it shows: once the message has gone out, Ctrl+Z
-    // must not pull it back.
-    let countdowns = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(std::collections::HashSet::<u64>::new())));
-    use_effect(move || {
-        let toasts = app.toasts.read();
-        let mut stack = shell.undo.write();
-        let mut countdowns = countdowns.borrow_mut();
-        for t in toasts.iter() {
-            if t.countdown.is_some() {
-                countdowns.insert(t.id);
-            }
-            if let Some(u) = &t.undo
-                && !stack.iter().any(|(id, _)| *id == t.id)
-            {
-                stack.push((t.id, u.clone()));
-            }
-        }
-        stack.retain(|(id, _)| !countdowns.contains(id) || toasts.iter().any(|t| t.id == *id));
-        countdowns.retain(|id| toasts.iter().any(|t| t.id == *id));
-        let excess = stack.len().saturating_sub(20);
-        stack.drain(..excess);
-    });
-
     // Client-side decorations (§12.4): only when the host provides window controls.
     let controls = window::use_window_controls();
     window::use_titlebar_events(controls);
@@ -295,6 +255,7 @@ pub fn Shell() -> Element {
 
     let module = (app.module)();
     let pane = (shell.pane)();
+    let side_pane = ((app.my_day_open)() && module != Module::Tasks) || pane.is_some();
     rsx! {
         document::Title { "{module.label()} - {crate::APP_NAME}" }
         style { {theme_css()} }
@@ -306,6 +267,8 @@ pub fn Shell() -> Element {
             "data-motion": look.motion,
             "data-ribbon": look.ribbon,
             "data-light-messages": if saved.light_message_background { "true" },
+            // A side pane is open (reminder cards keep clear of it).
+            "data-side-pane": if side_pane { "true" },
             "data-window": window_state,
             "data-tiled": tiled_edges,
             style: window_style,
@@ -337,6 +300,8 @@ pub fn Shell() -> Element {
                 }
             }
             toasts::Toasts {}
+            // Settles typed text the page held back (kit/typed_text.js).
+            dom::TypedTextSync {}
             // App-wide background work owned by other areas: event and task
             // reminders, scheduled sends and undo-send holds; the monthly backup.
             crate::calendar::ReminderHost {}
@@ -390,7 +355,7 @@ pub fn run_command(app: AppState, mut shell: ShellCtx, cmd: keymap::GlobalCmd) {
         G::PrevRegion => dom::cycle_regions(-1),
         G::Shortcuts => shell.shortcuts_open.set(true),
         G::Search => dom::focus(search::INPUT_SELECTOR),
-        G::Undo => shell.undo_last(app),
+        G::Undo => crate::mail::compose::send_queue::undo(app, false),
         G::NewMessage => app.compose(ComposeRequest::new_message()),
         G::Sync if !*shell.online.peek() => {
             app.toast("You're offline. Your accounts will sync when you reconnect.");

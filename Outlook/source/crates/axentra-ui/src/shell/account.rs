@@ -44,7 +44,7 @@ pub fn AccountFlyout() -> Element {
     rsx! {
         FlyoutPanel { label: "Account manager", class: "ax-account-flyout", on_close: move |_| shell.flyout.set(None),
             div { class: "ax-account-me",
-                Avatar { name: me.display_name.clone(), email: me.email.clone(), size: 48 }
+                Avatar { name: me.display_name.clone(), email: me.email.clone(), size: 48, photo: app.account_photo(me.id) }
                 div { class: "ax-account-me-text",
                     div { class: "ax-account-name ax-ellipsis", "{me.display_name}" }
                     div { class: "ax-account-email ax-ellipsis", "{me.email}" }
@@ -71,7 +71,7 @@ pub fn AccountFlyout() -> Element {
                                     }
                                 }
                             },
-                            Avatar { name: a.display_name.clone(), email: a.email.clone(), size: 32 }
+                            Avatar { name: a.display_name.clone(), email: a.email.clone(), size: 32, photo: app.account_photo(a.id) }
                             div { class: "ax-account-me-text",
                                 div { class: "ax-ellipsis", if a.nickname.trim().is_empty() { "{a.display_name}" } else { "{a.nickname}" } }
                                 div { class: "ax-account-email ax-ellipsis", "{a.email}" }

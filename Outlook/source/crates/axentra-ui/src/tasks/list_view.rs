@@ -465,7 +465,10 @@ fn TasksPane(view: View) -> Element {
             div { class: "ax-todo-scroll",
                 div { class: "ax-todo-content",
                     if view.has_add_bar() {
-                        AddTaskBar { key: "{view.key()}", view, list_id: current.as_ref().map(|l| l.id), list_name: title.clone() }
+                        // Sticky at the top of the list (tasks.css).
+                        div { class: "ax-todo-add-sticky",
+                            AddTaskBar { key: "{view.key()}", view, list_id: current.as_ref().map(|l| l.id), list_name: title.clone() }
+                        }
                     }
                     div {
                         class: "ax-todo-grid",

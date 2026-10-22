@@ -202,15 +202,30 @@ pub fn TextField(
     #[props(into)]
     min: Option<String>,
     #[props(into)] max: Option<String>,
+    /// The page empties the input as Enter goes down when the handler took
+    /// the key (prevent_default): quick entry, so the next text typed at
+    /// once doesn't land behind the last (kit/typed_text.js).
+    #[props(default)]
+    enter_clears: bool,
+    /// Marked invalid (red underline, `aria-invalid`).
+    #[props(default)]
+    invalid: bool,
+    /// Id of text elsewhere that describes the field (`aria-describedby`).
+    #[props(into)]
+    describedby: Option<String>,
 ) -> Element {
     let aria = if label.is_empty() { placeholder.clone() } else { label.clone() };
+    let input_class = if invalid { "ax-input ax-invalid" } else { "ax-input" };
+    let area_class = if invalid { "ax-textarea ax-invalid" } else { "ax-textarea" };
     rsx! {
         div { class: "ax-field {class}",
             if !label.is_empty() { label { class: "ax-field-label", r#for: id.clone(), "{label}" } }
             if multiline {
                 textarea {
                     id: id.clone(),
-                    class: "ax-textarea",
+                    class: area_class,
+                    "aria-invalid": if invalid { "true" },
+                    "aria-describedby": describedby.clone(),
                     placeholder: "{placeholder}",
                     value: "{value}",
                     autofocus,
@@ -224,7 +239,9 @@ pub fn TextField(
             } else {
                 input {
                     id: id.clone(),
-                    class: "ax-input",
+                    class: input_class,
+                    "aria-invalid": if invalid { "true" },
+                    "aria-describedby": describedby.clone(),
                     r#type: "{input_type}",
                     placeholder: "{placeholder}",
                     value: "{value}",
@@ -233,6 +250,7 @@ pub fn TextField(
                     min,
                     max,
                     "data-ax-autofocus": if autofocus { "true" },
+                    "data-ax-enter-clears": if enter_clears { "true" },
                     "aria-label": "{aria}",
                     oninput: move |e| oninput.call(e.value()),
                     onkeydown: move |e| { keys::stop_typing_keys(&e); if let Some(h) = &onkeydown { h.call(e) } },

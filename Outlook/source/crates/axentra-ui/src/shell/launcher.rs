@@ -6,8 +6,9 @@ use super::use_shell;
 use crate::kit::{Icon, dom, filled_icon};
 use crate::state::{Module, use_app};
 
-/// A non-modal flyout under a header or rail button: closes on Escape or an
-/// outside click, takes focus when it opens and gives it back when it closes.
+/// A non-modal flyout under a header or rail button: closes on Escape, an
+/// outside click or when focus moves out of it (Tab past its last item),
+/// takes focus when it opens and gives it back when it closes.
 #[component]
 pub fn FlyoutPanel(
     #[props(into)] label: String,
@@ -32,6 +33,27 @@ pub fn FlyoutPanel(
                 move |_| dom::open_popup(&id)
             },
             onclick: move |e| e.stop_propagation(),
+            onfocusout: {
+                let id = id.clone();
+                move |_| {
+                    // Checked once focus has landed: on another control of the
+                    // page (not lost to the page body, not still inside). A
+                    // mouse press on the open flyout's own button leaves it
+                    // to that button's click, which toggles it; keyboard focus
+                    // moving there (Shift+Tab) closes it like any other exit.
+                    let js = format!(
+                        "await new Promise((r) => setTimeout(r, 0)); const el = document.getElementById({}); const a = document.activeElement; \
+                         const kbd = document.documentElement.hasAttribute('data-ax-kbd'); \
+                         return !!el && !!a && a !== document.body && !el.contains(a) && (kbd || !a.closest('[aria-expanded=\"true\"]'));",
+                        dom::js_str(&id)
+                    );
+                    spawn(async move {
+                        if let Ok(true) = document::eval(&js).join::<bool>().await {
+                            on_close.call(());
+                        }
+                    });
+                }
+            },
             onkeydown: move |e: KeyboardEvent| {
                 if e.key() == Key::Escape {
                     e.stop_propagation();

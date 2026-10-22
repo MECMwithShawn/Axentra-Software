@@ -272,13 +272,16 @@ fn RepeatDialog(picker: Picker) -> Element {
                         oninput: move |e| every.set(e.value()),
                         onkeydown: move |e| keys::stop_typing_keys(&e),
                     }
-                    select {
-                        class: "ax-select ax-grow",
-                        "aria-label": "Unit",
-                        onchange: move |e| unit.set(e.value()),
-                        for (v, l) in UNITS {
-                            option { key: "{v}", value: "{v}", selected: unit() == v, "{l}" }
+                    div { class: "ax-select-wrap ax-grow",
+                        select {
+                            class: "ax-select",
+                            "aria-label": "Unit",
+                            onchange: move |e| unit.set(e.value()),
+                            for (v, l) in UNITS {
+                                option { key: "{v}", value: "{v}", selected: unit() == v, "{l}" }
+                            }
                         }
+                        Icon { name: "chevron_down", size: 12, class: "ax-select-chevron" }
                     }
                 }
                 if unit() == "weeks" {

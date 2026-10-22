@@ -4,6 +4,7 @@
 //! reading its revision signal (e.g. `app.mail_rev()`) before querying the
 //! store, and every mutation is followed by the matching `bump_*` call.
 
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use axentra_core::*;
@@ -229,8 +230,19 @@ pub struct AppState {
     /// Sent by the Mail ribbon via [`AppState::compose_command`], consumed by
     /// `mail::compose`.
     pub compose_cmd: Signal<Option<(u64, String)>>,
+    /// The user's own account photos (account id → `data:image/…` URL),
+    /// fetched by the sync engine; reloaded with [`AppState::bump_accounts`].
+    pub account_photos: Signal<HashMap<AccountId, String>>,
+    /// The Ctrl+Z stack, newest last, at most [`UNDO_DEPTH`]: every
+    /// reversible action of every module (with the undo bar it showed, if
+    /// any), the held "Undo send" message among them, so Ctrl+Z always
+    /// takes back the most recent one, wherever focus is.
+    undo: Signal<Vec<(Option<u64>, UndoAction)>>,
     next_toast: Signal<u64>,
 }
+
+/// How many actions Ctrl+Z can take back.
+const UNDO_DEPTH: usize = 20;
 
 pub fn use_app() -> AppState {
     use_context::<AppState>()
@@ -239,6 +251,8 @@ pub fn use_app() -> AppState {
 /// Create the state and provide it to the tree. Call once, in the root.
 pub fn provide_app_state() -> AppState {
     let settings = store().settings();
+    // Read now, so the first frame already shows the photos.
+    let photos = store().account_photos().unwrap_or_default();
     use_context_provider(|| AppState {
         module: Signal::new(Module::Mail),
         settings: Signal::new(settings),
@@ -254,6 +268,8 @@ pub fn provide_app_state() -> AppState {
         settings_dialog: Signal::new(None),
         my_day_open: Signal::new(false),
         compose_cmd: Signal::new(None),
+        account_photos: Signal::new(photos),
+        undo: Signal::new(Vec::new()),
         next_toast: Signal::new(1),
     })
 }
@@ -276,6 +292,17 @@ impl AppState {
         self.calendar_rev += 1;
         self.people_rev += 1;
         self.tasks_rev += 1;
+        // The engine bumps for a new, changed or removed photo too.
+        let photos = store().account_photos().unwrap_or_default();
+        if *self.account_photos.peek() != photos {
+            self.account_photos.set(photos);
+        }
+    }
+
+    /// The photo for one of the user's own accounts, if it has one
+    /// (subscribes the caller to photo changes).
+    pub fn account_photo(&self, id: AccountId) -> Option<String> {
+        self.account_photos.read().get(&id).cloned()
     }
 
     /// Change settings, persist them and re-render dependents.
@@ -313,8 +340,64 @@ impl AppState {
         self.push_toast(Toast::new(text.into()))
     }
 
+    /// An undo bar; its action also goes on the Ctrl+Z stack.
     pub fn toast_with_undo(self, text: impl Into<String>, undo: UndoAction) -> u64 {
-        self.push_toast(Toast { undo: Some(undo), ..Toast::new(text.into()) })
+        let id = self.push_toast(Toast { undo: Some(undo.clone()), ..Toast::new(text.into()) });
+        self.stack_undo(Some(id), undo);
+        id
+    }
+
+    /// Put an action on the Ctrl+Z stack without an undo bar (a flag or
+    /// category change, one message marked read).
+    pub fn push_undo(self, undo: UndoAction) {
+        self.stack_undo(None, undo);
+    }
+
+    fn stack_undo(mut self, toast: Option<u64>, undo: UndoAction) {
+        let mut stack = self.undo.write();
+        stack.push((toast, undo));
+        let excess = stack.len().saturating_sub(UNDO_DEPTH);
+        stack.drain(..excess);
+    }
+
+    /// Take an undo bar's action off the Ctrl+Z stack: a held send that went
+    /// out (or was moved elsewhere) can't be taken back any more.
+    pub fn forget_undo(mut self, toast: u64) {
+        self.undo.write().retain(|(t, _)| *t != Some(toast));
+    }
+
+    /// The undo bar of the most recent action on the Ctrl+Z stack, if it
+    /// showed one.
+    pub fn newest_undo_bar(self) -> Option<u64> {
+        self.undo.peek().last().and_then(|(t, _)| *t)
+    }
+
+    /// Ctrl+Z: undo the most recent reversible action and close its undo bar.
+    pub fn undo_last(mut self) {
+        let last = self.undo.write().pop();
+        match last {
+            Some((toast, action)) => {
+                self.run_undo(&action);
+                if let Some(id) = toast {
+                    self.dismiss_toast(id);
+                }
+                self.toast("Undone");
+            }
+            None => {
+                self.toast("Nothing to undo");
+            }
+        }
+    }
+
+    /// An undo bar's Undo button: undo its action (once: it leaves the
+    /// Ctrl+Z stack too) and close the bar.
+    pub fn undo_toast(self, id: u64) {
+        let undo = self.toasts.peek().iter().find(|t| t.id == id).and_then(|t| t.undo.clone());
+        self.forget_undo(id);
+        if let Some(undo) = undo {
+            self.run_undo(&undo);
+        }
+        self.dismiss_toast(id);
     }
 
     /// A toast with its own button, e.g. "Exported 3 contacts" + "Open folder".
@@ -324,9 +407,13 @@ impl AppState {
 
     /// The "Undo send" bar: Undo plus a countdown that ends at `until`
     /// (the `settings.undo_send_secs` delay). Undo runs `undo`.
+    /// The send is the most recent action, so it goes on the Ctrl+Z stack
+    /// too; [`AppState::forget_undo`] takes it off once the message is out.
     pub fn toast_undo_send(self, text: impl Into<String>, undo: UndoAction, until: chrono::DateTime<chrono::Utc>) -> u64 {
         let total_ms = (until - chrono::Utc::now()).num_milliseconds().max(0) as u64;
-        self.push_toast(Toast { undo: Some(undo), countdown: Some(Countdown { until, total_ms }), ..Toast::new(text.into()) })
+        let id = self.push_toast(Toast { undo: Some(undo.clone()), countdown: Some(Countdown { until, total_ms }), ..Toast::new(text.into()) });
+        self.stack_undo(Some(id), undo);
+        id
     }
 
     pub fn error(self, text: impl Into<String>) -> u64 {
@@ -424,5 +511,44 @@ mod tests {
         push_bounded(&mut list, with_action);
         assert_eq!(list.len(), 3);
         assert!(list.last().is_some_and(|t| t.action.as_ref().is_some_and(|(l, _)| l == "Open folder")));
+    }
+
+    /// The account photos are in the state from the first frame, and
+    /// `bump_accounts` (the engine's notifier) brings a changed or removed one.
+    #[test]
+    fn account_photos_load_at_start_and_follow_bump_accounts() {
+        use std::cell::Cell;
+        thread_local! {
+            static APP: Cell<Option<AppState>> = const { Cell::new(None) };
+        }
+        fn root() -> Element {
+            let app = provide_app_state();
+            APP.with(|a| a.set(Some(app)));
+            rsx! {}
+        }
+
+        // The only test here that needs the global store.
+        let store = STORE.get_or_init(|| Arc::new(Store::open_in_memory().unwrap())).clone();
+        let mut acct = Account { kind: AccountKind::Microsoft, email: "megan@contoso.example".into(), ..Default::default() };
+        let id = store.add_account(&mut acct).unwrap();
+        let photo = |url: &str| AccountPhoto { data_url: Some(url.into()), ..Default::default() };
+        store.set_account_photo(&acct, &photo("data:image/png;base64,AAAA")).unwrap();
+
+        let mut dom = VirtualDom::new(root);
+        dom.rebuild_in_place();
+        let app = APP.with(|a| a.get()).expect("the app state");
+        dom.in_runtime(|| {
+            assert_eq!(app.account_photo(id).as_deref(), Some("data:image/png;base64,AAAA"));
+            store.set_account_photo(&acct, &photo("data:image/jpeg;base64,BBBB")).unwrap();
+            app.bump_accounts();
+            assert_eq!(app.account_photo(id).as_deref(), Some("data:image/jpeg;base64,BBBB"));
+            store.set_account_photo(&acct, &AccountPhoto::default()).unwrap();
+            app.bump_accounts();
+            assert_eq!(app.account_photo(id), None);
+            store.set_account_photo(&acct, &photo("data:image/gif;base64,CCCC")).unwrap();
+            store.remove_account(id).unwrap();
+            app.bump_accounts();
+            assert_eq!(app.account_photo(id), None, "gone with the account");
+        });
     }
 }

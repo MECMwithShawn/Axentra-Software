@@ -58,7 +58,7 @@
 .ax-compose-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 28px; }
 .ax-compose-chip {
   position: relative; display: inline-flex; align-items: center; gap: 6px; flex: none;
-  height: 24px; max-width: 280px; padding: 0 2px 0 4px; border: 1px solid transparent; border-radius: 12px;
+  height: 24px; max-width: min(280px, 100%); padding: 0 2px 0 4px; border: 1px solid transparent; border-radius: 12px;
   background: var(--ax-bg-3); color: var(--ax-fg-1); font-size: var(--ax-text-300); cursor: default;
   transition: background var(--ax-duration-fast) var(--ax-ease);
 }

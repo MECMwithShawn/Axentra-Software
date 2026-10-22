@@ -81,6 +81,7 @@ pub fn ReadingPane(#[props(default)] style: String, #[props(default)] full: bool
             class: if full { "ax-full" },
             role: "region",
             "aria-label": "Reading pane",
+            "data-ax-region": "true",
             tabindex: "-1",
             style: "{style}",
             onresize: move |e: ResizeEvent| {
@@ -155,17 +156,29 @@ fn frame_width(container: f64, window: bool) -> f64 {
     (container - if window { 78.0 } else { 72.0 }).max(240.0)
 }
 
+/// How long the read window's width has to stay put before the message
+/// bodies are rebuilt for it (their height estimate follows the width).
+const READ_WINDOW_SETTLE_MS: u64 = 150;
+
 /// "Open in new window" (Shift+Enter): the conversation in a window over
 /// the app, closed with Escape or its Close button. The window is resizable,
-/// moves by its title bar, and remembers where it was ("read-window").
+/// moves by its title bar, and remembers where it was ("read-window"). The
+/// title bar carries the subject (the dialog's name) and the window's
+/// commands, so the conversation below starts with the messages.
 #[component]
 pub fn ReadWindow(open: Open) -> Element {
+    let app = use_app();
     let mut ctx = use_mail();
     let id = dom::use_unique_id("ax-mail-read-window");
+    let title_id = format!("{id}-title");
     let surface = use_surface(&id, Some(SurfaceSpec::new("read-window", 900, Some(760)).min(Some(480), Some(360)).movable()));
     let k = format!("{}-{}", open.message, open.conversation.clone().unwrap_or_default());
     let subject = store().message(open.message).ok().flatten().map(|m| bare_subject(&m.subject).to_string()).unwrap_or_default();
     let subject = if subject.trim().is_empty() { "(No subject)".to_string() } else { subject };
+    let dark = is_dark(app, ctx);
+    let light_body = *ctx.light_body.read();
+    // A width drag reports every frame; the bodies are rebuilt once it settles.
+    let mut resize_gen = use_signal(|| 0u64);
     rsx! {
         // Keyed on the outer element: a key on a nested child is dropped in
         // release builds, and the window must remount when the message changes.
@@ -174,20 +187,52 @@ pub fn ReadWindow(open: Open) -> Element {
             id: "{id}",
             class: "ax-mail-read-window ax-surface ax-surface-float",
             role: "dialog",
-            "aria-label": "Message window",
+            "aria-labelledby": "{title_id}",
+            // A press on the title bar focuses the window (kit/dom.js), so
+            // Esc closes it.
+            tabindex: "-1",
             style: surface.style(),
             onresize: move |e: ResizeEvent| {
-                if let Ok(size) = e.data().get_content_box_size()
-                    && (size.width - *ctx.read_window_width.peek()).abs() > 8.0
-                {
-                    ctx.read_window_width.set(size.width);
+                let Ok(size) = e.data().get_content_box_size() else { return };
+                let generation = *resize_gen.peek() + 1;
+                resize_gen.set(generation);
+                if (size.width - *ctx.read_window_width.peek()).abs() <= 8.0 {
+                    return;
                 }
+                spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(READ_WINDOW_SETTLE_MS)).await;
+                    if *resize_gen.peek() == generation {
+                        ctx.read_window_width.set(size.width);
+                    }
+                });
             },
             ..surface.attributes(),
             div { class: "ax-mail-read-window-bar", "data-ax-surface-move": "true",
                 Icon { name: "mail", size: 16 }
-                span { class: "ax-mail-read-window-title ax-ellipsis", "{subject}" }
-                IconButton { icon: "dismiss", title: "Close (Esc)", onclick: move |_| ctx.popout.set(None) }
+                // A press on the subject moves the window, as on any title
+                // bar, and brings focus into it when it was elsewhere.
+                h2 { id: "{title_id}", class: "ax-mail-read-window-title", title: "{subject}", "{subject}" }
+                if dark {
+                    IconButton {
+                        icon: if light_body { "weather_moon" } else { "weather_sunny" },
+                        title: "Switch background",
+                        toggled: light_body,
+                        onclick: move |_| {
+                            let v = !*ctx.light_body.peek();
+                            ctx.light_body.set(v);
+                        },
+                    }
+                }
+                IconButton { icon: "print", title: "Print (Ctrl+P)", onclick: move |_| actions::print() }
+                // As Esc does: focus goes back to the message list.
+                IconButton {
+                    icon: "dismiss",
+                    title: "Close (Esc)",
+                    onclick: move |_| {
+                        ctx.popout.set(None);
+                        ctx.request_list_focus();
+                    },
+                }
             }
             ConversationView { open, full: false, window: true }
             SurfaceGrips {}
@@ -308,36 +353,30 @@ fn ConversationView(open: Open, full: bool, window: bool) -> Element {
     };
 
     rsx! {
-        div { class: "ax-mail-reading-scroll", tabindex: "-1",
-            div { class: "ax-mail-reading-head",
-                if full {
-                    IconButton { icon: "arrow_left", title: "Back to the message list", onclick: move |_| ctx.full_view.set(false) }
-                }
-                h2 { class: "ax-mail-reading-subject ax-selectable", title: "{subject}", tabindex: "-1", "{subject}" }
-                div { class: "ax-mail-reading-head-actions",
-                    if dark {
-                        IconButton {
-                            icon: if light_body { "weather_moon" } else { "weather_sunny" },
-                            title: "Switch background",
-                            toggled: light_body,
-                            onclick: move |_| {
-                                let v = !*ctx.light_body.peek();
-                                ctx.light_body.set(v);
-                            },
-                        }
-                    }
-                    if !window {
-                        IconButton { icon: "open", title: "Open in new window (Shift+Enter)", onclick: open_window }
-                    }
-                    if window {
-                        IconButton {
-                            icon: "print",
-                            title: "Print (Ctrl+P)",
-                            onclick: move |_| actions::print(),
-                        }
-                    }
+        div { class: "ax-mail-reading-scroll", tabindex: "-1", "data-ax-default-focus": if !window { "true" },
+            // The read window shows the subject and these commands in its title bar.
+            if !window {
+                div { class: "ax-mail-reading-head",
                     if full {
-                        IconButton { icon: "dismiss", title: "Close", onclick: move |_| ctx.full_view.set(false) }
+                        IconButton { icon: "arrow_left", title: "Back to the message list", onclick: move |_| ctx.full_view.set(false) }
+                    }
+                    h2 { class: "ax-mail-reading-subject ax-selectable", title: "{subject}", tabindex: "-1", "{subject}" }
+                    div { class: "ax-mail-reading-head-actions",
+                        if dark {
+                            IconButton {
+                                icon: if light_body { "weather_moon" } else { "weather_sunny" },
+                                title: "Switch background",
+                                toggled: light_body,
+                                onclick: move |_| {
+                                    let v = !*ctx.light_body.peek();
+                                    ctx.light_body.set(v);
+                                },
+                            }
+                        }
+                        IconButton { icon: "open", title: "Open in new window (Shift+Enter)", onclick: open_window }
+                        if full {
+                            IconButton { icon: "dismiss", title: "Close", onclick: move |_| ctx.full_view.set(false) }
+                        }
                     }
                 }
             }
@@ -703,7 +742,8 @@ fn MessageCard(
             AttachmentWell { attachments: body.attachments.clone(), subject: msg.subject.clone() }
             iframe {
                 class: "ax-mail-body",
-                title: "Message body",
+                // A name for assistive technology, not a tooltip over the text.
+                "aria-label": "Message body",
                 "sandbox": "allow-popups",
                 srcdoc: doc.srcdoc.clone(),
                 style: format!("height:{}px", doc.height),

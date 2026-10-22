@@ -31,7 +31,7 @@ use axentra_core::EmailAddress;
 use ctx::{LIST_W, MenuTarget, NAV_W, PeopleCtx, PeopleDialog, Prefs, SUGGESTED_DAYS};
 use view::{BuildInput, Item, Node};
 
-use crate::kit::{Menu, keys};
+use crate::kit::{Menu, dom, keys};
 use crate::shell::ribbon::Ribbon;
 use crate::state::{NavRequest, store, use_app};
 
@@ -166,9 +166,10 @@ pub fn PeopleModule() -> Element {
             _ => None,
         };
         if let Some(dir) = region {
+            // The shell's cycle: header, App bar, ribbon, then these panes.
             e.prevent_default();
             e.stop_propagation();
-            cycle_regions(dir);
+            dom::cycle_regions(dir);
             return;
         }
         if ctx.editing.peek().is_some() {
@@ -264,28 +265,6 @@ pub fn PeopleModule() -> Element {
             }
         }
     }
-}
-
-/// Move focus to the next (`dir` = 1) or previous region: ribbon, navigation
-/// pane, contact list, details (2.2, keyboard spec 12.2).
-fn cycle_regions(dir: i32) {
-    document::eval(&format!(
-        r#"const regions = ['.ax-people .ax-ribbon', '#ax-people-nav', '#ax-people-listpane', '#ax-people-details'];
-        const targets = [
-          '.ax-people .ax-ribbon-commands button:not([disabled])',
-          '#ax-people-nav [tabindex="0"]',
-          '#ax-people-scroll [tabindex="0"], #ax-people-search',
-          '#ax-people-details button:not([disabled]), #ax-people-details input, #ax-people-details a'
-        ];
-        const active = document.activeElement;
-        let cur = regions.findIndex(sel => {{ const r = document.querySelector(sel); return r && r.contains(active); }});
-        const n = regions.length;
-        for (let k = 1; k <= n; k++) {{
-          const i = (((cur < 0 ? 0 : cur) + {dir} * k) % n + n) % n;
-          const el = document.querySelector(targets[i]);
-          if (el) {{ el.focus(); break; }}
-        }}"#
-    ));
 }
 
 /// Drag handle between panes; also resizable with the arrow keys

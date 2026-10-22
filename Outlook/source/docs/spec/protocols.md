@@ -481,7 +481,8 @@ Implementation:
 | Call | Use |
 |---|---|
 | `GET /me?$select=id,displayName,mail,userPrincipalName` | Account identity (`mail` may be null for some MSAs; fall back to `userPrincipalName`) |
-| `GET /me/photo/$value` | Avatar (404 = none) |
+| `GET /me/photo` | The signed-in user's own photo, metadata: `@odata.mediaEtag`, `width`, `height`. 404 (any error code) or the 1×1 placeholder (`"id":"1x1"`, empty etag) = no photo |
+| `GET /me/photos/{n}x{n}/$value`, `GET /me/photo/$value` | Photo bytes for the account avatars (header, Account Manager, Settings › Accounts): the largest of 240 / 120 / 96 px that fits the photo, else (smaller photo, or 400 / 404 on the sized request: sizes are documented for Microsoft 365 only) the full photo. Kept only when the bytes are JPEG, PNG, GIF or WebP up to 1 MiB, as a `data:` URL in the store (`account_photos`, never backed up); a larger download stops at the limit (a declared larger `Content-Length` isn't read at all), and a photo that wasn't kept isn't downloaded again until its etag changes. Saved only for the account the check began with, never for a newer account that reused its id; removing an account stops its check. Delegated `User.Read`, already in the scopes; works for personal accounts |
 | `GET /me/mailboxSettings` (optional scope) | `timeZone`, `language`, `workingHours`, `automaticRepliesSetting` |
 | `GET /me/outlook/masterCategories` (optional scope) | Category names and preset colours |
 
@@ -646,6 +647,7 @@ user's To Do "Flagged email" setting is (unverified) — never create a duplicat
 | Calendar (each visible calendar) | calendarView delta on window | 2 min / 10 min (estimate) |
 | Contacts | delta | 30 min (estimate) |
 | To Do lists + tasks | delta | 2 min / 10 min (estimate) |
+| Own profile photo | right after sign-in / re-sign-in | at most every 6 h, from Quick and Full passes; the bytes only when the etag changed. A failed check (network, 5xx, 429, 401 / 403) keeps the stored photo, never fails the pass or changes the account's state, and is retried after 30 min. One check per account at a time; a sign-in during a check checks again after it |
 
 Order on first sign-in: identity → folders → Inbox first page (render ASAP) → calendar today ± 7 days →
 remaining Inbox window → To Do → contacts → other folders. Budget check: these cadences use well under

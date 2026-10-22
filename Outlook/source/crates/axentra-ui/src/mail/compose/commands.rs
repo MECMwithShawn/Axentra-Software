@@ -153,9 +153,11 @@ pub fn run(app: AppState, mut form: Form, id: &str) {
     }
 }
 
-/// Ctrl+S / Save draft: save now and say so.
+/// Ctrl+S / Save draft: save now (an address still being typed included)
+/// and say so.
 pub async fn save(app: AppState, form: Form) {
     actions::refresh_body(form).await;
+    super::recipients::commit_typed(form);
     if actions::save_now(app, form).is_some() {
         app.toast("Draft saved");
     } else {

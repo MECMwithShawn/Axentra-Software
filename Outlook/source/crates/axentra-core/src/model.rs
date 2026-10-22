@@ -76,6 +76,31 @@ pub struct Account {
     pub nickname: String,
 }
 
+/// The signed-in user's own profile photo for an account, as the sync
+/// engine last fetched it (Microsoft Graph `/me/photo`). Kept per account by
+/// the store (`account_photos`), removed with the account, never backed up.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountPhoto {
+    /// `@odata.mediaEtag` of the stored photo ("" when there is none).
+    #[serde(default)]
+    pub etag: String,
+    /// `data:image/<type>;base64,…`, or `None` when the account has no photo.
+    #[serde(default)]
+    pub data_url: Option<String>,
+    /// When the server was last asked successfully.
+    #[serde(default)]
+    pub checked_at: Option<DateTime<Utc>>,
+    /// When the last attempt failed (network, throttling, …); retried
+    /// sooner than a regular re-check.
+    #[serde(default)]
+    pub failed_at: Option<DateTime<Utc>>,
+    /// `@odata.mediaEtag` of a photo that was downloaded and not kept (too
+    /// large, not an image): it isn't downloaded again while the server
+    /// still has it.
+    #[serde(default)]
+    pub rejected_etag: String,
+}
+
 // ---------------------------------------------------------------- folders
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

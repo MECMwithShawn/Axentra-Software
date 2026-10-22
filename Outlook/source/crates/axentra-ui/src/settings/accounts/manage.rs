@@ -87,7 +87,7 @@ pub fn ManagePanel(account_id: AccountId, live_rev: u64, on_action: EventHandler
                 span { "Email accounts" }
             }
             div { class: "ax-acct-manage-head",
-                Avatar { name: account.display_name.clone(), email: account.email.clone(), size: 48 }
+                Avatar { name: account.display_name.clone(), email: account.email.clone(), size: 48, photo: app.account_photo(account_id) }
                 div { class: "ax-acct-manage-id",
                     div { class: "ax-acct-manage-name",
                         span { class: "ax-ellipsis", "{name}" }

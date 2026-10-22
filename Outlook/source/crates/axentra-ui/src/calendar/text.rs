@@ -24,19 +24,22 @@ pub fn short_date(d: NaiveDate) -> String {
 /// The peek card's "when" line:
 /// "Mon 10/19/2026 9:00 AM – 9:30 AM", "Mon 10/19/2026 (All day)",
 /// "Mon 10/19/2026 – Wed 10/21/2026", or with times on both ends when a
-/// timed event spans days.
+/// timed event spans days. Each end is kept on one line (no-break spaces),
+/// so a long line wraps after the dash, never inside "2:00 AM".
 pub fn when_text(occ: &Occurrence, h24: bool) -> String {
+    let keep = |s: String| s.replace(' ', "\u{a0}");
     let day = |d: NaiveDate| d.format("%a %-m/%-d/%Y").to_string();
+    let range = |a: String, b: String| format!("{}\u{a0}– {}", keep(a), keep(b));
     let sd = local_date(occ.start);
     if occ.event.all_day {
         let last = local_date(occ.end) - Duration::days(1);
-        if last <= sd { format!("{} (All day)", day(sd)) } else { format!("{} – {}", day(sd), day(last)) }
+        if last <= sd { keep(format!("{} (All day)", day(sd))) } else { range(day(sd), day(last)) }
     } else {
         let ed = local_date(occ.end - Duration::seconds(1)).max(sd);
         if ed == sd {
-            format!("{} {}", day(sd), time_range(occ.start, occ.end, h24))
+            range(format!("{} {}", day(sd), fmt::time(occ.start, h24)), fmt::time(occ.end, h24))
         } else {
-            format!("{} {} – {} {}", day(sd), fmt::time(occ.start, h24), day(local_date(occ.end)), fmt::time(occ.end, h24))
+            range(format!("{} {}", day(sd), fmt::time(occ.start, h24)), format!("{} {}", day(local_date(occ.end)), fmt::time(occ.end, h24)))
         }
     }
 }
@@ -271,13 +274,17 @@ mod tests {
             original_start: start,
             color: String::new(),
         };
+        let plain = |s: String| s.replace('\u{a0}', " ");
         let timed = occ(local_to_utc(day, t(9, 0)), local_to_utc(day, t(9, 30)), false);
-        assert_eq!(when_text(&timed, false), "Mon 10/19/2026 9:00 AM – 9:30 AM");
+        assert_eq!(plain(when_text(&timed, false)), "Mon 10/19/2026 9:00 AM – 9:30 AM");
         let one_day = occ(local_to_utc(day, t(0, 0)), local_to_utc(day + Duration::days(1), t(0, 0)), true);
-        assert_eq!(when_text(&one_day, false), "Mon 10/19/2026 (All day)");
+        assert_eq!(plain(when_text(&one_day, false)), "Mon 10/19/2026 (All day)");
         let three = occ(local_to_utc(day, t(0, 0)), local_to_utc(day + Duration::days(3), t(0, 0)), true);
-        assert_eq!(when_text(&three, false), "Mon 10/19/2026 – Wed 10/21/2026");
+        assert_eq!(plain(when_text(&three, false)), "Mon 10/19/2026 – Wed 10/21/2026");
         let overnight = occ(local_to_utc(day, t(21, 0)), local_to_utc(day + Duration::days(1), t(2, 0)), false);
-        assert_eq!(when_text(&overnight, false), "Mon 10/19/2026 9:00 PM – Tue 10/20/2026 2:00 AM");
+        assert_eq!(plain(when_text(&overnight, false)), "Mon 10/19/2026 9:00 PM – Tue 10/20/2026 2:00 AM");
+        // The only place the line may wrap is after the dash.
+        assert_eq!(when_text(&overnight, false).matches(' ').count(), 1);
+        assert!(when_text(&overnight, false).contains("2:00\u{a0}AM"));
     }
 }

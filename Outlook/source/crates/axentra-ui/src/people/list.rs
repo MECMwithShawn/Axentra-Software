@@ -448,7 +448,7 @@ fn empty_state(node: &Node, query: &str, count: usize) -> Option<EmptyCopy> {
         return None;
     }
     if !query.trim().is_empty() {
-        return Some((format!("No results for \"{}\"", query.trim()), "Check the spelling or try a different name.".into(), None));
+        return Some((format!("No results for \u{201c}{}\u{201d}", query.trim()), "Check the spelling or try a different name.".into(), None));
     }
     Some(match node {
         Node::AllContacts => ("No contacts yet".into(), "People you add will show up here.".into(), Some(("New contact", "new_contact"))),
@@ -667,6 +667,8 @@ fn ListRow(
             "aria-setsize": "{setsize}",
             "aria-posinset": "{pos}",
             tabindex: if tab_stop { "0" } else { "-1" },
+            // F6 into the list lands on its tab stop (dom.js `enter`).
+            "data-ax-default-focus": if tab_stop { "true" },
             style: "top:{top}px;height:{height}px",
             draggable: if suggested_addr.is_none() { "true" } else { "false" },
             onclick: move |e: MouseEvent| {

@@ -5,7 +5,8 @@ use dioxus::prelude::*;
 /// Normalise a key event to a chord string such as `"Ctrl+Shift+R"`,
 /// `"Delete"`, `"Ctrl+Enter"`, `"ArrowDown"`, `"F6"` or `"Shift+F10"`.
 /// Letters and digits come from the physical key code, so Shift+1 is
-/// `"Shift+1"` (not `"!"`), regardless of layout quirks.
+/// `"Shift+1"` (not `"!"`), regardless of layout quirks. Tab too: WebKitGTK
+/// reports Shift+Tab (GTK's ISO_Left_Tab) as key "Unidentified".
 pub fn chord(e: &KeyboardEvent) -> String {
     let m = e.modifiers();
     let code = format!("{:?}", e.code());
@@ -13,6 +14,8 @@ pub fn chord(e: &KeyboardEvent) -> String {
         letter.to_string()
     } else if let Some(digit) = code.strip_prefix("Digit") {
         digit.to_string()
+    } else if code == "Tab" {
+        code
     } else {
         match e.key() {
             Key::Character(c) if c == " " => "Space".to_string(),
@@ -32,6 +35,11 @@ pub fn chord(e: &KeyboardEvent) -> String {
     }
     out.push_str(&key);
     out
+}
+
+/// The Tab key, with or without Shift (see [`chord`] for WebKitGTK's Shift+Tab).
+pub fn is_tab(e: &KeyboardEvent) -> bool {
+    e.key() == Key::Tab || e.code() == Code::Tab
 }
 
 /// Chords that edit text. Inside a text field they belong to the field

@@ -16,6 +16,10 @@ tracing-subscriber.workspace = true
 axentra-core.workspace = true
 axentra-sync.workspace = true
 chrono.workspace = true
+# Single instance (instance.rs): the profile key's hash and the runtime
+# directory's ownership checks. Same versions as the rest of the tree.
+sha2 = "=0.10.9"
+libc = "0.2"
 
 # The tao window's GTK side, for the compositor's tiled states (titlebar.rs).
 # Same version as tao's own.

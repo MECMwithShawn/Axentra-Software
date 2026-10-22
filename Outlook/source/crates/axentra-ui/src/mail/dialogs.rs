@@ -128,7 +128,6 @@ fn EmptyFolderDialog(id: FolderId, permanent: bool) -> Element {
                     let n = records.len();
                     if n > 0 {
                         let undo = crate::state::UndoAction::Moves(records);
-                        ctx.push_undo(undo.clone());
                         app.toast_with_undo(format!("Deleted {}", items(n)), undo);
                     }
                     app.bump_mail();
@@ -411,7 +410,6 @@ fn SweepDialog(id: MessageId) -> Element {
                                     app.toast(text);
                                 } else {
                                     let undo = crate::state::UndoAction::Moves(records);
-                                    ctx.push_undo(undo.clone());
                                     app.toast_with_undo(text, undo);
                                 }
                                 app.bump_mail();
@@ -516,10 +514,9 @@ pub fn ignore_without_confirm() -> bool {
     store().kv_get(IGNORE_SKIP_KEY).ok().flatten().as_deref() == Some("1")
 }
 
-pub fn ignore_now(app: AppState, ctx: MailCtx, conversation: &str) {
+pub fn ignore_now(app: AppState, conversation: &str) {
     if let Some(records) = app.check(store().ignore_conversation(conversation)) {
         let undo = crate::state::UndoAction::Moves(records);
-        ctx.push_undo(undo.clone());
         app.toast_with_undo("Ignored the conversation", undo);
         app.bump_mail();
     }
@@ -542,7 +539,7 @@ fn IgnoreDialog(conversation: String) -> Element {
                     let _ = store().kv_set(IGNORE_SKIP_KEY, "1");
                 }
                 let ids: Vec<MessageId> = store().conversation(&conversation).unwrap_or_default().iter().map(|m| m.id).collect();
-                ignore_now(app, ctx, &conversation);
+                ignore_now(app, &conversation);
                 let m = model.read();
                 actions::select_after_removal(app, ctx, &m, &ids);
             },
@@ -635,7 +632,7 @@ fn NewCategoryDialog(ids: Vec<MessageId>) -> Element {
         }
         close(ctx);
         if !ids2.is_empty() {
-            actions::toggle_category(app, ctx, ids2, &n);
+            actions::toggle_category(app, ids2, &n);
         }
         app.bump_mail();
     };
@@ -855,7 +852,7 @@ fn DateDialog(ids: Vec<MessageId>, snooze: bool) -> Element {
             actions::snooze(app, ctx, &m, ids2, when);
         } else {
             close(ctx);
-            actions::flag(app, ctx, ids2, FlagStatus::Flagged, Some(d));
+            actions::flag(app, ids2, FlagStatus::Flagged, Some(d));
         }
     };
     rsx! {
@@ -1078,7 +1075,7 @@ fn ShortcutsDialog() -> Element {
             on_close: move |_| close(ctx),
             p { class: "ax-mail-dialog-note", if off { "Keyboard shortcuts are turned off. Navigation keys and Delete still work." } else { "Shortcut set: Outlook" } }
             TextField { value: q(), placeholder: "Search shortcuts", autofocus: true, oninput: move |v| q.set(v), onkeydown: typing(ctx) }
-            span { class: "ax-visually-hidden", role: "status", "{found} shortcuts found" }
+            span { class: "ax-visually-hidden", role: "status", if found == 1 { "1 shortcut found" } else { "{found} shortcuts found" } }
             div { class: "ax-mail-shortcuts ax-surface-fill",
                 for (section, rows) in SHORTCUTS.iter() {
                     {

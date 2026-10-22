@@ -12,9 +12,14 @@
 //! * `sync_folders`: per mail folder cursors (IMAP UIDVALIDITY / UIDNEXT /
 //!   MODSEQ, Graph delta links).
 //! * `sync_cursors`: other per-account cursors and flags.
+//! * `account_photos`: the signed-in user's own profile photo per account
+//!   ([`AccountPhoto`] JSON), shown on the account avatars. Server data: it
+//!   goes with the account and is never backed up.
 //!
 //! The snapshot types live in `axentra-sync`; these methods are generic over
 //! serde so the core crate doesn't depend on them.
+
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, params};
@@ -47,6 +52,9 @@ CREATE TABLE IF NOT EXISTS sync_cursors (
     key TEXT NOT NULL,
     value TEXT NOT NULL,
     PRIMARY KEY (account_id, key));
+CREATE TABLE IF NOT EXISTS account_photos (
+    account_id INTEGER PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+    json TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS messages_internet_id ON messages(account_id, internet_message_id);
 ";
 
@@ -259,6 +267,57 @@ impl Store {
             None => conn.execute("DELETE FROM sync_cursors WHERE account_id = ?1 AND key = ?2", params![account_id, key])?,
         };
         Ok(())
+    }
+
+    // ------------------------------------------------------------ account photos
+
+    /// An account's stored profile photo record (photo and check times).
+    pub fn account_photo(&self, account_id: AccountId) -> Result<Option<AccountPhoto>> {
+        let json: Option<String> = self
+            .conn()
+            .query_row("SELECT json FROM account_photos WHERE account_id = ?1", [account_id], |r| r.get(0))
+            .optional()?;
+        Ok(json.and_then(|j| serde_json::from_str(&j).ok()))
+    }
+
+    /// Save the photo record of `account` (as read when its check began).
+    /// Saves nothing, and returns `false`, when that account is gone: removed,
+    /// or replaced by a newer account that reused its id (`accounts.id` is a
+    /// plain rowid), which the creation time tells apart.
+    pub fn set_account_photo(&self, account: &Account, photo: &AccountPhoto) -> Result<bool> {
+        let json = serde_json::to_string(photo)?;
+        self.tx(|tx| {
+            let current = Self::get_doc_in::<Account>(tx, account.id)?;
+            if current.is_none_or(|a| a.created_at != account.created_at) {
+                return Ok(false);
+            }
+            tx.execute(
+                "INSERT INTO account_photos (account_id, json) VALUES (?1, ?2) ON CONFLICT(account_id) DO UPDATE SET json = excluded.json",
+                params![account.id, json],
+            )?;
+            Ok(true)
+        })
+    }
+
+    /// Forget an account's photo and when it was checked.
+    pub fn clear_account_photo(&self, account_id: AccountId) -> Result<()> {
+        self.conn().execute("DELETE FROM account_photos WHERE account_id = ?1", [account_id])?;
+        Ok(())
+    }
+
+    /// Every account that has a photo, as account id → `data:image/…` URL.
+    pub fn account_photos(&self) -> Result<HashMap<AccountId, String>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare_cached("SELECT account_id, json FROM account_photos")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, AccountId>(0)?, r.get::<_, String>(1)?)))?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (id, json) = row?;
+            if let Some(url) = serde_json::from_str::<AccountPhoto>(&json).ok().and_then(|p| p.data_url).filter(|u| u.starts_with("data:image/")) {
+                out.insert(id, url);
+            }
+        }
+        Ok(out)
     }
 
     /// Rows changed through this store since it was opened. The engine
@@ -600,6 +659,53 @@ mod tests {
         assert_eq!(store.conversation_for_subject(acct, "other", since).unwrap(), None);
         assert_eq!(normalize_subject("RE: Fwd: RE[2]:  Budget   Review"), "budget review");
         assert_eq!(normalize_subject("AW: WG: Hallo"), "hallo");
+    }
+
+    #[test]
+    fn account_photos_round_trip_and_go_with_the_account() {
+        let (store, a) = store_with_account();
+        let mut other = Account { kind: AccountKind::Microsoft, email: "b@x".into(), display_name: "B".into(), ..Default::default() };
+        let b = store.add_account(&mut other).unwrap();
+        let (acct_a, acct_b) = (store.account(a).unwrap().unwrap(), store.account(b).unwrap().unwrap());
+        assert_eq!(store.account_photo(a).unwrap(), None);
+        assert!(store.account_photos().unwrap().is_empty());
+
+        let photo = AccountPhoto { etag: "E1".into(), data_url: Some("data:image/png;base64,iVBORw0K".into()), checked_at: Some(Utc::now()), ..Default::default() };
+        assert!(store.set_account_photo(&acct_a, &photo).unwrap());
+        assert_eq!(store.account_photo(a).unwrap().as_ref(), Some(&photo));
+        // Checked, no photo: a record for the throttle, nothing to show.
+        store.set_account_photo(&acct_b, &AccountPhoto { checked_at: Some(Utc::now()), ..Default::default() }).unwrap();
+        let all = store.account_photos().unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[&a], "data:image/png;base64,iVBORw0K");
+
+        // Replacing, then a value that isn't an image URL never reaches the avatars.
+        store.set_account_photo(&acct_a, &AccountPhoto { etag: "E2".into(), data_url: Some("data:image/jpeg;base64,/9j/".into()), ..photo.clone() }).unwrap();
+        assert_eq!(store.account_photos().unwrap()[&a], "data:image/jpeg;base64,/9j/");
+        store.set_account_photo(&acct_b, &AccountPhoto { data_url: Some("https://example.com/me.png".into()), ..Default::default() }).unwrap();
+        assert!(!store.account_photos().unwrap().contains_key(&b));
+
+        store.clear_account_photo(b).unwrap();
+        assert_eq!(store.account_photo(b).unwrap(), None);
+
+        // Removing the account removes its photo; a late write for it is a no-op.
+        store.remove_account(a).unwrap();
+        assert_eq!(store.account_photo(a).unwrap(), None);
+        assert!(!store.set_account_photo(&acct_a, &photo).unwrap());
+        assert_eq!(store.account_photo(a).unwrap(), None);
+        assert!(store.account_photos().unwrap().is_empty());
+
+        // A newer account that reuses the id of a removed one never gets the
+        // removed account's photo, only its own.
+        store.remove_account(b).unwrap();
+        let mut newer = Account { kind: AccountKind::Microsoft, email: "c@x".into(), display_name: "C".into(), ..Default::default() };
+        let c = store.add_account(&mut newer).unwrap();
+        assert_eq!(c, a, "SQLite reuses the ids of removed accounts");
+        assert!(!store.set_account_photo(&acct_a, &photo).unwrap());
+        assert!(!store.set_account_photo(&acct_b, &photo).unwrap());
+        assert_eq!(store.account_photo(c).unwrap(), None);
+        assert!(store.set_account_photo(&store.account(c).unwrap().unwrap(), &photo).unwrap());
+        assert_eq!(store.account_photos().unwrap()[&c], "data:image/png;base64,iVBORw0K");
     }
 
     #[test]

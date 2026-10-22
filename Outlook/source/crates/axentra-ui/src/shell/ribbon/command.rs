@@ -75,6 +75,7 @@ pub fn RibbonButton(
     let size = look.icon_size();
     let label = look.shows_label(&cmd).then(|| cmd.label.clone());
     let tabindex = if tab_stop { "0" } else { "-1" };
+    let keep_focus = cmd.keep_focus;
     rsx! {
         if cmd.split {
             div {
@@ -93,6 +94,7 @@ pub fn RibbonButton(
                     "data-ax-item": "true",
                     "data-ax-keytip": if keytip.is_empty() { None } else { Some(keytip.clone()) },
                     tabindex,
+                    onmousedown: move |e: MouseEvent| if keep_focus { e.prevent_default() },
                     onclick: {
                         let id = cmd.id.clone();
                         move |_| if !disabled { on_command.call(id.clone()) }
@@ -145,6 +147,7 @@ pub fn RibbonButton(
                 "data-ax-keytip": if keytip.is_empty() { None } else { Some(keytip.clone()) },
                 tabindex,
                 onmounted: move |e| anchor.set(Some(e.data())),
+                onmousedown: move |e: MouseEvent| if keep_focus { e.prevent_default() },
                 onclick: {
                     let id = cmd.id.clone();
                     move |_| {
