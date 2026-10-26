@@ -1,0 +1,7 @@
+{
+  "id": "notepad",
+  "name": "Axentra Notepad",
+  "tagline": "Text and code editing with tabs, highlighting and find in files",
+  "source": { "version_file": "Cargo.toml" },
+  "dist": { "path": "/home/shawn/Documents/Codex/2026-10-20/test-6/outputs/notepad-linux", "prefix": "axentra-notepad_", "suffix": "_amd64.deb" }
+}

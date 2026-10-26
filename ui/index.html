@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Axentra Notepad</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="titlebar" id="titlebar">
+  <img src="logo.png" alt="" class="logo" draggable="false">
+  <nav class="menubar" id="menubar" role="menubar" aria-label="Main menu"></nav>
+  <div class="grow dragZone"></div>
+  <button class="commandCenter" id="commandCenter" title="Search files by name (Ctrl+P), commands (Ctrl+Shift+P)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+    <span id="ccText">Axentra Notepad</span>
+  </button>
+  <div class="grow dragZone"></div>
+  <div class="layoutButtons" role="group" aria-label="Layout">
+    <button class="tb" id="toggleSidebarBtn" title="Toggle Side Bar (Ctrl+B)"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM9 5v14"/></svg></button>
+    <button class="tb" id="layoutBtn" title="Layout: Notepad, Notepad++ or Code"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M10 9v10"/></svg></button>
+  </div>
+  <div class="windowControls" id="windowControls" role="group" aria-label="Window controls" hidden>
+    <button class="windowButton" id="windowMinimize" title="Minimize" aria-label="Minimize"><svg viewBox="0 0 16 16"><path d="M3 8h10"/></svg></button>
+    <button class="windowButton" id="windowMaximize" title="Maximize" aria-label="Maximize"><svg viewBox="0 0 16 16"><path id="windowMaximizeIcon" d="M3 3h10v10H3z"/></svg></button>
+    <button class="windowButton windowClose" id="windowClose" title="Close" aria-label="Close"><svg viewBox="0 0 16 16"><path d="m3.5 3.5 9 9m0-9-9 9"/></svg></button>
+  </div>
+</header>
+
+<div class="toolbar" id="toolbar" role="toolbar" aria-label="Toolbar"></div>
+
+<div class="workbench" id="workbench">
+  <nav class="activitybar" id="activitybar" aria-label="Views">
+    <button class="ab" data-view="explorer" title="Explorer (Ctrl+Shift+E)"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5"/></svg></button>
+    <button class="ab" data-view="search" title="Search (Ctrl+Shift+F)"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button>
+    <button class="ab" data-view="bookmarks" title="Bookmarks"><svg viewBox="0 0 24 24"><path d="M7 3h10v18l-5-4-5 4z"/></svg></button>
+    <div class="grow"></div>
+    <button class="ab" id="abSettings" title="Settings (Ctrl+,)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></button>
+  </nav>
+
+  <aside class="sidebar" id="sidebar">
+    <section class="view" id="viewExplorer" data-view="explorer">
+      <div class="viewHead"><span>Explorer</span><span class="grow"></span>
+        <button class="tb small" id="exNewFile" title="New File"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14h6"/></svg></button>
+        <button class="tb small" id="exNewFolder" title="New Folder"><svg viewBox="0 0 24 24"><path d="M3 7V5h7l2 2h9v12H3zM12 11v6M9 14h6"/></svg></button>
+        <button class="tb small" id="exRefresh" title="Refresh Explorer"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+        <button class="tb small" id="exCollapse" title="Collapse Folders"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM9 12h6"/></svg></button>
+      </div>
+      <div class="section" id="openEditorsSection">
+        <button class="sectionHead" id="openEditorsHead"><svg class="chev" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>Open Editors</button>
+        <div class="list" id="openEditors"></div>
+      </div>
+      <div class="section grow" id="folderSection">
+        <button class="sectionHead" id="folderHead"><svg class="chev" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg><span id="folderName">No Folder Opened</span></button>
+        <div class="tree" id="tree" tabindex="0"></div>
+      </div>
+    </section>
+    <section class="view" id="viewSearch" data-view="search" hidden>
+      <div class="viewHead"><span>Search</span><span class="grow"></span>
+        <button class="tb small" id="srRefresh" title="Refresh"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+        <button class="tb small" id="srClear" title="Clear Search Results"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="tb small" id="srCollapse" title="Collapse All"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5zM9 12h6"/></svg></button>
+      </div>
+      <div class="searchForm">
+        <div class="searchRow">
+          <button class="tb small" id="srToggleReplace" title="Toggle Replace"><svg viewBox="0 0 16 16"><path id="srToggleIcon" d="m6 4 4 4-4 4"/></svg></button>
+          <div class="field">
+            <input id="srQuery" placeholder="Search" spellcheck="false" autocomplete="off">
+            <button class="opt" id="srCase" title="Match Case (Alt+C)">Aa</button>
+            <button class="opt" id="srWord" title="Match Whole Word (Alt+W)"><u>ab</u></button>
+            <button class="opt" id="srRegex" title="Use Regular Expression (Alt+R)">.*</button>
+          </div>
+        </div>
+        <div class="searchRow" id="srReplaceRow" hidden>
+          <span class="tbSpacer"></span>
+          <div class="field"><input id="srReplace" placeholder="Replace" spellcheck="false" autocomplete="off"></div>
+          <button class="tb small" id="srReplaceAll" title="Replace All (Ctrl+Alt+Enter)"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h9M4 17h6M15 14l3 3 4-5"/></svg></button>
+        </div>
+        <div class="searchRow"><span class="tbSpacer"></span><div class="field plain"><input id="srInclude" placeholder="Files to include (e.g. *.rs, src/**)" spellcheck="false"></div></div>
+        <div class="searchRow"><span class="tbSpacer"></span><div class="field plain"><input id="srExclude" placeholder="Files to exclude" spellcheck="false"></div></div>
+        <div class="srSummary" id="srSummary"></div>
+      </div>
+      <div class="results" id="srResults"></div>
+    </section>
+    <section class="view" id="viewBookmarks" data-view="bookmarks" hidden>
+      <div class="viewHead"><span>Bookmarks</span><span class="grow"></span>
+        <button class="tb small" id="bmClear" title="Clear Bookmarks in All Tabs"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="results" id="bmList"></div>
+    </section>
+  </aside>
+  <div class="sash" id="sash"></div>
+
+  <main class="editorArea" id="editorArea">
+    <div class="tabbar" id="tabbar">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <button class="tb newTab" id="newTabBtn" title="New Tab (Ctrl+N)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <div class="grow" id="tabFill"></div>
+    </div>
+    <div class="crumbs" id="crumbs"></div>
+    <div class="banner" id="banner" hidden></div>
+    <div class="editor" id="editor" hidden>
+      <div class="scroller">
+        <div class="sizer">
+          <div class="gutter"></div>
+          <div class="content">
+            <div class="deco"></div>
+            <div class="text"></div>
+            <div class="cursors"></div>
+            <textarea class="input" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Editor" wrap="off"></textarea>
+          </div>
+        </div>
+      </div>
+      <canvas class="minimap" aria-hidden="true"></canvas>
+      <div class="find" id="find" hidden>
+        <button class="tb small" id="findToggle" title="Toggle Replace"><svg viewBox="0 0 16 16"><path id="findToggleIcon" d="m6 4 4 4-4 4"/></svg></button>
+        <div class="findRows">
+          <div class="findRow">
+            <div class="field">
+              <input id="findInput" placeholder="Find" spellcheck="false" autocomplete="off">
+              <button class="opt" id="findCase" title="Match Case (Alt+C)">Aa</button>
+              <button class="opt" id="findWord" title="Match Whole Word (Alt+W)"><u>ab</u></button>
+              <button class="opt" id="findRegex" title="Use Regular Expression (Alt+R)">.*</button>
+            </div>
+            <span class="findCount" id="findCount">No results</span>
+            <button class="tb small" id="findPrev" title="Previous Match (Shift+Enter)"><svg viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></svg></button>
+            <button class="tb small" id="findNext" title="Next Match (Enter)"><svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg></button>
+            <button class="tb small" id="findInSel" title="Find in Selection (Alt+L)"><svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h12"/></svg></button>
+            <button class="tb small" id="findAll" title="Find All in Current Document (lists results in Search)"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg></button>
+            <button class="tb small" id="findClose" title="Close (Escape)"><svg viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></svg></button>
+          </div>
+          <div class="findRow" id="replaceRow" hidden>
+            <div class="field"><input id="replaceInput" placeholder="Replace" spellcheck="false" autocomplete="off"></div>
+            <button class="tb small" id="replaceOne" title="Replace (Enter)"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h9M15 14l3 3 4-5"/></svg></button>
+            <button class="tb small" id="replaceAllBtn" title="Replace All (Ctrl+Alt+Enter)"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 12h9M4 17h6M15 14l3 3 4-5"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="welcome" id="welcome" hidden></div>
+  </main>
+</div>
+
+<footer class="statusbar" id="statusbar">
+  <div class="sbLeft" id="sbLeft"></div>
+  <div class="grow"></div>
+  <div class="sbRight" id="sbRight"></div>
+</footer>
+
+<div class="menu" id="menu" hidden role="menu"></div>
+<div class="quick" id="quick" hidden>
+  <input id="quickInput" spellcheck="false" autocomplete="off">
+  <div class="quickList" id="quickList" role="listbox"></div>
+</div>
+<div class="modalBack" id="modal" hidden><div class="dialog" id="dialog" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<script src="core.js"></script>
+<script src="lang.js"></script>
+<script src="editor.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
