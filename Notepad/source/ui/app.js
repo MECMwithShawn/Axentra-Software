@@ -3163,7 +3163,7 @@ function showSummary() {
   return alertBox("Summary", el("div", { class: "stats" }, ...rows.flatMap(([a, v]) => [el("span", {}, a), el("span", {}, v)])));
 }
 function showAbout() {
-  return alertBox(APP, el("div", {}, el("p", {}, `Version ${S.version || "dev"}. Part of the Axentra suite.`), el("p", {}, `A text and code editor modelled on Windows Notepad, Notepad++ and Visual Studio Code: tabs that survive restarts, syntax highlighting for ${LG.languages.length - 1} languages, multiple cursors, column selection, folding, bookmarks, macros, find and replace across files, and 26 text encodings.`)));
+  return alertBox(APP, el("div", {}, el("p", {}, `Version ${S.version || "dev"}. Part of the Axentra suite.`), el("p", {}, `A text and code editor modelled on Windows Notepad, Notepad++ and Visual Studio Code: tabs that survive restarts, syntax highlighting for ${LG.languages.length - 1} languages, multiple cursors, column selection, folding, bookmarks, macros, find and replace across files, and 25 text encodings.`)));
 }
 function printTab() {
   const t = S.active;
