@@ -47,6 +47,11 @@ class EditorView {
     this.sizeKey = "";
     this.bind();
     new ResizeObserver(() => this.schedule()).observe(this.scroller);
+    // The font can finish loading after the first measurement; measure again once it has.
+    if (document.fonts) {
+      document.fonts.ready.then(() => this.remeasure());
+      document.fonts.addEventListener("loadingdone", () => this.remeasure());
+    }
   }
 
   // ---------------------------------------------------------------- setup
@@ -74,6 +79,42 @@ class EditorView {
     probe.remove();
     this.cw = w > 0 ? w : this.opts.fontSize * 0.6;
     this.root.style.setProperty("--cw", this.cw + "px");
+    this.checkedWidth = false;
+  }
+  /** Measures the character width again and redraws if it changed. */
+  remeasure() {
+    const old = this.cw;
+    this.measure();
+    if (Math.abs(old - this.cw) > 0.001) this.widthChanged();
+  }
+  widthChanged() {
+    this.root.style.setProperty("--cw", this.cw + "px");
+    this.htmlCache.clear();
+    this.rows.forEach((el) => (el._html = null));
+    this.sizeKey = "";
+    this.schedule();
+  }
+  /**
+   * Checks one drawn plain-ASCII row against the width the layout assumes. If the font arrived
+   * after measuring, or the renderer rounds glyph advances, positions would drift; adopt the
+   * real width instead.
+   */
+  checkWidth() {
+    if (this.checkedWidth || !this.tab) return;
+    const lines = this.tab.buf.doc.lines;
+    for (const [, el] of this.rows) {
+      const v = el._v;
+      if (!v || v.a !== 0 || el._left !== PAD + "px") continue;
+      const text = lines[v.line];
+      if (!text || text.length < 16 || v.b !== text.length || !PLAIN_RUN.test(text.replace(/ /g, "!")) || el.querySelector(".eolMark,.foldMark,.ws")) continue;
+      const w = el.getBoundingClientRect().width;
+      this.checkedWidth = true;
+      if (w > 0 && Math.abs(w - text.length * this.cw) > 0.75) {
+        this.cw = w / text.length;
+        this.widthChanged();
+      }
+      return;
+    }
   }
   setTab(tab) {
     if (this.tab === tab) return;
@@ -556,6 +597,7 @@ class EditorView {
         el.innerHTML = html;
         el._html = html;
       }
+      el._v = v;
       const left = PAD + shift + "px";
       if (el._left !== left) {
         el.style.left = left;
@@ -568,6 +610,7 @@ class EditorView {
         this.rows.delete(row);
       }
     }
+    this.checkWidth();
   }
 
   rowHtml(v, text, deadline) {

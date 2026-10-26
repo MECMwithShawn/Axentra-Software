@@ -31,12 +31,12 @@ Every command is in the menus and the command palette, and Help › Keyboard Sho
 
 ```sh
 cargo test                                    # Rust tests, plus tests/*_test.js under gjs
-out=/home/shawn/Documents/Codex/2026-10-20/test-6/outputs/notepad-linux
+out=dist
 python3 packaging/linux/package.py --output "$out"   # runs cargo build --release --locked first
 sudo apt install "$out"/axentra-notepad_<version>-1_amd64.deb
 ```
 
-`$out` is where the packages go on this machine: it's the folder Axentra Command checks for new releases, named by `dist.path` in `axentra.app.json` and in the user manifest (`~/.local/share/axentra/command/apps/notepad.json`). After changing the version in `Cargo.toml`, build once without `--locked` so `Cargo.lock` takes the new version.
+Axentra Command looks for new packages in the folder named by `dist.path` in `axentra.app.json` (`dist/` next to the source), or in your user manifest (`~/.local/share/axentra/command/apps/notepad.json`) if that names another folder. After changing the version in `Cargo.toml`, build once without `--locked` so `Cargo.lock` takes the new version.
 
 The package installs `/opt/axentra/notepad/AxentraNotepad`, `/usr/bin/axentra-notepad`, the launcher (registered for plain text, Markdown and common source files, with a *New window* action) and the suite icons. It also installs `/usr/share/axentra/command/apps/notepad.json`, which puts the app on Axentra Command's board. `package.py` doesn't trust an existing binary: it runs `cargo build --release --locked` itself, in `CARGO_TARGET_DIR` if that's set and `target/` otherwise, and packages the binary cargo reports. Cargo decides what to rebuild, for anything the binary is built from, including `ui/` (through `build.rs`) and `Cargo.toml` changes such as `[profile.release]` settings, so the package holds the binary `cargo build` makes from the current sources. Cargo judges freshness by file times, so a file restored with an older time (`cp -a`, `rsync -a`, `tar -x`) isn't picked up: `touch` it, or run `cargo clean`, before packaging. After copying the binary it asks cargo once more, and if a file was saved during the build (so cargo rebuilds), it packages the new binary instead. It refuses a checkout where `ui/` is incomplete, since `build.rs` only warns about that. Because of `--locked`, it also stops when `Cargo.lock` doesn't match `Cargo.toml`, as it won't right after a version change. The icons are packaged straight from `assets/`. `Installed-Size` is counted the way `dpkg-gencontrol` counts it. `package.py` also writes `SHA256SUMS.txt`, with a line for every `.deb` in the output folder.
 
