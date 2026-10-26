@@ -1,0 +1,19 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Axentra Notepad
+GenericName=Text Editor
+Comment=Edit text and code with tabs, syntax highlighting and find in files
+Exec=/opt/axentra/notepad/AxentraNotepad %F
+Icon=axentra-notepad
+Terminal=false
+Categories=Utility;TextEditor;
+Keywords=notepad;text;editor;code;notepad++;tabs;syntax;highlight;find;replace;txt;
+MimeType=text/plain;text/markdown;text/x-markdown;text/html;text/css;text/csv;text/xml;application/xml;application/json;application/javascript;text/javascript;application/x-shellscript;text/x-python;text/x-python3;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-csharp;text/x-java;text/x-go;text/rust;text/x-php;application/x-php;text/x-ruby;text/x-lua;text/x-sql;application/sql;application/x-yaml;application/toml;text/x-makefile;text/x-cmake;text/x-log;text/x-diff;text/x-patch;application/x-perl;text/x-tex;application/x-desktop;text/x-kotlin;text/x-scala;
+StartupNotify=true
+StartupWMClass=Axentra-notepad
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=New window
+Exec=/opt/axentra/notepad/AxentraNotepad --new-window

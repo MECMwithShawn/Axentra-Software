@@ -1,0 +1,19 @@
+{
+  "id": "notepad",
+  "name": "Axentra Notepad",
+  "tagline": "Text and code editing with tabs, highlighting and find in files",
+  "kind": "desktop",
+  "order": 46,
+  "accent": "#C8D4E8",
+  "icon": "/usr/share/icons/hicolor/256x256/apps/axentra-notepad.png",
+  "install": {
+    "uninstall_key": "axentra-notepad",
+    "exe": "/opt/axentra/notepad/AxentraNotepad"
+  },
+  "launch": {
+    "exe": "/opt/axentra/notepad/AxentraNotepad"
+  },
+  "process": [
+    "AxentraNotepad"
+  ]
+}
