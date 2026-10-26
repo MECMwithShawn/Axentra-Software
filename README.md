@@ -19,6 +19,7 @@ screenshots, release notes and security scan results. Installers and extension p
 | [USB](USB/) | 0.1.1 Windows preview | None | Source / packaging included; hardware validation pending |
 | [iMessage](iMessage/) | Service 0.1.0 / GTK frontend | None | [Local preview; Rust frontend migration pending](iMessage/) |
 | [OneDrive](OneDrive/) | 0.1.0 Linux preview | None | [Installed preview](OneDrive/LINUX.md); source included |
+| [Notepad](Notepad/) | 0.1.4 Linux preview | None | [Installed preview](Notepad/LINUX.md); source included |
 
 Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md) and [Linux / Zorin support](docs/LINUX.md).
 

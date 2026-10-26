@@ -15,6 +15,7 @@ All nine applications have native Linux development previews installed and launc
 | [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
 | [Archive](../Archive/) | 0.1.4 | None | [Installed preview](../Archive/LINUX.md) |
 | [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](../Edge-Extension-Suite/Horizon/LINUX.md) |
+| [Notepad](../Notepad/) | 0.1.4 | None | [Installed preview](../Notepad/LINUX.md) |
 
 ## Axentra OneDrive (added 2026-10-19)
 
@@ -23,6 +24,10 @@ All nine applications have native Linux development previews installed and launc
 ## Axentra Outlook (added 2026-10-19)
 
 [Axentra Outlook](../Outlook/) 0.1.4 is a Linux-native mail, calendar, people and to-do client in the new Outlook layout. Its source is published in [Outlook/source](../Outlook/source/), and its `.deb` (installing to `/opt/axentra/outlook` with a Command manifest) is a public GitHub pre-release, `outlook-v0.1.4` (earlier pre-releases remain available). 0.1.1 added encrypted monthly backups to the OneDrive folder; 0.1.2 made the blue header the window title bar; 0.1.3 made Settings and the other larger dialogs resizable with remembered sizes and made the compose and read pop-out windows movable; 0.1.4 shows a Microsoft account's own profile photo instead of initials on the account button, in the account menu and in Settings › Accounts. 452 Rust tests passed; Microsoft Graph sign-in and sync were checked with a real Outlook.com account on a test build, and the account photo with the user's own Outlook.com account on a debug build. Limits are in its [Linux page](../Outlook/LINUX.md).
+
+## Axentra Notepad (added 2026-10-21)
+
+[Axentra Notepad](../Notepad/) 0.1.4 is a Linux text and code editor with Windows Notepad, Notepad++ and VS Code layouts: tabs and sessions, highlighting for 46 languages, multiple cursors, find and replace across folders and 25 encodings. Its source is published in [Notepad/source](../Notepad/source/); there's no published package yet. 0.1.3 made closing reliable (a native save prompt and an exit watchdog) and turned off GPU rendering after WebKit's GPU renderer froze the window on a hybrid Intel/NVIDIA laptop; 0.1.4 keeps highlights aligned when the font loads late. 21 Rust tests and 715 editor and highlighter tests passed. Limits are in its [Linux page](../Notepad/LINUX.md).
 
 ## Installation locations
 
