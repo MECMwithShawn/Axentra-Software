@@ -239,6 +239,42 @@ pub fn frame_state(maximized: bool, tiled: TiledEdges) -> &'static str {
     }
 }
 
+/// Keeps the window below other windows (Settings › General › Pin to
+/// desktop). Provided by the desktop host in both title-bar modes; absent in
+/// the browser preview.
+#[derive(Clone, Copy)]
+pub struct WindowPin {
+    /// Apply the setting to the window (and remember it for the next start).
+    pub set: Callback<bool>,
+    /// On Wayland a change only takes effect after a restart.
+    pub needs_restart: bool,
+    /// Close this copy and open it again.
+    pub restart: Callback,
+    /// Pinned: go back behind every other window (after a click raised it).
+    pub send_back: Callback,
+}
+
+/// Pinned, the window is the desktop: other windows are in front of it or
+/// minimised, never behind it. A click in the page (the window manager
+/// raises the window for it) sends it straight back.
+const SEND_BACK_JS: &str = "document.addEventListener('pointerdown', () => dioxus.send(1), true); await new Promise(() => {});";
+
+pub fn use_send_back_on_click(pin: Option<WindowPin>, desktop_view: bool) {
+    use_future(move || async move {
+        let Some(pin) = pin.filter(|_| desktop_view) else { return };
+        let mut ev = document::eval(SEND_BACK_JS);
+        while ev.recv::<u8>().await.is_ok() {
+            pin.send_back.call(());
+        }
+    });
+}
+
+/// The glass setting as a CSS percentage, or `None` when solid.
+pub fn glass_percent(setting: u32) -> Option<u32> {
+    let g = setting.min(axentra_core::MAX_WINDOW_GLASS);
+    (g > 0).then_some(g)
+}
+
 /// Native window operations, provided as context by the host (see the
 /// module docs). All fields are cheap handles, so the struct is `Copy`.
 #[derive(Clone, Copy, PartialEq)]

@@ -156,6 +156,21 @@ fn HeaderButton(
     }
 }
 
+/// The desktop view's only chrome (Pin to desktop): a small toolbar in the
+/// top-right corner with Sync, Settings and Unpin, which takes effect at once.
+#[component]
+pub fn DesktopBar() -> Element {
+    let app = use_app();
+    let shell = use_shell();
+    rsx! {
+        div { class: "ax-desktop-bar", role: "toolbar", "aria-label": "Desktop view",
+            HeaderButton { icon: "arrow_sync", title: "Sync", onclick: move |_| run_command(app, shell, GlobalCmd::Sync) }
+            HeaderButton { icon: "settings", title: "Settings", onclick: move |_| run_command(app, shell, GlobalCmd::Settings) }
+            HeaderButton { icon: "pin_off", title: "Unpin from desktop", onclick: move |_| app.update_settings(|s| s.pin_to_desktop = false) }
+        }
+    }
+}
+
 /// "More options" (…): secondary header actions (§3.1 #10).
 #[component]
 fn MoreMenu() -> Element {

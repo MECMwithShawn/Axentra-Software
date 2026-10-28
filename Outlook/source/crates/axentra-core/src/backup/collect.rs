@@ -322,29 +322,26 @@ fn account_data(store: &Store, account: &Account, all_kv: &[(String, String)]) -
 
 /// Gather the backup document. `now` becomes `manifest.created_at`.
 pub fn collect(store: &Store, now: DateTime<Utc>) -> Result<Payload> {
-    let (recent_addresses, blocked_senders, safe_senders, inference_overrides, all_kv) = {
+    let (recent_addresses, image_senders, inference_overrides, all_kv) = {
         let conn = store.conn();
         let recent = rows(&conn, "SELECT address, name, last_used, use_count FROM recent_addresses ORDER BY address", [], |r| {
             Ok(RecentAddress { address: r.get(0)?, name: r.get(1)?, last_used: r.get(2)?, use_count: r.get(3)? })
         })?;
-        let blocked = rows(&conn, "SELECT address, name, added_at FROM mail_blocked_senders ORDER BY address", [], |r| {
-            Ok(BlockedSender { address: r.get(0)?, name: r.get(1)?, added_at: r.get(2)? })
-        })?;
-        let safe = rows(&conn, "SELECT address, added_at FROM mail_safe_senders ORDER BY address", [], |r| {
-            Ok(SafeSender { address: r.get(0)?, added_at: r.get(1)? })
+        let images = rows(&conn, "SELECT address, added_at, subdomains FROM junk_image_senders ORDER BY address", [], |r| {
+            Ok(SafeSender { address: r.get(0)?, added_at: r.get(1)?, subdomains: r.get(2)? })
         })?;
         let overrides = rows(&conn, "SELECT address, inference FROM mail_inference_overrides ORDER BY address", [], |r| {
             Ok(InferenceOverride { address: r.get(0)?, inference: r.get(1)? })
         })?;
         let kv = rows(&conn, "SELECT key, value FROM kv ORDER BY key", params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-        (recent, blocked, safe, overrides, kv)
+        (recent, images, overrides, kv)
     };
     let mut payload = Payload {
         settings: store.settings(),
         categories: store.categories()?,
         recent_addresses,
-        blocked_senders,
-        safe_senders,
+        sender_rules: store.sender_rules()?,
+        image_senders,
         inference_overrides,
         kv: all_kv.iter().filter(|(k, _)| kv_allowed(k)).map(|(k, v)| KvEntry { key: k.clone(), value: v.clone() }).collect(),
         ..Default::default()

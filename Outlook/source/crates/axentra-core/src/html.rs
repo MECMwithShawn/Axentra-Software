@@ -1,5 +1,10 @@
 //! Email HTML handling.
 
+pub mod color;
+mod dark;
+
+pub use dark::{adapt_for_dark, light_scheme_only};
+
 use std::collections::HashSet;
 
 /// Result of sanitising an email body for display.
@@ -24,6 +29,8 @@ pub fn sanitize_email_html(raw: &str, allow_remote: bool) -> SanitizedHtml {
         .add_generic_attributes(["style", "class", "align", "valign", "width", "height", "bgcolor", "color", "dir"])
         .add_tags(["font", "center", "style"])
         .rm_clean_content_tags(["style"])
+        // The document <title> is metadata, not body text.
+        .add_clean_content_tags(["title"])
         .add_tag_attributes("font", ["face", "size", "color"])
         .add_tag_attributes("table", ["border", "cellpadding", "cellspacing"])
         .add_tag_attributes("td", ["colspan", "rowspan", "nowrap"])
@@ -104,6 +111,13 @@ pub fn html_to_text(html: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_document_title_is_not_body_text() {
+        let s = sanitize_email_html("<html><head><title>Your receipt</title></head><body><p>Thanks</p></body></html>", false);
+        assert!(!s.html.contains("Your receipt"), "{}", s.html);
+        assert!(s.html.contains("Thanks"));
+    }
 
     #[test]
     fn strips_scripts_and_blocks_remote_images() {

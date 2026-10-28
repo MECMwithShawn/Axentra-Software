@@ -4,7 +4,7 @@ use axentra_core::*;
 use dioxus::prelude::*;
 
 use super::controls::{LinkButton, Note, Row, Section, Unavailable, use_settings};
-use crate::kit::{Button, Checkbox, Icon, RadioGroup, RadioOption, Select, Switch};
+use crate::kit::{Button, Checkbox, Icon, RadioGroup, RadioOption, Select, Slider, Switch};
 use crate::shell::{keymap, search, theme, use_shell};
 use crate::state::{store, sync, use_app};
 
@@ -100,6 +100,7 @@ pub fn AppearancePage() -> Element {
     let s = ctx.get();
     let current_theme = theme::color_theme(&s.color_theme).id;
     let dark_in_effect = s.theme != ThemeMode::Light;
+    let pin = try_use_context::<crate::shell::window::WindowPin>();
     rsx! {
         Section { title: "Theme", description: "Colour themes change the header, buttons and highlights.",
             div { class: "ax-theme-grid", role: "radiogroup", "aria-label": "Theme", "data-ax-roving": "grid", "data-ax-cols": "auto",
@@ -199,6 +200,35 @@ pub fn AppearancePage() -> Element {
                 onchange: move |v| ctx.edit(|s| s.system_title_bar = v),
             }
         }
+        Section { title: "Window",
+            if s.system_title_bar {
+                Note { text: "Glass needs Axentra's own title bar: turn off \"Use the system title bar\" above to use it." }
+            } else {
+                Row { label: "Glass", description: "Lets your desktop show through the window's backgrounds. Text, icons, messages, menus and dialogs stay solid.",
+                    Slider {
+                        value: s.window_glass.min(MAX_WINDOW_GLASS),
+                        min: 0,
+                        max: MAX_WINDOW_GLASS,
+                        step: 5,
+                        label: "Glass",
+                        value_text: glass_text(s.window_glass),
+                        onchange: move |v| ctx.edit(|s| s.window_glass = v),
+                    }
+                }
+            }
+            Switch {
+                label: "Pin to desktop",
+                checked: s.pin_to_desktop,
+                onchange: move |v| ctx.edit(|s| s.pin_to_desktop = v),
+            }
+            Note { text: "Keeps Axentra Outlook below your other windows, like part of the desktop, in a simpler layout that shows only your inbox. Open it from Axentra Command, the app menu or the taskbar to bring it forward." }
+            if let Some(pin) = pin.filter(|p| p.needs_restart && s.pin_to_desktop) {
+                div { style: "display:flex;align-items:center;gap:12px;flex-wrap:wrap",
+                    Note { text: "On Wayland, pinning starts when Axentra Outlook restarts. Save, then restart." }
+                    Button { label: "Restart now", onclick: move |_| pin.restart.call(()) }
+                }
+            }
+        }
         Section { title: "Accessibility",
             Row { label: "High contrast", description: "Black-and-white colours with strong outlines.",
                 Select {
@@ -209,6 +239,14 @@ pub fn AppearancePage() -> Element {
                 }
             }
         }
+    }
+}
+
+/// The glass slider's value as text.
+fn glass_text(v: u32) -> String {
+    match v.min(MAX_WINDOW_GLASS) {
+        0 => "Off".into(),
+        v => format!("{v}%"),
     }
 }
 
@@ -540,6 +578,18 @@ mod tests {
         for v in [None, Some(true), Some(false)] {
             assert_eq!(tri_parse(&tri_value(v)), v);
         }
+    }
+
+    #[test]
+    fn glass_and_pin_default_off_and_glass_is_capped() {
+        let s: Settings = serde_json::from_str(r#"{"theme":"Dark"}"#).unwrap();
+        assert_eq!((s.window_glass, s.pin_to_desktop), (0, false));
+        assert_eq!(glass_text(0), "Off");
+        assert_eq!(glass_text(35), "35%");
+        assert_eq!(glass_text(200), format!("{MAX_WINDOW_GLASS}%"));
+        assert_eq!(crate::shell::window::glass_percent(0), None);
+        assert_eq!(crate::shell::window::glass_percent(40), Some(40));
+        assert_eq!(crate::shell::window::glass_percent(999), Some(MAX_WINDOW_GLASS));
     }
 
     #[test]

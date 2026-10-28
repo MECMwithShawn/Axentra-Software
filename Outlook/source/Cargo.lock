@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -330,6 +330,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
  "tracing",
  "uuid",
@@ -338,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-desktop"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axentra-core",
  "axentra-sync",
@@ -354,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-preview"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axentra-core",
  "axentra-sync",
@@ -369,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-sync"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-channel 2.5.0",
  "async-imap",
@@ -398,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-ui"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axentra-core",
  "axentra-sync",

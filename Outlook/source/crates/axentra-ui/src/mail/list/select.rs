@@ -21,7 +21,7 @@ pub fn range(model: &ListModel, a: &RowKey, b: &RowKey) -> Vec<RowKey> {
 }
 
 fn hidden_pane(app: AppState) -> bool {
-    app.settings.peek().reading_pane == ReadingPanePosition::Hidden
+    app.settings.peek().reading_pane_shown() == ReadingPanePosition::Hidden
 }
 
 /// Open the single selected row, or nothing for zero / several.

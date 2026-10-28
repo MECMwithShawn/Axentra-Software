@@ -388,7 +388,9 @@ impl<'a> GraphMail<'a> {
         let wants_attachments = m.has_attachments || g.body.html.as_deref().is_some_and(|h| h.contains("cid:"));
         let attachments = if wants_attachments { self.attachments(&g.id).await.unwrap_or_default() } else { Vec::new() };
         let id = self.store.insert_synced_message(&mut m, &g.body, &attachments)?;
-        let sh = Shadow { remote_id: g.id.clone(), container: container.clone(), etag: g.change_key.clone(), state: MessageState::of(&m).to_value(), ..Default::default() };
+        // The shadow is what the server has; when a local rule routed the
+        // message elsewhere (a block rule to Junk), the next push moves it.
+        let sh = Shadow { remote_id: g.id.clone(), container: container.clone(), etag: g.change_key.clone(), state: server.to_value(), ..Default::default() };
         self.store.sync_put(account_id, KIND_MESSAGE, id, &g.id, &container, &sh)?;
         self.locals.insert(id, m);
         Ok(true)

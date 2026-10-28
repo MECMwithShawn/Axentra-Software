@@ -1,0 +1,528 @@
+{
+ "about": "Modern development set (60 messages, assistant-authored synthetic, 2026-10-26). It was written as a fresh validation set, but its first results were then used to diagnose the shipped-model failure and to add general warning-sign rules, so it is a development set now: it chooses thresholds and simulates a user's first reports. The untouched final check is fresh-validation.json. Labels are the author's, not independent annotations.",
+ "messages": [
+  {
+   "id": "fv-l01",
+   "label": "legitimate",
+   "from_name": "GitHub",
+   "from": "noreply@github.com",
+   "subject": "[axentra/outlook] Pull request #212 merged",
+   "html": "<p>Merged #212 into main.</p><p><a href=\"https://github.com/axentra/outlook/pull/212\">View it on GitHub</a></p><p>You are receiving this because you were mentioned.</p>"
+  },
+  {
+   "id": "fv-l02",
+   "label": "legitimate",
+   "from_name": "Amazon.com",
+   "from": "shipment-tracking@amazon.com",
+   "subject": "Your package was delivered",
+   "html": "<p>Your package was delivered to the front door.</p><p><a href=\"https://www.amazon.com/gp/your-account/order-details?orderID=113-4471\">Track package</a></p>"
+  },
+  {
+   "id": "fv-l03",
+   "label": "legitimate",
+   "from_name": "Microsoft account team",
+   "from": "account-security-noreply@accountprotection.microsoft.com",
+   "subject": "Microsoft account security code",
+   "text": "Please use the following security code for the Microsoft account al***@outlook.com. Security code: 482913. If you don't recognize the account, you can click a link to remove your email from that account. Thanks, The Microsoft account team"
+  },
+  {
+   "id": "fv-l04",
+   "label": "legitimate",
+   "from_name": "Maya Chen",
+   "from": "maya.chen@riverbend.example",
+   "subject": "Saturday hike?",
+   "text": "Hey! Are you still up for the ridge trail on Saturday? I can drive. Let me know by Thursday so I can pack enough snacks."
+  },
+  {
+   "id": "fv-l05",
+   "label": "legitimate",
+   "from_name": "Riverbend School District",
+   "from": "news@riverbend-schools.example",
+   "subject": "October newsletter: conferences and picture day",
+   "html": "<h2>October news</h2><p>Parent-teacher conferences are on the 28th. Picture day moved to Friday.</p><p><a href=\"https://www.riverbend-schools.example/calendar\">District calendar</a> \u00b7 <a href=\"https://www.riverbend-schools.example/unsubscribe\">Unsubscribe</a></p>"
+  },
+  {
+   "id": "fv-l06",
+   "label": "legitimate",
+   "from_name": "Northwind Bank",
+   "from": "alerts@northwindbank.example",
+   "subject": "Your October statement is ready",
+   "html": "<p>Your statement for the account ending 0042 is ready. Sign in to the Northwind app or at <a href=\"https://www.northwindbank.example/statements\">northwindbank.example</a> to view it.</p><p>We'll never ask for your password by email.</p>"
+  },
+  {
+   "id": "fv-l07",
+   "label": "legitimate",
+   "from_name": "Daniel Kim",
+   "from": "daniel.kim@contoso.example",
+   "subject": "Re: release checklist",
+   "text": "Thanks for the notes. I moved the smoke tests to Thursday and added the migration step. Can you review the rollback section before standup?"
+  },
+  {
+   "id": "fv-l08",
+   "label": "legitimate",
+   "from_name": "Calendar",
+   "from": "calendar-notification@google.com",
+   "subject": "Invitation: Design review @ Wed Oct 29, 2pm - 3pm",
+   "html": "<p>You have been invited to Design review.</p><p><a href=\"https://calendar.google.com/calendar/event?eid=abc\">More details</a></p><p>Going? Yes - Maybe - No</p>"
+  },
+  {
+   "id": "fv-l09",
+   "label": "legitimate",
+   "from_name": "Lumen Studio",
+   "from": "billing@lumen.example",
+   "subject": "Receipt for invoice LS-2210",
+   "html": "<p>Thanks for your payment of $1,240.00 for invoice LS-2210.</p><p>The PDF receipt is attached.</p>",
+   "attachments": [
+    {
+     "name": "Receipt LS-2210.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "fv-l10",
+   "label": "legitimate",
+   "from_name": "Spotify",
+   "from": "no-reply@spotify.com",
+   "subject": "Your Wrapped is here",
+   "html": "<p>Your year in music is ready.</p><p><a href=\"https://open.spotify.com/wrapped\">See your Wrapped</a></p><p><a href=\"https://www.spotify.com/account/notifications\">Notification settings</a></p>"
+  },
+  {
+   "id": "fv-l11",
+   "label": "legitimate",
+   "from_name": "Priya Raman",
+   "from": "priya.raman@northwind.example",
+   "subject": "Slides for Thursday",
+   "text": "Attached are the slides for Thursday. Slide 9 still needs the Q3 numbers; I'll update it tomorrow morning.",
+   "attachments": [
+    {
+     "name": "Thursday review.pptx",
+     "type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+   ]
+  },
+  {
+   "id": "fv-l12",
+   "label": "legitimate",
+   "from_name": "Dropbox",
+   "from": "no-reply@dropbox.com",
+   "subject": "Maya shared \"Trip photos\" with you",
+   "html": "<p>Maya Chen shared a folder with you.</p><p><a href=\"https://www.dropbox.com/scl/fo/xyz\">Go to folder</a></p>"
+  },
+  {
+   "id": "fv-l13",
+   "label": "legitimate",
+   "from_name": "City Library",
+   "from": "holds@citylibrary.example",
+   "subject": "Your hold is ready for pickup",
+   "text": "The item you placed on hold, \"The Long Way Home\", is ready at the Main branch. It will be held until November 2."
+  },
+  {
+   "id": "fv-l14",
+   "label": "legitimate",
+   "from_name": "Skyline Air",
+   "from": "reservations@skyline.example",
+   "subject": "Your trip confirmation: SEA to DEN, Nov 14",
+   "html": "<p>Confirmation code K7Q2PL.</p><p>Check in 24 hours before departure at <a href=\"https://www.skyline.example/checkin\">skyline.example/checkin</a>.</p>"
+  },
+  {
+   "id": "fv-l15",
+   "label": "legitimate",
+   "from_name": "Contoso IT",
+   "from": "it-help@contoso.example",
+   "subject": "Planned maintenance Saturday 6-8am",
+   "text": "VPN and email may be unavailable on Saturday between 6 and 8 am while we update servers. No action is needed."
+  },
+  {
+   "id": "fv-l16",
+   "label": "legitimate",
+   "from_name": "Hannah Okafor",
+   "from": "hannah.okafor@contoso.example",
+   "subject": "Lunch order",
+   "text": "Ordering from the Thai place at 11:30. Want your usual? Reply before 11!"
+  },
+  {
+   "id": "fv-l17",
+   "label": "legitimate",
+   "from_name": "Fabrikam Store",
+   "from": "orders@fabrikam-store.example",
+   "subject": "Order #55102 has shipped",
+   "html": "<p>Good news! Your order is on its way.</p><p><a href=\"https://click.email.fabrikam-store.example/track/55102\">Track your order</a></p><p>Questions? Visit our help center.</p>"
+  },
+  {
+   "id": "fv-l18",
+   "label": "legitimate",
+   "from_name": "Dr. Patel's office",
+   "from": "appointments@greenvalleyclinic.example",
+   "subject": "Appointment reminder: Tue 9:40am",
+   "text": "This is a reminder of your appointment on Tuesday at 9:40 am. Reply C to confirm or call us to reschedule."
+  },
+  {
+   "id": "fv-l19",
+   "label": "legitimate",
+   "from_name": "LinkedIn",
+   "from": "messages-noreply@linkedin.com",
+   "subject": "You have 2 new messages",
+   "html": "<p>Wei Zhang sent you a message.</p><p><a href=\"https://www.linkedin.com/messaging/\">View messages</a></p>"
+  },
+  {
+   "id": "fv-l20",
+   "label": "legitimate",
+   "from_name": "Rosa Morgan",
+   "from": "rosa.morgan@outlook.com",
+   "subject": "Mom's birthday",
+   "text": "Can we split the gift? I found the scarf she wanted, it's $60. I'll bring a card for everyone to sign."
+  },
+  {
+   "id": "fv-l21",
+   "label": "legitimate",
+   "from_name": "Contoso Payroll",
+   "from": "payroll@contoso.example",
+   "subject": "Your pay stub for Oct 15-31",
+   "html": "<p>Your pay stub is available in the HR portal.</p><p><a href=\"https://hr.contoso.example/paystubs\">Open the HR portal</a></p>"
+  },
+  {
+   "id": "fv-l22",
+   "label": "legitimate",
+   "from_name": "Northwind Weekly",
+   "from": "newsletter@northwind.example",
+   "subject": "This week: product roadmap and team spotlight",
+   "html": "<p>Highlights from the roadmap review and a spotlight on the support team.</p><p><a href=\"https://news.northwind.example/2026/10/roadmap\">Read more</a> | <a href=\"https://news.northwind.example/unsubscribe\">Unsubscribe</a></p>"
+  },
+  {
+   "id": "fv-l23",
+   "label": "legitimate",
+   "from_name": "Apple",
+   "from": "no_reply@email.apple.com",
+   "subject": "Your receipt from Apple",
+   "html": "<p>Order ID: MQ7T2LLV. iCloud+ 200 GB, $2.99.</p><p><a href=\"https://reportaproblem.apple.com\">Report a Problem</a></p>"
+  },
+  {
+   "id": "fv-l24",
+   "label": "legitimate",
+   "from_name": "Marcus Lee",
+   "from": "marcus.lee@contoso.example",
+   "subject": "FW: venue contract",
+   "text": "Forwarding the signed venue contract for your records. Deposit is due on the 3rd.",
+   "attachments": [
+    {
+     "name": "Venue contract signed.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "fv-l25",
+   "label": "legitimate",
+   "from_name": "Zoom",
+   "from": "no-reply@zoom.us",
+   "subject": "Cloud recording is now available",
+   "html": "<p>Your cloud recording \"Weekly sync\" is now available.</p><p><a href=\"https://contoso.zoom.us/rec/share/abc\">Share recording</a></p>"
+  },
+  {
+   "id": "fv-s01",
+   "label": "spam",
+   "from_name": "CryptoGains",
+   "from": "alerts@cryptogains-daily.example",
+   "subject": "This coin could 50x before Friday!!!",
+   "html": "<p>Insiders are loading up NOW. Don't miss the next 50x gem!!!</p><p><a href=\"https://cryptogains-daily.example/buy\">GET IN EARLY</a></p>"
+  },
+  {
+   "id": "fv-s02",
+   "label": "spam",
+   "from_name": "SEO Experts",
+   "from": "outreach@rankfast-seo.example",
+   "subject": "Page 1 of Google in 7 days guaranteed",
+   "text": "Hi, I noticed your website is not ranking. We guarantee page 1 rankings in 7 days for only $199. Reply YES to start today."
+  },
+  {
+   "id": "fv-s03",
+   "label": "spam",
+   "from_name": "Keto Burn",
+   "from": "deals@ketoburn-shop.example",
+   "subject": "Doctors hate this one weird trick",
+   "html": "<p>Lose 30 lbs in 30 days without diet or exercise! Limited stock - 80% OFF today only!</p><p><a href=\"https://ketoburn-shop.example/order\">ORDER NOW</a></p>"
+  },
+  {
+   "id": "fv-s04",
+   "label": "spam",
+   "from_name": "Fast Loans",
+   "from": "approve@quickcash-loans.example",
+   "subject": "You're pre-approved for $5,000 - no credit check",
+   "text": "Congratulations! You are pre-approved for up to $5,000 cash. No credit check, money in your account in 1 hour. Apply now before this offer expires."
+  },
+  {
+   "id": "fv-s05",
+   "label": "spam",
+   "from_name": "Prize Desk",
+   "from": "claims@winner-notice.example",
+   "subject": "You have been selected to receive a $1000 gift card",
+   "html": "<p>Congratulations!!! You were randomly selected. Complete the short survey to claim your reward.</p><p><a href=\"https://winner-notice.example/claim\">CLAIM NOW</a></p>"
+  },
+  {
+   "id": "fv-s06",
+   "label": "spam",
+   "from_name": "Lonely Singles",
+   "from": "match@hot-singles-near.example",
+   "subject": "3 singles near you want to chat",
+   "text": "Sarah, 29, and two others viewed your profile today. Create a free account to see their photos. Unsubscribe options inside."
+  },
+  {
+   "id": "fv-s07",
+   "label": "spam",
+   "from_name": "Replica Watches",
+   "from": "sales@luxury-replica.example",
+   "subject": "Luxury watches 90% off",
+   "html": "<p>Top quality replica watches, free shipping worldwide. Best prices!!!</p><p><a href=\"https://luxury-replica.example\">Shop now</a></p>"
+  },
+  {
+   "id": "fv-s08",
+   "label": "spam",
+   "from_name": "Web Design Team",
+   "from": "info@cheap-webdesign.example",
+   "subject": "Your website needs a redesign",
+   "text": "Hello sir/madam, we are a professional web design company offering redesign at very low cost. Kindly reply with your requirement and budget."
+  },
+  {
+   "id": "fv-s09",
+   "label": "spam",
+   "from_name": "Investment Club",
+   "from": "vip@forex-signals.example",
+   "subject": "Turn $250 into $10,000 with our forex signals",
+   "html": "<p>Join 10,000 members earning daily profits. Risk free!!! Limited VIP seats.</p><p><a href=\"https://forex-signals.example/join\">Join VIP</a></p>"
+  },
+  {
+   "id": "fv-s10",
+   "label": "spam",
+   "from_name": "Pharmacy Online",
+   "from": "rx@discount-meds.example",
+   "subject": "Cheap meds without prescription",
+   "text": "Buy brand and generic medications at the lowest prices. No prescription needed. Discreet shipping."
+  },
+  {
+   "id": "fv-s11",
+   "label": "spam",
+   "from_name": "Lead Lists",
+   "from": "data@b2b-leads.example",
+   "subject": "Buy 50,000 verified email leads",
+   "text": "We sell verified B2B email lists for any industry. 50,000 contacts for $99. Reply for a free sample."
+  },
+  {
+   "id": "fv-s12",
+   "label": "spam",
+   "from_name": "Solar Savings",
+   "from": "offers@solar-free-panels.example",
+   "subject": "Free solar panels for homeowners in your area",
+   "html": "<p>The government will pay for your solar panels! Check if you qualify in 60 seconds.</p><p><a href=\"https://solar-free-panels.example/check\">Check now</a></p>"
+  },
+  {
+   "id": "fv-s13",
+   "label": "spam",
+   "from_name": "Casino Royale",
+   "from": "bonus@spin-casino.example",
+   "subject": "200 free spins waiting for you",
+   "html": "<p>Your 200 FREE SPINS + $500 bonus are waiting. Play now!!!</p><p><a href=\"https://spin-casino.example/play\">PLAY</a></p>"
+  },
+  {
+   "id": "fv-s14",
+   "label": "spam",
+   "from_name": "Extended Warranty",
+   "from": "notice@auto-warranty-center.example",
+   "subject": "Final notice: your vehicle warranty is expiring",
+   "text": "We have been trying to reach you about your car's extended warranty. Call now to avoid losing coverage."
+  },
+  {
+   "id": "fv-s15",
+   "label": "spam",
+   "from_name": "Mystery Shopper",
+   "from": "jobs@easy-money-shopper.example",
+   "subject": "Earn $500 a week as a mystery shopper",
+   "text": "Work from home and earn $500 weekly. No experience needed. Reply with your name, address and phone number to get started."
+  },
+  {
+   "id": "fv-p01",
+   "label": "phishing",
+   "from_name": "Microsoft 365",
+   "from": "no-reply@m365-passwordreset.example",
+   "subject": "Your password expires today",
+   "html": "<p>Your Microsoft 365 password expires today. Keep your current password:</p><p><a href=\"https://m365-passwordreset.example/keep\">https://login.microsoftonline.com/keep-password</a></p>"
+  },
+  {
+   "id": "fv-p02",
+   "label": "phishing",
+   "from_name": "PayPal",
+   "from": "service@paypal-resolution.example",
+   "subject": "Unusual activity: account limited",
+   "html": "<p>We've limited your account. Confirm your identity to restore access.</p><p><a href=\"https://paypal-resolution.example/confirm\">Confirm now</a></p>"
+  },
+  {
+   "id": "fv-p03",
+   "label": "phishing",
+   "from_name": "Netflix",
+   "from": "billing@netfl1x-support.example",
+   "subject": "Payment declined - update your card",
+   "html": "<p>We couldn't process your last payment. Update your payment details within 48 hours to avoid suspension.</p><p><a href=\"https://netfl1x-support.example/billing\">Update payment</a></p>"
+  },
+  {
+   "id": "fv-p04",
+   "label": "phishing",
+   "from_name": "DocuSign",
+   "from": "dse@docs-sign-review.example",
+   "subject": "Please review and sign: Q4 bonus agreement",
+   "html": "<p>Contoso HR sent you a document to review and sign.</p><p><a href=\"http://203.0.113.45/docusign/review\">REVIEW DOCUMENT</a></p>"
+  },
+  {
+   "id": "fv-p05",
+   "label": "phishing",
+   "from_name": "Daniel Kim (CEO)",
+   "from": "daniel.kim.ceo@gmail.com",
+   "subject": "Quick favor",
+   "text": "Are you at your desk? I need you to buy 5 Apple gift cards for a client today, $200 each. Scratch the codes and send me photos. I'm in a meeting so email only. I'll reimburse you."
+  },
+  {
+   "id": "fv-p06",
+   "label": "phishing",
+   "from_name": "USPS",
+   "from": "tracking@usps-redelivery.example",
+   "subject": "Your package is on hold: unpaid fee",
+   "html": "<p>Your parcel could not be delivered due to an unpaid fee of $1.99.</p><p><a href=\"https://usps-redelivery.example/pay\">Pay and schedule delivery</a></p>"
+  },
+  {
+   "id": "fv-p07",
+   "label": "phishing",
+   "from_name": "Accounts Payable",
+   "from": "ap@fabrikam-invoices.example",
+   "subject": "Overdue invoice INV-88231",
+   "text": "Please see the attached overdue invoice and process payment today to avoid late fees.",
+   "attachments": [
+    {
+     "name": "INV-88231.pdf.exe",
+     "type": "application/octet-stream"
+    }
+   ]
+  },
+  {
+   "id": "fv-p08",
+   "label": "phishing",
+   "from_name": "IT Support",
+   "from": "helpdesk@contoso-it-support.example",
+   "subject": "Mailbox quota exceeded",
+   "html": "<p>Your mailbox is full. Validate your account to receive new mail.</p><p><a href=\"https://contoso-it-support.example/validate\">Validate mailbox</a></p>"
+  },
+  {
+   "id": "fv-p09",
+   "label": "phishing",
+   "from_name": "IRS",
+   "from": "refunds@irs-taxrefund.example",
+   "subject": "You are eligible for a tax refund of $812.40",
+   "html": "<p>After the last annual calculation you are eligible for a refund. Submit your bank details to receive it.</p><p><a href=\"https://irs-taxrefund.example/claim\">www.irs.gov/refund</a></p>"
+  },
+  {
+   "id": "fv-p10",
+   "label": "phishing",
+   "from_name": "Coinbase",
+   "from": "security@coinbase-verify.example",
+   "subject": "Verify your wallet to avoid suspension",
+   "html": "<p>New regulations require wallet verification. Enter your recovery phrase to continue.</p><p><a href=\"https://coinbase-verify.example/wallet\">Verify wallet</a></p>"
+  },
+  {
+   "id": "fv-p11",
+   "label": "phishing",
+   "from_name": "Shared document",
+   "from": "sharepoint@0nedrive-files.example",
+   "subject": "Priya shared \"Salary review 2027.xlsx\" with you",
+   "html": "<p>Priya Raman shared a file with you.</p><p><a href=\"https://0nedrive-files.example/s/login\">Open</a></p>"
+  },
+  {
+   "id": "fv-p12",
+   "label": "phishing",
+   "from_name": "billing@apple.com",
+   "from": "noreply@appleid-billing.example",
+   "subject": "Your Apple ID has been locked",
+   "html": "<p>Your Apple ID was locked for security reasons. Unlock it now.</p><p><a href=\"https://appleid-billing.example/unlock\">https://appleid.apple.com</a></p>"
+  },
+  {
+   "id": "fv-p13",
+   "label": "phishing",
+   "from_name": "Wells Fargo",
+   "from": "alerts@we11sfargo.example",
+   "subject": "Suspicious sign-in blocked",
+   "html": "<p>We blocked a sign-in attempt. If this wasn't you, secure your account now.</p><p><a href=\"https://we11sfargo.example/secure\">Secure account</a></p>"
+  },
+  {
+   "id": "fv-p14",
+   "label": "phishing",
+   "from_name": "HR Department",
+   "from": "hr@contoso-benefits.example",
+   "subject": "Open enrollment: action required",
+   "text": "Open enrollment closes today. Download the attached form, enable editing and macros, and submit your elections.",
+   "attachments": [
+    {
+     "name": "Benefits_Form_2027.docm",
+     "type": "application/vnd.ms-word.document.macroEnabled.12"
+    }
+   ]
+  },
+  {
+   "id": "fv-p15",
+   "label": "phishing",
+   "from_name": "Voicemail",
+   "from": "voicemail@vm-notify.example",
+   "subject": "New voicemail (0:42) from +1 206 555 0182",
+   "text": "You have a new voicemail. Open the attached file to listen.",
+   "attachments": [
+    {
+     "name": "voicemail_0042.html",
+     "type": "text/html"
+    }
+   ]
+  },
+  {
+   "id": "fv-p16",
+   "label": "phishing",
+   "from_name": "Amazon",
+   "from": "order-update@amaz0n-orders.example",
+   "subject": "Your order #402-1182 could not be shipped",
+   "html": "<p>There was a problem with your payment method. Update it to avoid cancellation.</p><p><a href=\"https://amaz0n-orders.example/update\">Update payment</a></p>"
+  },
+  {
+   "id": "fv-p17",
+   "label": "phishing",
+   "from_name": "Contoso Payroll",
+   "from": "payroll@contoso-hr-portal.example",
+   "subject": "Update your direct deposit before Friday",
+   "html": "<p>Our payroll system changed. Re-enter your direct deposit details before Friday's run.</p><p><a href=\"https://contoso-hr-portal.example/deposit\">hr.contoso.example/paystubs</a></p>",
+   "reply_to": "payroll-team@freemail.example"
+  },
+  {
+   "id": "fv-p18",
+   "label": "phishing",
+   "from_name": "Google",
+   "from": "no-reply@accounts-google-security.example",
+   "subject": "Critical security alert",
+   "html": "<p>Someone has your password. Google blocked a sign-in attempt. Review activity now.</p><p><a href=\"https://accounts-google-security.example/review\">Check activity</a></p>"
+  },
+  {
+   "id": "fv-p19",
+   "label": "phishing",
+   "from_name": "Fedex Delivery",
+   "from": "delivery@fedex-parcel-status.example",
+   "subject": "Delivery attempt failed",
+   "text": "We were unable to deliver your parcel. Print the attached label and bring it to the nearest office.",
+   "attachments": [
+    {
+     "name": "Shipping_Label.zip",
+     "type": "application/zip"
+    }
+   ]
+  },
+  {
+   "id": "fv-p20",
+   "label": "phishing",
+   "from_name": "Northwind Bank",
+   "from": "security@northwindbank-alerts.example",
+   "subject": "Your card has been suspended",
+   "html": "<p>Your debit card was suspended due to suspicious transactions. Verify your card number and PIN to reactivate.</p><p><a href=\"https://northwindbank-alerts.example/verify\">www.northwindbank.example/verify</a></p>"
+  }
+ ]
+}

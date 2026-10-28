@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use axentra_ui::shell::window::{ButtonLayout, ResizeEdge, TiledEdges, TitlebarAction, TitlebarPrefs, WindowControls};
+use axentra_ui::shell::window::{ButtonLayout, ResizeEdge, TiledEdges, TitlebarAction, TitlebarPrefs, WindowControls, WindowPin};
 use dioxus::desktop::tao::event::{Event, WindowEvent};
 use dioxus::desktop::tao::window::ResizeDirection;
 use dioxus::desktop::{DesktopService, use_window, use_wry_event_handler};
@@ -163,6 +163,122 @@ fn use_gdk_window_state(desktop: &Rc<DesktopService>, maximized: Signal<bool>, t
     );
 }
 
+/// Put the window behind all other windows (X11 / XWayland; Wayland
+/// windows can't restack themselves).
+fn send_to_back(d: &DesktopService) {
+    #[cfg(target_os = "linux")]
+    {
+        use dioxus::desktop::tao::platform::unix::WindowExtUnix;
+        use gtk::prelude::*;
+        if let Some(g) = d.window.gtk_window().window() {
+            g.lower();
+        }
+    }
+}
+
+/// [`send_to_back`] once the window manager has finished raising the
+/// window for the focus change or click that is being handled.
+fn send_to_back_soon(d: &DesktopService) {
+    #[cfg(target_os = "linux")]
+    {
+        let w = std::sync::Arc::downgrade(&d.window);
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
+            use dioxus::desktop::tao::platform::unix::WindowExtUnix;
+            use gtk::prelude::*;
+            if let Some(win) = w.upgrade()
+                && let Some(g) = win.gtk_window().window()
+            {
+                g.lower();
+            }
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    send_to_back(d);
+}
+
+/// Maximise; where the window manager won't (seen with XWayland), cover
+/// the monitor instead.
+fn fill_screen(d: &DesktopService) {
+    d.set_maximized(true);
+    #[cfg(target_os = "linux")]
+    {
+        let w = std::sync::Arc::downgrade(&d.window);
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(600), move || {
+            let Some(win) = w.upgrade() else { return };
+            if win.is_maximized() {
+                return;
+            }
+            if let Some(m) = win.current_monitor() {
+                tracing::debug!("maximize refused; covering the monitor");
+                win.set_outer_position(m.position());
+                win.set_inner_size(m.size());
+            }
+        });
+    }
+}
+
+/// Provides [`WindowPin`]: Pin to desktop keeps the window below the others.
+fn use_window_pin(desktop: &std::rc::Rc<DesktopService>) {
+    let weak = Rc::downgrade(desktop);
+    let w = weak.clone();
+    // Pinned, the window goes behind the others whenever it loses focus. It
+    // stays a normal window rather than "keep below": desktop-icon layers
+    // (Zorin's, GNOME's DING) are full-screen see-through windows at the
+    // bottom, and a keep-below window ends up under them, seen but never
+    // clicked.
+    let pinned = use_hook(|| Rc::new(std::cell::Cell::new(false)));
+    let p = pinned.clone();
+    let lw = weak.clone();
+    // Pinned, the window is the desktop: any raise (focus, a click) is
+    // undone, so other windows are in front of it or minimised, never behind.
+    use_wry_event_handler(move |event, _| {
+        if let Event::WindowEvent { event: WindowEvent::Focused(_), .. } = event
+            && p.get()
+            && let Some(d) = lw.upgrade()
+        {
+            send_to_back_soon(&d);
+        }
+    });
+    use_context_provider(move || {
+        let db = crate::database_path();
+        WindowPin {
+            set: Callback::new(move |on: bool| {
+                crate::pin::remember(&db, on);
+                let was = pinned.replace(on);
+                if let Some(d) = w.upgrade() {
+                    tracing::debug!(on, "pin to desktop");
+                    // The desktop view fills the screen and starts behind.
+                    if on && !was {
+                        fill_screen(&d);
+                        send_to_back(&d);
+                    }
+                }
+            }),
+            needs_restart: crate::pin::needs_restart(|k| std::env::var_os(k)),
+            send_back: {
+                let w = weak.clone();
+                Callback::new(move |()| {
+                    if let Some(d) = w.upgrade() {
+                        send_to_back_soon(&d);
+                    }
+                })
+            },
+            // A launch while this copy closes opens it again once it has gone.
+            restart: Callback::new(move |()| {
+                match std::env::current_exe().and_then(|exe| std::process::Command::new(exe).spawn()) {
+                    Ok(_) => {
+                        crate::instance::closing();
+                        if let Some(d) = weak.upgrade() {
+                            d.close();
+                        }
+                    }
+                    Err(e) => tracing::warn!("restart: {e}"),
+                }
+            }),
+        }
+    });
+}
+
 /// Root component in title-bar mode: provides `WindowControls` for this
 /// window (the `TitlebarPrefs` come from the launch context), keeps
 /// `is_maximized` and `tiled` in step with the window (GDK state changes,
@@ -172,6 +288,7 @@ fn use_gdk_window_state(desktop: &Rc<DesktopService>, maximized: Signal<bool>, t
 pub fn CsdRoot() -> Element {
     let desktop = use_window();
     let prefs = try_use_context::<TitlebarPrefs>().unwrap_or_default();
+    use_window_pin(&desktop);
     let mut maximized = use_signal(|| desktop.is_maximized());
     let tiled = use_signal(TiledEdges::default);
     #[cfg(target_os = "linux")]
@@ -235,6 +352,7 @@ pub fn CsdRoot() -> Element {
 /// manager close noted for later launches ([`crate::instance::closing`]).
 #[allow(non_snake_case)]
 pub fn SystemRoot() -> Element {
+    use_window_pin(&use_window());
     use_wry_event_handler(|event, _| {
         if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
             crate::instance::closing();

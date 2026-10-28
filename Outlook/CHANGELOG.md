@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.1.5 (pre-release, 2026-10-28)
+
+- **Glass:** Settings › General › Window › Glass (0–60%) lets your desktop show
+  through the window's backgrounds; text, icons, message bodies, menus and
+  dialogs stay solid. Needs Axentra's own title bar.
+- **Pin to desktop:** the window becomes part of the desktop: it fills the
+  screen, stays behind every other window (a click in it never brings it in
+  front), and shows a streamlined layout: just your mail in one list, no top
+  bar, ribbon, app bar or folder pane, with Sync, Settings and Unpin in a small
+  corner toolbar. On Wayland it opens through XWayland so GNOME keeps it at the
+  back (Settings offers Restart now after pinning).
+- **Readable email in dark mode:** HTML email colours are adapted for the dark
+  reading pane, like Outlook does: dark text is lightened, light boxes are
+  darkened (keeping their hues), logos and icons keep a light backing, and
+  senders' own dark-mode designs are kept. "Switch background" still shows the
+  message as sent. If adapting a message ever fails, it shows with its own
+  colours instead of affecting the app. The document `<title>` no longer shows
+  at the top of a message.
+- **Junk email, local and advisory** (details and evaluation in `docs/JUNK.md`):
+  - **Block and never-block rules** now belong to one account and match a whole
+    domain with its subdomains; an exact address wins over a domain. Lists from
+    earlier versions carry over as all-accounts rules that mean what they did:
+    a domain there covers that domain only.
+  - **Block rules apply to synced mail too.** Before, they only applied to mail
+    added on this computer. New mail from a blocked sender now goes to Junk Email
+    here and on the server: mail that arrives after you block, never older mail
+    a first sync brings in (also when the sender was on Never block before).
+  - **Pictures are separate.** "Always show content from…" no longer makes
+    someone a safe sender, and Never block doesn't load pictures.
+  - **Reports you can undo.** Report junk, Report phishing and Not junk are
+    remembered and undone together with the move and any block they made, as
+    one change. Adding or removing a rule in Settings can be undone too.
+    Report phishing keeps the message in Junk Email with a warning instead of
+    deleting it.
+  - **Warning signs.** Messages are checked on this computer, without opening
+    links or attachments: link text that names another site, look-alike and
+    impersonating domains, a contact's name from a stranger's address, runnable
+    attachments, requests for passwords or codes, and failed sender checks
+    reported by Gmail, Fastmail or Yahoo. Results show as a banner and a list
+    marker (also read out by screen readers); nothing is moved.
+  - **Learning from your reports.** Axentra learns from your reports only and
+    uses a learned version only after it passes fixed checks (no new false
+    flags on the benchmark, the fresh validation set or your held-back
+    reports). It can be rolled back or forgotten in Settings › Mail › Junk
+    email. No model ships: the SpamAssassin bootstrap failed the checks.
+
+Source: [`source/`](source/) (snapshot of commit `5923b18`). See [release notes](releases/0.1.5.md).
+
 ## 0.1.4 (pre-release, 2026-10-22)
 
 - **One window per profile:** opening Axentra Outlook while it is already running (from Axentra Command, the

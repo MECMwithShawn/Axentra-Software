@@ -3,9 +3,11 @@
 //! a Content-Security-Policy that blocks remote content unless allowed,
 //! quoted history split off behind "Show message history", theme colours,
 //! zoom and a height estimate (the parent can't measure a sandboxed frame).
+//! On the dark body the email's colours are adapted the way Outlook's dark
+//! mode does it ([`adapt_for_dark`]); the light body shows them as sent.
 
 use axentra_core::MessageBody;
-use axentra_core::html::sanitize_email_html;
+use axentra_core::html::{adapt_for_dark, light_scheme_only, sanitize_email_html};
 
 /// Body colours. The frame is a separate document and can't see the app's
 /// CSS variables, so these mirror the `--ax-bg-1` / `--ax-fg-1` /
@@ -186,6 +188,22 @@ pub fn build(body: &MessageBody, allow_remote: bool, theme: BodyTheme, zoom: u32
             let clean = sanitize_email_html(source, allow_remote);
             let blocked_any = !allow_remote && (sanitize_email_html(raw, false).blocked_remote_content || has_other_remote(raw));
             let html = if allow_remote { strip_tracking_pixels(&clean.html) } else { clean.html };
+            // Dark body: the email's own colours are adapted (dark text
+            // lightened, light boxes darkened) for display only. Whether
+            // remote pictures load decides which backgrounds are pictures.
+            // A failure there must never take the app down: the message
+            // then shows with its own colours.
+            // Light body: as sent, the sender's dark-mode rules never
+            // applying (the frame's colour-scheme preference follows the
+            // app's GTK theme, which may be dark).
+            let html = if theme == BodyTheme::Dark {
+                std::panic::catch_unwind(|| adapt_for_dark(&html, allow_remote)).unwrap_or_else(|_| {
+                    tracing::warn!("dark-mode colour adaptation failed; showing the message's own colours");
+                    html.clone()
+                })
+            } else {
+                light_scheme_only(&html).into_owned()
+            };
             (html, history.map(|_| ()), blocked_any)
         }
         None => {
@@ -209,7 +227,7 @@ pub fn build(body: &MessageBody, allow_remote: bool, theme: BodyTheme, zoom: u32
 <base target=\"_blank\"><style>\
 :root{{color-scheme:{scheme}}}\
 html,body{{margin:0;padding:0;background:{bg};}}\
-body{{color:{fg};font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Selawik,Inter,\"Noto Sans\",sans-serif;font-size:14px;line-height:20px;\
+body{{color:{fg};font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Selawik,Inter,\"Noto Sans\",sans-serif;font-size:14px;line-height:1.43;\
 overflow-wrap:anywhere;zoom:{zoom}%;padding:2px 2px 8px}}\
 a{{color:{link}}}img{{max-width:100%;height:auto}}img:not([src]):not([height])[alt]:not([alt=\"\"]){{height:24px}}table{{max-width:100%}}\
 blockquote{{margin:0 0 0 8px;padding-left:12px;border-left:3px solid {link}}}\
@@ -223,6 +241,104 @@ p{{margin:0 0 12px}}pre{{white-space:pre-wrap}}\
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Writes each corpus file's frame document, dark and light, for the
+    /// WebKitGTK contrast check (`<name>.dark.html`, `<name>.light.html`):
+    /// `AXENTRA_BODY_CORPUS=<dir of .html/.txt> AXENTRA_BODY_OUT=<dir>
+    /// cargo test -p axentra-ui dump_corpus -- --ignored`
+    /// (`AXENTRA_BODY_REMOTE=1`: as with remote content shown).
+    #[test]
+    #[ignore]
+    fn dump_corpus() {
+        let (Ok(dir), Ok(out)) = (std::env::var("AXENTRA_BODY_CORPUS"), std::env::var("AXENTRA_BODY_OUT")) else {
+            panic!("set AXENTRA_BODY_CORPUS and AXENTRA_BODY_OUT");
+        };
+        let mut entries: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).collect();
+        entries.sort();
+        for path in entries {
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or_default().to_owned();
+            if ext != "html" && ext != "txt" {
+                continue;
+            }
+            let raw = std::fs::read_to_string(&path).unwrap();
+            let body = if ext == "html" { MessageBody { html: Some(raw), ..Default::default() } } else { MessageBody { text: raw, ..Default::default() } };
+            let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+            let remote = std::env::var("AXENTRA_BODY_REMOTE").is_ok_and(|v| v == "1");
+            for (theme, name) in [(BodyTheme::Dark, "dark"), (BodyTheme::Light, "light")] {
+                let doc = build(&body, remote, theme, 100, true, 700.0);
+                std::fs::write(std::path::Path::new(&out).join(format!("{stem}.{name}.html")), doc.srcdoc).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn dark_body_adapts_the_emails_colours_light_body_keeps_them() {
+        use axentra_core::html::color;
+        let html = "<style>.muted{color:#8a8a8a}</style><table bgcolor=\"#ffffff\"><tr><td style=\"color:#333333;padding:4px\">Hi there</td></tr></table><p class=\"muted\">Footer</p>";
+        let body = MessageBody { html: Some(html.into()), ..Default::default() };
+        // Light: the sanitised HTML exactly as before.
+        let light = build(&body, false, BodyTheme::Light, 100, false, 600.0);
+        assert!(light.srcdoc.contains(&sanitize_email_html(html, false).html));
+        assert!(light.srcdoc.contains("background:#ffffff;") && light.srcdoc.contains("color-scheme:light"));
+        // Dark: same structure, the email's colours adapted, the frame's
+        // own colours unchanged.
+        let dark = build(&body, false, BodyTheme::Dark, 100, false, 600.0);
+        for original in ["bgcolor=\"#ffffff\"", "color:#333333", "#8a8a8a"] {
+            assert!(!dark.srcdoc.contains(original), "{original}: {}", dark.srcdoc);
+        }
+        assert!(dark.srcdoc.contains("background:#292929;") && dark.srcdoc.contains("body{color:#ffffff;") && dark.srcdoc.contains("a{color:#479ef5}"));
+        assert!(dark.srcdoc.contains(";padding:4px\">Hi there</td>") && dark.srcdoc.contains("<p class=\"muted\">Footer</p>"));
+        assert_eq!(dark.height, light.height);
+        let cell = dark.srcdoc.split("<table bgcolor=\"").nth(1).unwrap();
+        let bg = color::parse(&cell[..7]).unwrap();
+        let fg = color::parse(&cell[cell.find("color:").unwrap() + 6..][..7]).unwrap();
+        assert!(color::contrast(fg, bg) >= 4.5 && bg.lightness() < 0.35, "{cell}");
+        // The adaptation targets the frame's dark canvas and link colour.
+        assert_eq!(color::parse(DARK.0), Some(color::DARK_CANVAS));
+        assert_eq!(color::parse(DARK.2), Some(color::DARK_LINK));
+        // Plain text is never touched.
+        let text = MessageBody { text: "Colour #333333 stays".into(), ..Default::default() };
+        assert!(build(&text, false, BodyTheme::Dark, 100, false, 600.0).srcdoc.contains(">Colour #333333 stays</div>"));
+    }
+
+    #[test]
+    fn line_height_scales_with_the_text() {
+        // An absolute 20px would be inherited by 44px amounts and headlines.
+        let body = MessageBody { html: Some("<p style=\"font-size:44px\">$84.17</p>".into()), ..Default::default() };
+        for theme in [BodyTheme::Light, BodyTheme::Dark] {
+            let doc = build(&body, false, theme, 100, false, 600.0);
+            assert!(doc.srcdoc.contains("font-size:14px;line-height:1.43;") && !doc.srcdoc.contains("line-height:20px"));
+        }
+    }
+
+    #[test]
+    fn the_light_body_never_applies_the_senders_dark_rules() {
+        // The frame's prefers-color-scheme follows the app's GTK theme: in a
+        // dark app, "Light background" must still show the light design.
+        let html = "<style>.bg{background:#ffffff}@media (prefers-color-scheme: dark){.bg{background:#121212!important}}</style><div class=\"bg\">x</div>";
+        let body = MessageBody { html: Some(html.into()), ..Default::default() };
+        let light = build(&body, false, BodyTheme::Light, 100, false, 600.0);
+        assert!(light.srcdoc.contains("@media (max-width:0px){.bg{background:#121212!important}}"), "{}", light.srcdoc);
+        // The dark body keeps the sender's dark design as it is.
+        let dark = build(&body, false, BodyTheme::Dark, 100, false, 600.0);
+        assert!(dark.srcdoc.contains("@media (prefers-color-scheme: dark){.bg{background:#121212!important}}"), "{}", dark.srcdoc);
+    }
+
+    #[test]
+    fn dark_body_keeps_background_pictures_that_load() {
+        // A light picture with dark text over it: once the picture loads
+        // (remote content shown), the cell and its text keep their colours;
+        // while it is blocked, the fallback colour shows and is adapted.
+        let html = "<table><tr><td style=\"background:#f5efe6 url(https://cdn.example/paper.jpg)\"><h1 style=\"color:#2b2118\">Winter Blend</h1></td></tr></table>";
+        let body = MessageBody { html: Some(html.into()), ..Default::default() };
+        let shown = build(&body, true, BodyTheme::Dark, 100, false, 600.0);
+        assert!(shown.srcdoc.contains("background:#f5efe6 url(https://cdn.example/paper.jpg)") && shown.srcdoc.contains("color:#2b2118"), "{}", shown.srcdoc);
+        let blocked = build(&body, false, BodyTheme::Dark, 100, false, 600.0);
+        assert!(!blocked.srcdoc.contains("#f5efe6") && !blocked.srcdoc.contains("color:#2b2118"), "{}", blocked.srcdoc);
+        assert!(blocked.srcdoc.contains("url(https://cdn.example/paper.jpg)"));
+        // The light body is the sanitised HTML either way.
+        assert!(build(&body, true, BodyTheme::Light, 100, false, 600.0).srcdoc.contains(&sanitize_email_html(html, true).html));
+    }
 
     #[test]
     fn history_is_split_at_the_reply_header() {

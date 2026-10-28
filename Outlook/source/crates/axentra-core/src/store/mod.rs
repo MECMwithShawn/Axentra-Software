@@ -18,6 +18,9 @@ pub mod mail_search {
     pub use super::mail::parse_search;
 }
 mod drafts;
+mod junk;
+pub use junk::{JunkOperation, LearnStatus};
+pub(crate) use junk::{import_legacy_in as junk_import_legacy, restore_image_sender_in as junk_restore_image_sender, restore_rule_in as junk_restore_rule};
 mod mail;
 mod people;
 mod sync;
@@ -141,9 +144,18 @@ pub(crate) fn enum_str<T: Serialize>(v: &T) -> String {
     }
 }
 
+/// A test's callback at each step of a junk training run.
+#[cfg(test)]
+pub(crate) type LearnHook = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
 pub struct Store {
     conn: Mutex<Connection>,
     path: Option<PathBuf>,
+    /// The active junk model, loaded once per digest.
+    junk_model: Mutex<Option<std::sync::Arc<crate::junk::learn::Model>>>,
+    /// Called at each step of a junk training run (tests only).
+    #[cfg(test)]
+    pub(crate) learn_hook: Mutex<Option<LearnHook>>,
 }
 
 impl std::fmt::Debug for Store {
@@ -193,12 +205,21 @@ impl Store {
             people::SCHEMA_EXTRA,
             tasks::SCHEMA_EXTRA,
             sync::SCHEMA_EXTRA,
+            junk::SCHEMA_EXTRA,
         ] {
             if !extra.trim().is_empty() {
                 conn.execute_batch(extra)?;
             }
         }
-        Ok(Self { conn: Mutex::new(conn), path })
+        junk::upgrade_schema_in(&conn)?;
+        junk::migrate_legacy_in(&conn)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+            path,
+            junk_model: Mutex::new(None),
+            #[cfg(test)]
+            learn_hook: Mutex::new(None),
+        })
     }
 
     /// Lock the connection. Never hold the guard across an `.await`.
@@ -428,7 +449,10 @@ impl Store {
 
     /// Remove an account and everything that belongs to it.
     pub fn remove_account(&self, id: AccountId) -> Result<()> {
-        self.delete_doc::<Account>(id)
+        self.delete_doc::<Account>(id)?;
+        self.tx(|tx| junk::remove_account_in(tx, id))?;
+        self.forget_cached_model();
+        Ok(())
     }
 
     // ------------------------------------------------------------ categories

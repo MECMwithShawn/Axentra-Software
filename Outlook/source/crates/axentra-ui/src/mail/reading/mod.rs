@@ -551,7 +551,17 @@ fn MessageCard(
     let role = folder.as_ref().map(|f| f.role);
     let me: Vec<String> = s.accounts().unwrap_or_default().into_iter().map(|a| a.email.to_lowercase()).collect();
     let from_me = me.contains(&msg.from.address.to_lowercase());
-    let allowed = ctx.allowed_remote.read().contains(&id) || !settings.block_external_images || s.is_safe_sender(&msg.from.address).unwrap_or(false);
+    let label = s.message_label(id).ok().flatten();
+    let assessment = s.assessment(id).ok().flatten();
+    let advice = assessment.as_ref().map(|a| a.advice).unwrap_or_default();
+    let reasons: Vec<String> = assessment.as_ref().map(|a| a.analysis.findings.iter().map(|f| f.describe()).collect()).unwrap_or_default();
+    let partial = assessment.as_ref().is_some_and(|a| a.analysis.truncated);
+    // The check couldn't finish: say so rather than show nothing (which
+    // would read as a clean result).
+    let unchecked = assessment.as_ref().is_some_and(|a| a.analysis.incomplete);
+    let (advice_icon, advice_tone) = if advice == junk::Advice::Phishing { ("shield_error", "ax-danger-banner") } else { ("warning", "ax-warning") };
+    let routed = s.routed_by_rule(id).ok().flatten();
+    let allowed = ctx.allowed_remote.read().contains(&id) || !settings.block_external_images || s.images_allowed_for(&msg.from.address).unwrap_or(false);
     let mut history = use_signal(|| false);
     let zoom = *ctx.zoom.read();
     let width = frame_width(if window { *ctx.read_window_width.read() } else { *ctx.reading_width.read() }, window);
@@ -600,7 +610,7 @@ fn MessageCard(
     let card_id = card_dom_id(window, id);
 
     let more_items = {
-        let t = Target::for_ids(&[id], role, folder.as_ref().map(|f| f.id), settings.focused_inbox, settings.use_24h_time);
+        let t = Target::for_ids(&[id], role, folder.as_ref().map(|f| f.id), settings.focused_inbox_shown(), settings.use_24h_time);
         menus::message_menu(&t, folder.as_ref().map(|f| f.id))
     };
     let run = move |cmd: String| {
@@ -687,9 +697,55 @@ fn MessageCard(
                         }
                     }
                 }
-                if role == Some(FolderRole::Junk) {
+                if label != Some(junk::Label::Phishing) && advice != junk::Advice::None {
+                    Banner {
+                        icon: advice_icon,
+                        tone: advice_tone,
+                        span {
+                            {match advice {
+                                junk::Advice::Phishing => "This message might be phishing. Be careful with its links and attachments.",
+                                junk::Advice::LooksLikeJunk => "This looks like junk to Axentra. It's a suggestion; nothing was moved.",
+                                _ => "Be careful with this message.",
+                            }}
+                        }
+                        if !reasons.is_empty() {
+                            ul { class: "ax-junk-reasons",
+                                for r in reasons.iter() {
+                                    li { "{r}" }
+                                }
+                            }
+                        }
+                        if partial {
+                            span { " Only part of this message was checked; it's very large." }
+                        }
+                        if advice == junk::Advice::Phishing {
+                            button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("report_phishing".into()), "Report phishing" }
+                        } else if role != Some(FolderRole::Junk) {
+                            button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("report_junk".into()), "Report junk" }
+                        }
+                        if advice == junk::Advice::LooksLikeJunk {
+                            button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("not_junk".into()), "It's not junk" }
+                        }
+                    }
+                }
+                if unchecked && advice == junk::Advice::None {
                     Banner { icon: "warning", tone: "ax-warning",
-                        span { "This message is in Junk Email. Links and attachments may be unsafe." }
+                        span { "Axentra couldn't finish checking this message for warning signs. Be careful with its links and attachments." }
+                    }
+                }
+                if label == Some(junk::Label::Phishing) {
+                    Banner { icon: "shield_error", tone: "ax-danger-banner",
+                        span { "You reported this message as phishing. Don't open its links or attachments, or reply with personal information." }
+                    }
+                } else if role == Some(FolderRole::Junk) {
+                    Banner { icon: "warning", tone: "ax-warning",
+                        span {
+                            if let Some(rule) = routed.clone() {
+                                "Moved to Junk Email by your block rule for {rule}. Links and attachments may be unsafe."
+                            } else {
+                                "This message is in Junk Email. Links and attachments may be unsafe."
+                            }
+                        }
                         button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("not_junk".into()), "It's not junk" }
                     }
                 }
@@ -726,7 +782,8 @@ fn MessageCard(
                             r#type: "button",
                             class: "ax-mail-link",
                             onclick: move |_| {
-                                if app.check(store().add_safe_sender(&sender_addr)).is_some() {
+                                // A picture permission only: no junk rule, no label.
+                                if app.check(store().allow_images_from(&sender_addr)).is_some() {
                                     app.toast(format!("Content from {sender_addr} will always be shown."));
                                     ctx.allowed_remote.write().insert(id);
                                 }

@@ -364,6 +364,12 @@
 .ax-mail-banner > .ax-icon { color: var(--ax-fg-3); }
 .ax-mail-banner.ax-warning { background: var(--ax-warning-bg); border-color: var(--ax-warning-border); }
 .ax-mail-banner.ax-warning > .ax-icon { color: var(--ax-warning-fg); }
+.ax-mail-banner.ax-danger-banner { background: var(--ax-danger-bg); border-color: var(--ax-danger-border); }
+.ax-mail-banner.ax-danger-banner > .ax-icon { color: var(--ax-danger-fg); }
+.ax-mail-ico.ax-junk-danger { color: var(--ax-danger-fg); }
+.ax-mail-ico.ax-junk-caution { color: var(--ax-warning-fg); }
+.ax-junk-reasons { margin: 4px 0 0; padding-left: 18px; }
+.ax-junk-reasons li { margin: 2px 0; }
 .ax-mail-banner.ax-important > .ax-icon, .ax-mail-banner.ax-flagged > .ax-icon { color: var(--ax-flag); }
 .ax-mail-banner.ax-complete > .ax-icon { color: var(--ax-success-fg); }
 .ax-mail-banner-text { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; min-width: 0; }

@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use super::controls::{LinkButton, Note, Row, Section, Unavailable, use_settings};
 use super::pages::PageId;
 use crate::kit::{Button, Checkbox, Icon, IconButton, RadioGroup, RadioOption, Select, Slider, Switch, TextField, dom};
-use crate::state::{store, use_app};
+use crate::state::{UndoAction, store, use_app};
 
 /// Undo-send stops: Off, 5 … 30 seconds (January 2026 maximum).
 pub const UNDO_SEND_STOPS: [u32; 7] = [0, 5, 10, 15, 20, 25, 30];
@@ -321,61 +321,207 @@ pub fn sweep_rule_text(mode: &str, sender: &str, folder: &str, target: &str) -> 
     }
 }
 
-/// Settings > Mail > Junk email: blocked and safe senders. Changes apply
-/// right away.
+/// Settings > Mail > Junk email: block and allow rules (per account, or all
+/// accounts), the separate picture permission, and the reports Axentra
+/// learns from. Changes apply right away.
 #[component]
 pub fn JunkPage() -> Element {
     let app = use_app();
     let _ = app.mail_rev();
     let s = store();
-    let blocked: Vec<(String, String)> = s
-        .blocked_senders()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|a| {
-            let label = if a.name.trim().is_empty() || a.name.eq_ignore_ascii_case(&a.address) { a.address.clone() } else { format!("{} <{}>", a.name, a.address) };
-            (a.address, label)
-        })
-        .collect();
-    let safe: Vec<(String, String)> = s.safe_senders().unwrap_or_default().into_iter().map(|a| (a.clone(), a)).collect();
+    let accounts = s.accounts().unwrap_or_default();
+    // Where new rules typed here apply: an account, or "all" on purpose.
+    let mut scope = use_signal(|| accounts.first().map(|a| a.id.to_string()).unwrap_or_else(|| "all".into()));
+    let scope_id: Option<AccountId> = scope().parse().ok();
+    let scope_name = |a: Option<AccountId>| match a {
+        None => "all accounts".to_string(),
+        Some(id) => accounts.iter().find(|x| x.id == id).map(|x| x.email.clone()).unwrap_or_else(|| "a removed account".into()),
+    };
+    let rules = s.sender_rules().unwrap_or_default();
+    let list = |action: junk::RuleAction| -> (Vec<(String, String, String)>, Vec<String>) {
+        let mut items = Vec::new();
+        let mut taken = Vec::new();
+        for r in rules.iter().filter(|r| r.action() == action) {
+            let who = if r.name.trim().is_empty() || r.domain { r.pattern.clone() } else { format!("{} <{}>", r.name, r.pattern) };
+            let kind = match (r.domain, r.exact_domain) {
+                (true, false) => " (whole domain)",
+                (true, true) => " (this domain only)",
+                _ => "",
+            };
+            let whose = match (r.account_id, r.source) {
+                (None, junk::RuleSource::Legacy) => "all accounts, from an earlier version".to_string(),
+                (a, _) => scope_name(a),
+            };
+            items.push((r.id.to_string(), r.pattern.clone(), format!("{who}{kind} \u{2014} {whose}")));
+            if r.account_id == scope_id {
+                taken.push(r.pattern.clone());
+            }
+        }
+        (items, taken)
+    };
+    let (blocked, blocked_taken) = list(junk::RuleAction::Block);
+    let (allowed, allowed_taken) = list(junk::RuleAction::Allow);
+    let images: Vec<(String, String, String)> = s.image_senders().unwrap_or_default().into_iter().map(|a| (a.clone(), a.clone(), a)).collect();
+    let image_taken: Vec<String> = images.iter().map(|i| i.1.clone()).collect();
+    let mut scope_options: Vec<(String, String)> = accounts.iter().map(|a| (a.id.to_string(), a.email.clone())).collect();
+    scope_options.push(("all".into(), "All accounts".into()));
+    let remove_rule = move |key: String| {
+        let Ok(id) = key.parse::<i64>() else { return };
+        if let Some(Some(rule)) = app.check(store().remove_sender_rule(id)) {
+            app.bump_mail();
+            app.toast_with_undo(format!("Rule for {} removed", rule.pattern), UndoAction::RestoreRule(rule));
+        }
+    };
     rsx! {
+        Section { title: "Where new rules apply", description: "Rules you add on this page apply to the account you choose here. Rules made from a message apply to that message's account.",
+            Select {
+                value: scope(),
+                options: scope_options,
+                aria_label: "Account for new rules",
+                onchange: move |v: String| scope.set(v),
+            }
+        }
         SenderList {
             title: "Blocked senders and domains",
-            description: "Mail from these senders and domains goes straight to Junk Email.",
+            description: "New mail from these senders goes to Junk Email, also on the server. A domain covers its subdomains, except domains carried over from an earlier version, which cover that domain only. Phishing warnings still show.",
             empty: "You haven't blocked anyone. Block a sender from a message (Home > More options > Block).",
-            add_label: "Block a sender or domain",
+            add_label: format!("Block a sender or domain in {}", scope_name(scope_id)),
             items: blocked,
+            taken: blocked_taken,
             on_add: move |addr: String| {
-                if app.check(store().block_sender(&EmailAddress::new("", addr.as_str()))).is_some() {
+                if let Some(change) = app.check(store().set_sender_rule(scope_id, &addr, "", junk::RuleAction::Block)) {
                     app.bump_mail();
-                    dom::announce(&format!("Blocked {addr}"), false);
+                    app.toast_with_undo(format!("Blocked {addr}"), UndoAction::Junk { events: Vec::new(), rules: vec![change], moves: Vec::new() });
+                }
+            },
+            on_remove: remove_rule,
+        }
+        SenderList {
+            title: "Never block",
+            description: "Block rules for a domain don't apply to these senders, and Axentra doesn't suggest Junk for them. They still get phishing warnings, and pictures don't load automatically.",
+            empty: "No one yet. Choose \u{201c}Never block sender\u{201d} on a message to add one.",
+            add_label: format!("Never block a sender or domain in {}", scope_name(scope_id)),
+            items: allowed,
+            taken: allowed_taken,
+            on_add: move |addr: String| {
+                if let Some(change) = app.check(store().set_sender_rule(scope_id, &addr, "", junk::RuleAction::Allow)) {
+                    app.bump_mail();
+                    app.toast_with_undo(format!("{addr} will never be blocked"), UndoAction::Junk { events: Vec::new(), rules: vec![change], moves: Vec::new() });
+                }
+            },
+            on_remove: remove_rule,
+        }
+        SenderList {
+            title: "Load pictures automatically",
+            description: "Pictures and other content from the internet load in mail from these senders and domains, in every account. This doesn't change how their mail is filtered.",
+            empty: "No senders yet. Choose \u{201c}Always show content from\u{2026}\u{201d} on a message to add one.",
+            add_label: "Add a sender or domain",
+            items: images,
+            taken: image_taken,
+            on_add: move |addr: String| {
+                if app.check(store().allow_images_from(&addr)).is_some() {
+                    app.bump_mail();
+                    dom::announce(&format!("Pictures from {addr} will load"), false);
                 }
             },
             on_remove: move |addr: String| {
-                if app.check(store().unblock_sender(&addr)).is_some() {
+                if app.check(store().remove_image_sender(&addr)).is_some() {
                     app.bump_mail();
-                    app.toast(format!("{addr} is no longer blocked"));
+                    app.toast(format!("Pictures from {addr} won't load automatically"));
                 }
             },
         }
-        SenderList {
-            title: "Safe senders and domains",
-            description: "Mail from these senders and domains is never moved to Junk Email, and pictures in it load automatically.",
-            empty: "No safe senders yet. Choose \"Always show content from…\" on a message to add one.",
-            add_label: "Add a safe sender or domain",
-            items: safe,
-            on_add: move |addr: String| {
-                if app.check(store().add_safe_sender(&addr)).is_some() {
+        JunkReports {}
+    }
+}
+
+/// What Axentra learned from your reports: the switch for suggestions, the
+/// model in use and how it was checked, Roll back, and Forget.
+#[component]
+fn JunkReports() -> Element {
+    let app = use_app();
+    let ctx = use_settings();
+    let _ = app.mail_rev();
+    let s = store();
+    let history = s.label_history(25).unwrap_or_default();
+    let status = s.learn_status().unwrap_or_default();
+    let mut confirm = use_signal(|| false);
+    let model_text = match &status.active {
+        Some(m) if m.manifest.kind == "personal" => format!(
+            "In use: a model learned from {} junk and {} not-junk reports (version {}). It passed every check before it was used.",
+            m.manifest.examples_unwanted, m.manifest.examples_wanted, m.digest
+        ),
+        Some(m) => format!("In use: the model that came with Axentra (version {}).", m.digest),
+        None => "In use: rules and warning signs only. Axentra suggests junk once it has learned from enough of your reports and the result passes its checks.".to_string(),
+    };
+    let personal = status.active.as_ref().is_some_and(|m| m.manifest.kind == "personal");
+    rsx! {
+        Section {
+            title: "Learning from your reports",
+            description: "Report junk, Report phishing and Not junk are the only things Axentra learns from. Learning happens on this device; your reports aren't sent anywhere and aren't included in backups. Suggestions never move mail.",
+            Checkbox {
+                label: "Suggest when a message looks like junk",
+                checked: ctx.get().junk_suggestions,
+                onchange: move |v| {
+                    ctx.edit(|s| s.junk_suggestions = v);
                     app.bump_mail();
-                    dom::announce(&format!("{addr} added to safe senders"), false);
+                },
+            }
+            Note { text: "Phishing and other warning signs are always shown." }
+            p { class: "ax-set-desc", "{model_text}" }
+            p { class: "ax-set-desc", "Your reports: {status.unwanted} junk or phishing, {status.wanted} not junk." }
+            if !status.last.is_empty() {
+                p { class: "ax-set-desc", "Last update: {status.last}" }
+            }
+            div { class: "ax-row", style: "gap:8px;margin-top:8px;flex-wrap:wrap",
+                if personal {
+                    Button {
+                        label: "Roll back",
+                        icon: "arrow_undo",
+                        title: "Go back to the version before this one. Your reports and rules stay.",
+                        onclick: move |_| {
+                            if app.check(store().roll_back_model()).is_some() {
+                                app.bump_mail();
+                                app.toast("Rolled back to the previous version");
+                            }
+                        },
+                    }
                 }
-            },
-            on_remove: move |addr: String| {
-                if app.check(store().remove_safe_sender(&addr)).is_some() {
-                    app.bump_mail();
-                    app.toast(format!("{addr} removed from safe senders"));
+                if confirm() {
+                    Button {
+                        label: "Forget all reports",
+                        variant: crate::kit::Variant::Primary,
+                        onclick: move |_| {
+                            confirm.set(false);
+                            if app.check(store().forget_learning()).is_some() {
+                                app.bump_mail();
+                                app.toast("Axentra forgot your junk reports and what it learned. Your block and never-block rules stay.");
+                            }
+                        },
+                    }
+                    Button { label: "Cancel", onclick: move |_| confirm.set(false) }
+                } else {
+                    Button { label: "Forget learned data\u{2026}", icon: "delete", onclick: move |_| confirm.set(true) }
                 }
-            },
+            }
+        }
+        Section { title: "Recent reports", description: "Undo a report from the message's notification, or report it again the other way.",
+            if history.is_empty() {
+                Note { text: "No reports yet." }
+            } else {
+                div { class: "ax-cat-list", role: "list", "aria-label": "Recent reports",
+                    for e in history.into_iter() {
+                        div { key: "{e.id}", class: "ax-cat-row", role: "listitem",
+                            Icon { name: match e.label { junk::Label::Spam => "mail_prohibited", junk::Label::Phishing => "shield_error", junk::Label::NotSpam => "mail_inbox" }, size: 16 }
+                            span { class: "ax-grow ax-ellipsis", title: "{e.subject}",
+                                {match e.label { junk::Label::Spam => "Junk", junk::Label::Phishing => "Phishing", junk::Label::NotSpam => "Not junk" }}
+                                ": {e.subject} \u{2014} {e.sender}"
+                                if e.undone { " (undone)" }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -399,8 +545,10 @@ fn SenderList(
     #[props(into)] description: String,
     #[props(into)] empty: String,
     #[props(into)] add_label: String,
-    /// (address, shown text)
-    items: Vec<(String, String)>,
+    /// (key for removal, pattern, shown text)
+    items: Vec<(String, String, String)>,
+    /// Patterns already listed where a new entry would go.
+    taken: Vec<String>,
     on_add: EventHandler<String>,
     on_remove: EventHandler<String>,
 ) -> Element {
@@ -409,7 +557,7 @@ fn SenderList(
     let mut rejected = use_signal(|| false);
     let text = draft().trim().to_lowercase();
     let ok = valid_sender(&text);
-    let dup = items.iter().any(|(a, _)| a.eq_ignore_ascii_case(&text));
+    let dup = taken.iter().any(|a| a.eq_ignore_ascii_case(text.trim_start_matches('@')));
     let (hint, invalid) = sender_hint(&text, ok, dup, rejected());
     let hint_id = crate::kit::dom::use_unique_id("ax-sender-hint");
     // True when the address was added (the page then empties the box).
@@ -468,14 +616,14 @@ fn SenderList(
                 Note { text: empty }
             } else {
                 div { class: "ax-cat-list", role: "list", "aria-label": "{title}",
-                    for (addr, label) in items.iter().cloned() {
-                        div { key: "{addr}", class: "ax-cat-row", role: "listitem",
+                    for (key, addr, label) in items.iter().cloned() {
+                        div { key: "{key}", class: "ax-cat-row", role: "listitem",
                             span { class: "ax-grow ax-ellipsis ax-selectable", title: "{label}", "{label}" }
                             IconButton {
                                 icon: "delete",
                                 title: "Remove {addr}",
                                 small: true,
-                                onclick: move |_| on_remove.call(addr.clone()),
+                                onclick: move |_| on_remove.call(key.clone()),
                             }
                         }
                     }

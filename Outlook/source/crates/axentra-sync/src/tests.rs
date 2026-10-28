@@ -1210,3 +1210,128 @@ async fn signing_in_checks_the_photo_at_once() {
     assert_eq!(photo_requests(&log).len(), before);
     assert!(!store.account_photos().unwrap().contains_key(&gmail.id));
 }
+
+/// A block rule applies to synced mail too: the new message lands in Junk
+/// Email here, the shadow keeps the server's folder, and the next push moves
+/// it to Junk on the server, once. Mail from before blocking took effect
+/// stays put, also when the rule was an Allow from years ago turned into a
+/// Block today.
+#[tokio::test]
+async fn a_block_rule_routes_synced_mail_to_junk_on_the_server() {
+    use crate::graph::client::{Graph, StaticToken};
+    use crate::graph::mail::GraphMail;
+
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let (base, log) = fake_http(move |method, path, _body, base| {
+        let reply = match (method, path) {
+            ("GET", p) if p.starts_with("/me/mailFolders/inbox?") => r#"{"id":"INBOX-ID"}"#.to_string(),
+            ("GET", p) if p.starts_with("/me/mailFolders/junkemail?") => r#"{"id":"JUNK-ID"}"#.to_string(),
+            ("GET", p) if p.starts_with("/me/mailFolders/") && p.ends_with("?$select=id") => {
+                return Some((404, "application/json", br#"{"error":{"code":"ErrorItemNotFound","message":"nope"}}"#.to_vec()));
+            }
+            ("GET", p) if p.starts_with("/me/mailFolders?") => r#"{"value":[
+                {"id":"INBOX-ID","displayName":"Inbox","parentFolderId":"ROOT","childFolderCount":0},
+                {"id":"JUNK-ID","displayName":"Junk Email","parentFolderId":"ROOT","childFolderCount":0}]}"#
+                .to_string(),
+            ("GET", p) if p.starts_with("/me/mailFolders/INBOX-ID/messages/delta") => format!(
+                r#"{{"value":[
+                {{"id":"M1","subject":"You won","isRead":false,"parentFolderId":"INBOX-ID","conversationId":"C1",
+                "internetMessageId":"<w@deals.example>","receivedDateTime":"{now}","changeKey":"ck1",
+                "from":{{"emailAddress":{{"name":"Deals","address":"win@deals.example"}}}},
+                "body":{{"contentType":"text","content":"Claim now"}}}},
+                {{"id":"M0","subject":"Old offer","isRead":true,"parentFolderId":"INBOX-ID","conversationId":"C0",
+                "internetMessageId":"<o@deals.example>","receivedDateTime":"2020-01-01T09:00:00Z","changeKey":"ck0",
+                "from":{{"emailAddress":{{"name":"Deals","address":"win@deals.example"}}}},
+                "body":{{"contentType":"text","content":"Old"}}}},
+                {{"id":"M2","subject":"Lunch?","isRead":false,"parentFolderId":"INBOX-ID","conversationId":"C2",
+                "internetMessageId":"<l@contoso.example>","receivedDateTime":"{now}","changeKey":"ck2",
+                "from":{{"emailAddress":{{"name":"Megan","address":"megan@contoso.example"}}}},
+                "body":{{"contentType":"text","content":"Noon"}}}}],
+                "@odata.deltaLink":"{base}/empty"}}"#
+            ),
+            ("GET", p) if p.contains("/messages/delta") || p == "/empty" => format!(r#"{{"value":[],"@odata.deltaLink":"{base}/empty"}}"#),
+            ("POST", "/me/messages/M1/move") => r#"{"id":"M1-J"}"#.to_string(),
+            _ => return Some((404, "application/json", br#"{"error":{"code":"ErrorItemNotFound","message":"nope"}}"#.to_vec())),
+        };
+        Some((200, "application/json", reply.into_bytes()))
+    })
+    .await;
+    let store = Store::open_in_memory().unwrap();
+    let mut acct = Account { kind: AccountKind::Microsoft, email: "me@contoso.example".into(), display_name: "Me".into(), ..Default::default() };
+    let cfg = AccountConfig { provider: crate::config::Provider::MicrosoftWork, auth: crate::config::AuthMethod::OauthGraph, ..Default::default() };
+    cfg.store_into(&mut acct);
+    store.add_account(&mut acct).unwrap();
+    let old = axentra_core::junk::SenderRule {
+        account_id: Some(acct.id),
+        pattern: "deals.example".into(),
+        domain: true,
+        action: Some(axentra_core::junk::RuleAction::Allow),
+        created_at: 1_500_000_000,
+        updated_at: 1_500_000_000,
+        effective_at: 1_500_000_000,
+        ..Default::default()
+    };
+    store.restore_sender_rule(&old).unwrap();
+    store.set_sender_rule(Some(acct.id), "deals.example", "", axentra_core::junk::RuleAction::Block).unwrap();
+    let notifier = Notifier::default();
+    let graph = Graph::with_base(reqwest::Client::new(), Arc::new(StaticToken(Secret::new("tok"))), &base);
+
+    let mut mail = GraphMail::new(&graph, &store, &acct, &cfg, &notifier).unwrap();
+    mail.sync_folders().await.unwrap();
+    mail.sync_messages(Some(&[FolderRole::Inbox])).await.unwrap();
+    let inbox = store.folder_by_role(acct.id, FolderRole::Inbox).unwrap().unwrap().id;
+    let junk = store.folder_by_role(acct.id, FolderRole::Junk).unwrap().unwrap().id;
+    let all = store.account_messages(acct.id).unwrap();
+    let won = all.iter().find(|m| m.subject == "You won").unwrap();
+    assert_eq!(won.folder_id, junk);
+    assert_eq!(store.routed_by_rule(won.id).unwrap().as_deref(), Some("deals.example"));
+    assert_eq!(all.iter().find(|m| m.subject == "Old offer").unwrap().folder_id, inbox, "mail from before the rule stays");
+    assert_eq!(all.iter().find(|m| m.subject == "Lunch?").unwrap().folder_id, inbox);
+
+    assert_eq!(mail.push().await.unwrap(), 1);
+    let requests = log.lock().unwrap().clone();
+    let moves: Vec<&String> = requests.iter().filter(|r| r.starts_with("POST /me/messages/")).collect();
+    assert_eq!(moves.len(), 1, "{requests:?}");
+    assert!(moves[0].starts_with("POST /me/messages/M1/move") && moves[0].contains("JUNK-ID"), "{moves:?}");
+    let (_, sh) = store.sync_find::<Shadow>(acct.id, KIND_MESSAGE, "M1-J").unwrap().expect("shadow follows the new id");
+    assert_eq!(crate::diff::MessageState::from_value(&sh.state).folder_id, junk);
+    assert_eq!(mail.push().await.unwrap(), 0, "moved once");
+}
+
+/// On IMAP, mail that arrived (INTERNALDATE) before blocking took effect is
+/// left in the Inbox by a first sync, and nothing is pushed to the server for
+/// it, also when the rule was an Allow made long before.
+#[tokio::test]
+async fn an_imap_first_sync_leaves_mail_from_before_a_block() {
+    let store = Store::open_in_memory().unwrap();
+    let acct = account(&store);
+    let cfg = AccountConfig::of(&acct);
+    let notifier = Notifier::default();
+    // The fake server's INTERNALDATE is 19 Oct 2026; the block takes effect today, later.
+    let old = axentra_core::junk::SenderRule {
+        account_id: Some(acct.id),
+        pattern: "megan@contoso.example".into(),
+        action: Some(axentra_core::junk::RuleAction::Allow),
+        created_at: 1_500_000_000,
+        updated_at: 1_500_000_000,
+        effective_at: 1_500_000_000,
+        ..Default::default()
+    };
+    store.restore_sender_rule(&old).unwrap();
+    store.set_sender_rule(Some(acct.id), "megan@contoso.example", "", axentra_core::junk::RuleAction::Block).unwrap();
+    assert!(store.sender_rules().unwrap()[0].effective_since() > chrono::Utc::now().timestamp() - 60);
+    let state = Arc::new(Mutex::new(FakeServer { inbox: vec![(1, vec![], raw("Budget", "root@contoso.example", ""))], ..Default::default() }));
+    for _ in 0..2 {
+        let mut session = connect(&state, "secret").await.unwrap();
+        let mut ms = MailSync::new(&store, &acct, &cfg, &notifier).unwrap();
+        let mapped = ms.map_folders(&folders::list(&mut session).await.unwrap()).unwrap();
+        let inbox = mapped.iter().find(|m| m.remote.role == Some(FolderRole::Inbox)).unwrap().clone();
+        ms.sync_folder(&mut session, inbox.folder_id, "INBOX").await.unwrap();
+        let msgs = store.folder_messages(inbox.folder_id).unwrap();
+        assert_eq!(msgs.len(), 1, "still in the Inbox");
+        assert!(store.routed_by_rule(msgs[0].id).unwrap().is_none());
+        let _ = session.session.logout().await;
+    }
+    let log = state.lock().unwrap().log.clone();
+    assert!(!log.iter().any(|c| c.starts_with("UID MOVE") || c.starts_with("UID COPY") || c.starts_with("UID STORE")), "{log:?}");
+}

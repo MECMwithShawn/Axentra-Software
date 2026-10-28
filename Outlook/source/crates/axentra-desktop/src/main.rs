@@ -16,6 +16,7 @@
 mod appearance;
 mod icon;
 mod instance;
+mod pin;
 mod titlebar;
 
 use std::sync::Arc;
@@ -64,6 +65,11 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Args {
     Args::Run { ignored }
 }
 
+/// The database this copy opens (`AXENTRA_DB`, else the default profile).
+fn database_path() -> std::path::PathBuf {
+    std::env::var_os("AXENTRA_DB").map(Into::into).unwrap_or_else(Store::default_path)
+}
+
 fn main() {
     match parse_args(std::env::args().skip(1)) {
         Args::Version => {
@@ -79,8 +85,16 @@ fn main() {
         }
         Args::Run { .. } => {}
     }
+    let path = database_path();
+    // Pin to desktop on Wayland: GNOME ignores "keep below" from Wayland
+    // windows, so a pinned window opens through XWayland, where it is
+    // honoured. Decided from a marker next to the database, before any
+    // thread or GTK starts (the setting itself is in the store).
+    if pin::wants_xwayland(&path, |k| std::env::var_os(k)) {
+        // SAFETY: still single-threaded; nothing has read the environment yet.
+        unsafe { std::env::set_var("GDK_BACKEND", "x11") };
+    }
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
-    let path = std::env::var_os("AXENTRA_DB").map(Into::into).unwrap_or_else(Store::default_path);
     // First, before anything slow: is this profile already open? A copy the
     // lock can't see (one started before this version, which takes no lock,
     // or one whose lock is elsewhere) is checked for too.
