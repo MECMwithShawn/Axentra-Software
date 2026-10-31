@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5 (preview, 2026-10-30)
+
+- **Lines no longer overlap after changing the font size:** rows stayed where they were first drawn, so a bigger font
+  or zoom piled lines on top of each other until the file was reopened.
+- **Ctrl+scroll wheel zooms** the text anywhere in the window, in 10% steps from 10% to 500% like Windows Notepad
+  (Ctrl+= and Ctrl+- use the same steps). Touchpad scrolling adds up to a step instead of racing.
+- **Each layout has its usual font size and line spacing:** Notepad 15 px with tight lines, Notepad++ 14 px, Code
+  14 px with VS Code's spacing. Upgrading resets the font settings once to the current layout's.
+- The editor font list names only installed fonts. WebKitGTK replaced a missing font with a proportional one instead
+  of trying the next, which broke the character grid.
+
 ## 0.1.4 (preview, 2026-10-26)
 
 - **Highlights line up with the text:** if the editor font finished loading after the editor measured it,

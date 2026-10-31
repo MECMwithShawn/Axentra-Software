@@ -1,6 +1,6 @@
 # Axentra Notepad on Linux
 
-Built and tested 2026-10-26 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.4**; a **preview**, not a stable
+Built and tested 2026-10-30 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.5**; a **preview**, not a stable
 release. There's no published package yet: build it from [source](source/).
 
 ## Install and run
@@ -8,7 +8,7 @@ release. There's no published package yet: build it from [source](source/).
 ```bash
 cd source
 python3 packaging/linux/package.py --output dist
-sudo apt install ./dist/axentra-notepad_0.1.4-1_amd64.deb
+sudo apt install ./dist/axentra-notepad_0.1.5-1_amd64.deb
 ```
 
 Open **Axentra Notepad** from the application menu, from Axentra Command, or run `axentra-notepad` (with files, or
@@ -42,8 +42,10 @@ Unsaved tabs are backed up as you type. The page renders without the GPU, becaus
   every close path (Cancel, Don't Save, Save through the GTK save dialog, and Don't Save or Save with the page
   process paused).
 - A 13 MB, 200,000-line file opens in under half a second and types at about 2 ms per keystroke.
-- 0.1.3 was installed and used on this Zorin machine; the window-freeze it fixes was diagnosed on the same machine.
-  0.1.4 was built and its packaging checked, but not installed here yet.
+- 0.1.3 and 0.1.4 were installed and used on this Zorin machine; the window freeze 0.1.3 fixes and the overlapping
+  lines 0.1.5 fixes were both found there. 0.1.5's Ctrl+scroll zoom (100% to 200% and back to 80%) and the Notepad
+  layout's spacing were checked in a real window under Xvfb; 0.1.5 was built and its package checked, but not
+  installed here yet.
 
 ## Not yet
 

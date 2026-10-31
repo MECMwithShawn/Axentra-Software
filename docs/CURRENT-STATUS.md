@@ -15,7 +15,7 @@ All nine applications have native Linux development previews installed and launc
 | [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
 | [Archive](../Archive/) | 0.1.4 | None | [Installed preview](../Archive/LINUX.md) |
 | [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](../Edge-Extension-Suite/Horizon/LINUX.md) |
-| [Notepad](../Notepad/) | 0.1.4 | None | [Installed preview](../Notepad/LINUX.md) |
+| [Notepad](../Notepad/) | 0.1.5 | None | [Installed preview](../Notepad/LINUX.md) |
 
 ## Axentra OneDrive (added 2026-10-19)
 
@@ -27,7 +27,7 @@ All nine applications have native Linux development previews installed and launc
 
 ## Axentra Notepad (added 2026-10-21)
 
-[Axentra Notepad](../Notepad/) 0.1.4 is a Linux text and code editor with Windows Notepad, Notepad++ and VS Code layouts: tabs and sessions, highlighting for 46 languages, multiple cursors, find and replace across folders and 25 encodings. Its source is published in [Notepad/source](../Notepad/source/); there's no published package yet. 0.1.3 made closing reliable (a native save prompt and an exit watchdog) and turned off GPU rendering after WebKit's GPU renderer froze the window on a hybrid Intel/NVIDIA laptop; 0.1.4 keeps highlights aligned when the font loads late. 21 Rust tests and 715 editor and highlighter tests passed. Limits are in its [Linux page](../Notepad/LINUX.md).
+[Axentra Notepad](../Notepad/) 0.1.5 is a Linux text and code editor with Windows Notepad, Notepad++ and VS Code layouts: tabs and sessions, highlighting for 46 languages, multiple cursors, find and replace across folders and 25 encodings. Its source is published in [Notepad/source](../Notepad/source/); there's no published package yet. 0.1.3 made closing reliable (a native save prompt and an exit watchdog) and turned off GPU rendering after WebKit's GPU renderer froze the window on a hybrid Intel/NVIDIA laptop; 0.1.4 keeps highlights aligned when the font loads late; 0.1.5 stops lines overlapping after a font size change, adds Ctrl+scroll wheel zoom and gives each layout its usual font size and spacing. 21 Rust tests and 715 editor and highlighter tests passed. Limits are in its [Linux page](../Notepad/LINUX.md).
 
 ## Installation locations
 

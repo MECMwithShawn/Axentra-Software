@@ -1,6 +1,6 @@
 <img src="logo.png" alt="Axentra Notepad logo" width="96" align="right">
 
-**Linux preview (0.1.4, built 2026-10-26):** [Zorin installation, tests and limits](LINUX.md).
+**Linux preview (0.1.5, built 2026-10-30):** [Zorin installation, tests and limits](LINUX.md).
 
 # Axentra Notepad
 
@@ -16,14 +16,14 @@ text encodings. There's no account, telemetry or network access.
 
 ![Axentra Notepad in the Code layout, with two cursors from Ctrl+D](screenshots/linux-2026-10-26-code-layout.png)
 
-**Latest version: 0.1.4 (Linux preview)** · No published download yet; build it from [source](source/) ·
+**Latest version: 0.1.5 (Linux preview)** · No published download yet; build it from [source](source/) ·
 [Changelog](CHANGELOG.md) · [Linux page](LINUX.md)
 
 ## Features
 
 | Area | What you get |
 |---|---|
-| **Layouts** | *Notepad*: just the text, word wrap on, no line numbers. *Notepad++*: toolbar, line numbers, fold margin, bookmarks and a length/lines status field. *Code*: activity bar, explorer, search, breadcrumbs and minimap. Every part can also be switched on or off on its own from View, and there are dark and light themes |
+| **Layouts** | *Notepad*: just the text, word wrap on, no line numbers, Notepad's font size and line spacing. *Notepad++*: toolbar, line numbers, fold margin, bookmarks and a length/lines status field. *Code*: activity bar, explorer, search, breadcrumbs and minimap. Every part can also be switched on or off on its own from View, and there are dark and light themes. Ctrl+scroll wheel zooms the text in 10% steps, like Windows Notepad |
 | **Tabs and sessions** | Tabs with drag-to-reorder, middle-click close and Reopen Closed Tab. Open tabs come back after a restart; closing the window with unsaved changes asks Save / Don't Save / Cancel (or, if you prefer, keeps them for next time like Windows 11 Notepad). Closing the last tab returns to a start page with *New Note* and *New Code File…*. Files changed by other programs reload automatically, or ask if you have unsaved edits |
 | **Highlighting** | 46 languages detected from the file name, extension or shebang, including C/C++, C#, Java, Kotlin, Go, Rust, JavaScript/TypeScript, Python, PHP, Ruby, shell, PowerShell, SQL, HTML with embedded CSS and JS, Markdown with highlighted fenced code, JSON, YAML, TOML and INI. CSV/TSV get rainbow columns and logs get coloured levels |
 | **Editing** | Multiple cursors (Alt+click or Ctrl+click, Ctrl+D, Ctrl+Shift+L, Ctrl+Alt+Up/Down), column selection (Alt+drag or Column Selection Mode), auto-closing brackets and quotes, auto-indent, smart Home, toggle line and block comments, line operations (move, copy, duplicate, delete, join, sort, reverse, shuffle, remove duplicate or empty lines, trim), case changes, Base64/URL/HTML conversions, JSON format and minify, insert date/time (F5), overtype and read-only mode |
@@ -50,7 +50,7 @@ There's no published package yet. To build and install it from the source folder
 cd source
 cargo test
 python3 packaging/linux/package.py --output dist
-sudo apt install ./dist/axentra-notepad_0.1.4-1_amd64.deb
+sudo apt install ./dist/axentra-notepad_0.1.5-1_amd64.deb
 ```
 
 Open **Axentra Notepad** from the application menu or Axentra Command, or run `axentra-notepad file.txt`
