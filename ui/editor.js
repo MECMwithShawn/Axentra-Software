@@ -139,12 +139,6 @@ class EditorView {
     const inp = this.input;
     this.scroller.addEventListener("scroll", () => this.schedule());
     this.sizer.addEventListener("mousedown", (e) => this.onMouseDown(e));
-    this.root.addEventListener("wheel", (e) => {
-      if (e.ctrlKey) {
-        e.preventDefault();
-        this.host.zoom(e.deltaY < 0 ? 1 : -1);
-      }
-    }, { passive: false });
     this.sizer.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       if (e.target.closest(".gutter")) return;
@@ -589,9 +583,14 @@ class EditorView {
       if (!el) {
         el = document.createElement("div");
         el.className = "row";
-        el.style.top = v.row * this.lh + "px";
         this.textLayer.append(el);
         this.rows.set(v.row, el);
+      }
+      // The line height changes with the font size and zoom, so place the row every time.
+      const top = v.row * this.lh + "px";
+      if (el._top !== top) {
+        el.style.top = top;
+        el._top = top;
       }
       if (el._html !== html) {
         el.innerHTML = html;

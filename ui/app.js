@@ -79,14 +79,14 @@ async function clipGet() {
 
 // ------------------------------------------------------------------ preferences
 const LAYOUTS = {
-  notepad: { activityBar: false, sidebar: false, toolbar: false, minimap: false, lineNumbers: "off", folding: false, glyphMargin: false, breadcrumbs: false, indentGuides: false, currentLine: false, wrap: true, scrollBeyond: false },
-  notepadpp: { activityBar: false, sidebar: false, toolbar: true, minimap: false, lineNumbers: "on", folding: true, glyphMargin: true, breadcrumbs: false, indentGuides: true, currentLine: true, wrap: false, scrollBeyond: false },
-  code: { activityBar: true, sidebar: true, toolbar: false, minimap: true, lineNumbers: "on", folding: true, glyphMargin: true, breadcrumbs: true, indentGuides: true, currentLine: true, wrap: false, scrollBeyond: true },
+  notepad: { fontSize: 15, lineHeight: 1.25, activityBar: false, sidebar: false, toolbar: false, minimap: false, lineNumbers: "off", folding: false, glyphMargin: false, breadcrumbs: false, indentGuides: false, currentLine: false, wrap: true, scrollBeyond: false },
+  notepadpp: { fontSize: 14, lineHeight: 1.25, activityBar: false, sidebar: false, toolbar: true, minimap: false, lineNumbers: "on", folding: true, glyphMargin: true, breadcrumbs: false, indentGuides: true, currentLine: true, wrap: false, scrollBeyond: false },
+  code: { fontSize: 14, lineHeight: 1.35, activityBar: true, sidebar: true, toolbar: false, minimap: true, lineNumbers: "on", folding: true, glyphMargin: true, breadcrumbs: true, indentGuides: true, currentLine: true, wrap: false, scrollBeyond: true },
 };
 const LAYOUT_NAMES = { notepad: "Notepad", notepadpp: "Notepad++", code: "Code" };
-const DEFAULT_FONT = '"Cascadia Mono", "Cascadia Code", "JetBrains Mono", "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", monospace';
+const DEFAULT_FONTS = ["Cascadia Mono", "Cascadia Code", "JetBrains Mono", "DejaVu Sans Mono", "Ubuntu Mono", "Liberation Mono", "Noto Sans Mono"];
 const DEFAULTS = {
-  theme: "dark", layout: "code", fontFamily: "", fontSize: 14, lineHeight: 1.5, zoom: 100,
+  theme: "dark", layout: "code", fontFamily: "", zoom: 100,
   ...LAYOUTS.code, tabs: true, statusBar: true, whitespace: "none", eol: false, rulers: "",
   cursorStyle: "line", cursorBlink: true, matchBrackets: true, occurrences: true, highlight: true,
   tabSize: 4, insertSpaces: true, detectIndent: true, autoClose: true, autoIndent: true, smartHome: true,
@@ -95,7 +95,13 @@ const DEFAULTS = {
   findCase: false, findWord: false, findRegex: false,
 };
 const prefs = (() => {
-  try { return Object.assign({ ...DEFAULTS }, JSON.parse(localStorage.getItem("axn-prefs") || "{}")); } catch { return { ...DEFAULTS }; }
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("axn-prefs") || "{}"); } catch {}
+  const p = Object.assign({ ...DEFAULTS }, saved);
+  // 0.1.5 gave each layout its own font size and line spacing; start once from the layout's.
+  if (saved.layout && !saved.fontsV && LAYOUTS[p.layout]) Object.assign(p, { fontFamily: "", fontSize: LAYOUTS[p.layout].fontSize, lineHeight: LAYOUTS[p.layout].lineHeight });
+  p.fontsV = 1;
+  return p;
 })();
 function savePrefs() {
   try { localStorage.setItem("axn-prefs", JSON.stringify(prefs)); } catch {}
@@ -634,11 +640,22 @@ async function restoreSession(sess, buffers) {
 }
 
 // ------------------------------------------------------------------ editing glue
+/**
+ * The editor's font stack, naming only installed fonts. WebKitGTK asks fontconfig for the first
+ * family, and fontconfig substitutes a proportional sans font for a name that isn't installed
+ * instead of moving on to the next one, which breaks the monospace grid.
+ */
+function fontStack() {
+  const have = new Map(S.fonts.map((f) => [f.toLowerCase(), f]));
+  const want = prefs.fontFamily ? [prefs.fontFamily, ...DEFAULT_FONTS] : DEFAULT_FONTS;
+  const names = have.size ? want.map((f) => have.get(f.toLowerCase())).filter(Boolean) : want;
+  return [...new Set(names)].map((f) => `"${f}"`).concat("monospace").join(", ");
+}
 function configureView() {
   const t = S.active;
   const z = prefs.zoom / 100;
   view.configure({
-    fontFamily: prefs.fontFamily ? `"${prefs.fontFamily}", ${DEFAULT_FONT}` : DEFAULT_FONT,
+    fontFamily: fontStack(),
     fontSize: Math.max(5, Math.round(prefs.fontSize * z * 10) / 10), lineHeight: prefs.lineHeight, wrap: prefs.wrap, wrapColumn: prefs.wrapColumn,
     lineNumbers: prefs.lineNumbers, folding: prefs.folding, glyphMargin: prefs.glyphMargin, minimap: prefs.minimap,
     whitespace: prefs.whitespace, eol: prefs.eol, indentGuides: prefs.indentGuides, currentLine: prefs.currentLine,
@@ -1854,7 +1871,7 @@ function renderStatus() {
     right.append(item(prefs.layout === "notepad" ? eolName(t.eol) : eolShort(t.eol), { title: "Select End of Line Sequence", run: () => pickEol(t) }));
     right.append(item(langOf(t).name, { title: "Select Language Mode", run: () => pickLanguage(t) }));
   }
-  right.append(item(`${prefs.zoom}%`, { title: "Zoom (Ctrl+= / Ctrl+- / Ctrl+0)", run: () => run("zoomReset") }));
+  right.append(item(`${prefs.zoom}%`, { title: "Zoom (Ctrl+scroll wheel, Ctrl+= / Ctrl+- / Ctrl+0)", run: () => run("zoomReset") }));
   right.append(item("", { title: `Layout: ${LAYOUT_NAMES[prefs.layout]}`, html: svg("sidebar"), run: () => pickLayout() }));
 }
 /** Tells the app window the title, whether the session still needs writing (guard), and
@@ -3047,9 +3064,9 @@ function promptText({ title, label, value = "", selectStem = false }) {
 
 const SETTINGS = {
   text: { label: "Text Editor", items: [
-    ["fontFamily", "Font family", "font", "Empty uses Cascadia Mono, then other monospace fonts."],
-    ["fontSize", "Font size", "number", "", 6, 48],
-    ["lineHeight", "Line height", "select", "", [[1.2, "Compact"], [1.35, "Snug"], [1.5, "Normal"], [1.7, "Relaxed"]]],
+    ["fontFamily", "Font family", "font", "Empty uses Cascadia Mono, then other monospace fonts. A font that isn't installed is skipped."],
+    ["fontSize", "Font size", "number", "Choosing a layout sets its usual size. Ctrl+scroll wheel zooms.", 6, 48],
+    ["lineHeight", "Line height", "select", "", [[1.2, "Compact"], [1.25, "Notepad"], [1.35, "Snug"], [1.5, "Normal"], [1.7, "Relaxed"]]],
     ["wrap", "Word wrap", "bool", "Wrap long lines at the window edge (Alt+Z)."],
     ["wrapColumn", "Wrap column", "number", "0 wraps at the window edge.", 0, 400],
     ["cursorStyle", "Cursor style", "select", "", [["line", "Line"], ["block", "Block"], ["underline", "Underline"]]],
@@ -3174,12 +3191,23 @@ function printTab() {
 }
 
 // ------------------------------------------------------------------ zoom, prefs and layout
+/** Zooms the text in 10% steps from 10% to 500%, like Windows Notepad. */
 function zoomBy(d) {
-  const steps = [30, 50, 67, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
-  const z = prefs.zoom;
-  const next = d > 0 ? steps.find((s) => s > z) ?? 500 : [...steps].reverse().find((s) => s < z) ?? 30;
-  setPref("zoom", next);
+  const next = Math.max(10, Math.min(500, Math.round(prefs.zoom / 10) * 10 + Math.sign(d) * 10));
+  if (next !== prefs.zoom) setPref("zoom", next);
 }
+// Ctrl+scroll wheel zooms anywhere in the window. A wheel notch is one step; touchpads send many
+// small deltas, so those add up to a notch first.
+let wheelZoom = 0;
+window.addEventListener("wheel", (e) => {
+  if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+  e.preventDefault();
+  const dy = e.deltaMode === 0 ? e.deltaY : e.deltaY * 40;
+  wheelZoom = Math.sign(dy) === Math.sign(wheelZoom) ? wheelZoom + dy : dy;
+  if (Math.abs(wheelZoom) < 40) return;
+  zoomBy(wheelZoom < 0 ? 1 : -1);
+  wheelZoom = 0;
+}, { passive: false, capture: true });
 function applyPrefs() {
   const root = document.documentElement;
   root.dataset.theme = prefs.theme;
@@ -3339,7 +3367,6 @@ const host = {
   selectionChanged: () => onSelectionChanged(),
   selectionMade: () => {},
   langOf: (t) => langOf(t),
-  zoom: (d) => zoomBy(d),
   focusChanged: () => {},
   idleTokenize: () => scheduleIdle(),
   overtype: () => S.overtype,
