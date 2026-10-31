@@ -33,6 +33,8 @@ pub struct Row {
     pub importance: Importance,
     pub mentions_me: bool,
     pub meeting: Option<MeetingMessageKind>,
+    /// The strongest junk / phishing advice among the row's messages.
+    pub advice: junk::Advice,
     pub categories: Vec<String>,
     pub draft: bool,
     /// Folder name shown on search results.
@@ -308,6 +310,17 @@ fn group_label(row: &Row, view: &ListView, pinned_group: bool, now: DateTime<Loc
     }
 }
 
+/// Phishing beats a junk suggestion beats caution.
+fn strongest(advice: impl Iterator<Item = junk::Advice>) -> junk::Advice {
+    let rank = |a: &junk::Advice| match a {
+        junk::Advice::None => 0,
+        junk::Advice::Caution => 1,
+        junk::Advice::LooksLikeJunk => 2,
+        junk::Advice::Phishing => 3,
+    };
+    advice.max_by_key(rank).unwrap_or_default()
+}
+
 /// Approximate message size in bytes (attachments plus text), for the
 /// Size sort.
 fn approx_size(m: &Message, attachments: &HashMap<MessageId, Vec<Attachment>>) -> i64 {
@@ -385,7 +398,7 @@ pub fn build(app: AppState, ctx: MailCtx) -> ListModel {
         search: searching.then(|| search.query.trim().to_string()),
         scope: (ctx.search_scope)(),
         conversation_view: settings.conversation_view,
-        focused_inbox: settings.focused_inbox,
+        focused_inbox: settings.focused_inbox_shown(),
         attachment_chips: settings.show_attachment_previews && settings.density == Density::Roomy,
         expanded: (ctx.expanded)(),
         collapsed: ctx.collapsed_groups.read().clone(),
@@ -469,6 +482,8 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
         Vec::new()
     };
     let attachments = s.attachments_for(&att_ids)?;
+    let all_ids: Vec<MessageId> = groups.iter().flat_map(|g| g.iter().map(|m| m.id)).collect();
+    let advice = s.advice_for(&all_ids).unwrap_or_default();
     // Replied / forwarded icons (not for the user's own Sent Items and Drafts).
     let responses = if matches!(role, Some(FolderRole::Sent | FolderRole::Drafts)) && !across {
         HashMap::new()
@@ -534,6 +549,7 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
             },
             mentions_me: g.iter().any(|m| m.mentions_me),
             meeting: g.iter().find_map(|m| m.meeting_kind),
+            advice: strongest(g.iter().filter_map(|m| advice.get(&m.id).copied())),
             categories,
             draft: latest.is_draft,
             folder_tag: across.then(|| by_id.get(&latest.folder_id).map(|f| f.name.clone())).flatten(),

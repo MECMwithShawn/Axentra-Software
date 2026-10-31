@@ -459,15 +459,23 @@ fn BlockDialog(id: MessageId) -> Element {
     let ctx = use_mail();
     let Some(m) = store().message(id).ok().flatten() else { return rsx! {} };
     let sender = m.from.clone();
+    let acct = m.account_id;
+    let account = store().account(acct).ok().flatten().map(|a| a.email).unwrap_or_else(|| "this account".into());
     rsx! {
         Confirm {
             title: format!("Block {}?", m.from.display()),
-            body: format!("Messages from {} will go to Junk Email. Messages you already have stay where they are.", m.from.address),
+            body: format!(
+                "New messages from {} to {} will go to Junk Email. Messages you already have stay where they are. Phishing warnings still show.",
+                m.from.address,
+                account
+            ),
             confirm: "Block",
             on_confirm: move |_| {
                 close(ctx);
-                if app.check(store().block_sender(&sender)).is_some() {
-                    app.toast(format!("Blocked {}", sender.address));
+                if let Some(change) = app.check(store().set_sender_rule(Some(acct), &sender.address, &sender.name, junk::RuleAction::Block)) {
+                    let undo = crate::state::UndoAction::Junk { events: Vec::new(), rules: vec![change], moves: Vec::new() };
+                    app.toast_with_undo(format!("Blocked {}", sender.address), undo);
+                    app.bump_mail();
                 }
             },
         }
@@ -489,9 +497,9 @@ fn ReportDialog(ids: Vec<MessageId>, phishing: bool) -> Element {
     };
     let who = if senders.len() == 1 { senders[0].clone() } else { format!("{} senders", senders.len()) };
     let (title, body) = if phishing {
-        ("Report as phishing?", format!("{} will be moved to Deleted Items. This report stays on this device.", if ids.len() == 1 { "The message".to_string() } else { format!("{} messages", ids.len()) }))
+        ("Report as phishing?", format!("{} will be moved to Junk Email and keep a phishing warning. Axentra learns from this on this device; nothing is sent to Microsoft or anyone else.", if ids.len() == 1 { "The message".to_string() } else { format!("{} messages", ids.len()) }))
     } else {
-        ("Report as junk?", format!("{} will be moved to Junk Email. This report stays on this device.", if ids.len() == 1 { "The message".to_string() } else { format!("{} messages", ids.len()) }))
+        ("Report as junk?", format!("{} will be moved to Junk Email. Axentra learns from this on this device; nothing is sent to Microsoft or anyone else.", if ids.len() == 1 { "The message".to_string() } else { format!("{} messages", ids.len()) }))
     };
     rsx! {
         Confirm {
@@ -503,7 +511,7 @@ fn ReportDialog(ids: Vec<MessageId>, phishing: bool) -> Element {
                 let m = model.read();
                 actions::report(app, ctx, &m, ids.clone(), phishing, *block.peek());
             },
-            Checkbox { checked: block(), label: format!("Also block {who}"), onchange: move |v| block.set(v) }
+            Checkbox { checked: block(), label: format!("Also block {who} in this account"), onchange: move |v| block.set(v) }
         }
     }
 }

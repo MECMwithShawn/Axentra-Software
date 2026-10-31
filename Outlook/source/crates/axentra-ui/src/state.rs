@@ -78,6 +78,12 @@ pub enum UndoAction {
     RestoreContact(Contact),
     /// Undo a message flag/read/pin change by writing the old messages back.
     RestoreMessages(Vec<Message>),
+    /// Undo a Report junk / Report phishing / Not junk (or a rule change):
+    /// the confirmed labels go back to what they were, any rule made with it
+    /// goes, the messages move back, all in one change.
+    Junk { events: Vec<i64>, rules: Vec<axentra_core::junk::RuleChange>, moves: Vec<MoveRecord> },
+    /// Put back a sender rule removed in Settings.
+    RestoreRule(axentra_core::junk::SenderRule),
 }
 
 /// What a custom toast button does (besides Undo).
@@ -461,6 +467,10 @@ impl AppState {
             UndoAction::RestoreEvent(e) => s.insert_event(&mut Event { id: 0, ..e.clone() }).map(|_| self.bump_calendar()),
             UndoAction::RestoreContact(c) => s.insert_contact(&mut Contact { id: 0, ..c.clone() }).map(|_| self.bump_people()),
             UndoAction::RestoreMessages(msgs) => msgs.iter().try_for_each(|m| s.update_message(m)).map(|_| self.bump_mail()),
+            UndoAction::Junk { events, rules, moves } => s
+                .undo_junk_operation(&axentra_core::store::JunkOperation { events: events.clone(), rules: rules.clone(), moves: moves.clone() })
+                .map(|_| self.bump_mail()),
+            UndoAction::RestoreRule(rule) => s.restore_sender_rule(rule).map(|_| self.bump_mail()),
         };
         if let Err(e) = result {
             self.error(format!("Couldn't undo: {e}"));

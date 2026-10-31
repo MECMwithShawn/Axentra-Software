@@ -103,8 +103,14 @@ pub struct Payload {
     pub settings: Settings,
     pub categories: Vec<Category>,
     pub recent_addresses: Vec<RecentAddress>,
+    /// Sender lists of 0.1.4 and earlier (restored as all-accounts rules).
     pub blocked_senders: Vec<BlockedSender>,
     pub safe_senders: Vec<SafeSender>,
+    /// Junk email allow / block rules. Confirmed labels and the learned
+    /// model are not backed up: they stay on this device.
+    pub sender_rules: Vec<crate::junk::SenderRule>,
+    /// Senders whose pictures load automatically.
+    pub image_senders: Vec<SafeSender>,
     pub inference_overrides: Vec<InferenceOverride>,
     /// App-wide key/value entries from the allowlist (see `collect.rs`).
     pub kv: Vec<KvEntry>,
@@ -259,6 +265,9 @@ pub struct BlockedSender {
 pub struct SafeSender {
     pub address: String,
     pub added_at: i64,
+    /// A picture permission for a domain that also covers its subdomains.
+    /// Absent (old backups, the old safe-sender list): the domain only.
+    pub subdomains: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

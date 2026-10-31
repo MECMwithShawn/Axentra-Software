@@ -61,7 +61,7 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     let none = ids.is_empty();
     let role = if model.searching { None } else { model.folder.as_ref().map(|f| f.role) };
     let folder = model.folder.as_ref().map(|f| f.id);
-    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox, settings.use_24h_time);
+    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox_shown(), settings.use_24h_time);
     let single = t.messages.len() == 1;
     let drafts = role == Some(FolderRole::Drafts) || (!t.messages.is_empty() && t.messages.iter().all(|m| m.is_draft));
     let all_read = !t.messages.is_empty() && t.messages.iter().all(|m| m.is_read);
@@ -105,7 +105,7 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     let sweep_ok = single && !matches!(role, Some(FolderRole::Junk | FolderRole::Drafts | FolderRole::Sent | FolderRole::Deleted)) && role.is_some();
     let mut move_menu = menus::move_items("move", account, folder, "Other folder…");
     move_menu.push(MenuItem::new("copy_picker", "Copy to…").icon("copy"));
-    if settings.focused_inbox && role == Some(FolderRole::Inbox) && !none {
+    if settings.focused_inbox_shown() && role == Some(FolderRole::Inbox) && !none {
         let other = t.messages.iter().all(|m| m.inference == InferenceClass::Other);
         move_menu.push(MenuItem::divider());
         if other {

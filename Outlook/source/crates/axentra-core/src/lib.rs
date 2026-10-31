@@ -5,6 +5,7 @@
 pub mod backup;
 pub mod error;
 pub mod html;
+pub mod junk;
 pub mod model;
 pub mod recurrence;
 pub mod seed;

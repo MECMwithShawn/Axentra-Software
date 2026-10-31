@@ -567,3 +567,40 @@
 @media (forced-colors: active) {
   .ax-customize-group-delete { opacity: 1; }
 }
+
+/* Glass (Settings › General › Window): the frame, header, rail, ribbon and
+   panes let the desktop show through by --ax-glass; text, icons, message
+   bodies and everything that floats (menus, dialogs, flyouts, popovers,
+   pop-out windows, toasts) stay solid so they remain readable. Only with
+   the header as the title bar, whose window is see-through. */
+.ax-app[data-glass] {
+  --ax-glass-keep: calc(100% - var(--ax-glass));
+  --ax-bg-canvas: color-mix(in srgb, var(--colorNeutralBackground3) var(--ax-glass-keep), transparent);
+  --ax-bg-1: color-mix(in srgb, var(--colorNeutralBackground1) var(--ax-glass-keep), transparent);
+  --ax-bg-2: color-mix(in srgb, var(--colorNeutralBackground2) var(--ax-glass-keep), transparent);
+  --ax-bg-3: color-mix(in srgb, var(--colorNeutralBackground3) var(--ax-glass-keep), transparent);
+}
+.ax-app[data-glass] .ax-header { background: color-mix(in srgb, var(--ax-header-bg) var(--ax-glass-keep), transparent); }
+.ax-app[data-glass] :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [role="tooltip"],
+    .ax-dialog, .ax-acct-dialog, .ax-menu, .ax-flyout, .ax-toast, .ax-cal-peek, .ax-surface) {
+  --ax-bg-canvas: var(--colorNeutralBackground3);
+  --ax-bg-1: var(--colorNeutralBackground1);
+  --ax-bg-2: var(--colorNeutralBackground2);
+  --ax-bg-3: var(--colorNeutralBackground3);
+}
+
+/* Desktop view (Pin to desktop): no header, ribbon, app bar or folder pane;
+   the inbox fills the window and a small toolbar floats in the top-right
+   corner, quiet until hovered or focused. */
+.ax-app[data-desktop-view] { --ax-header-h: 0px; }
+.ax-desktop-bar {
+  position: fixed; top: 8px; right: 12px; z-index: 30; display: flex; gap: 2px; padding: 2px;
+  border-radius: var(--ax-radius-l); background: var(--ax-bg-1); box-shadow: var(--ax-shadow-8);
+  opacity: 0.55; transition: opacity var(--ax-dur-faster, 100ms) ease;
+}
+.ax-desktop-bar:hover, .ax-desktop-bar:focus-within { opacity: 1; }
+.ax-desktop-bar .ax-header-btn { width: 36px; height: 32px; color: var(--ax-fg-2); background: transparent; border-radius: var(--ax-radius-m); }
+.ax-desktop-bar .ax-header-btn:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-app[data-desktop-view] .ax-mail-list-header { padding-right: 140px; }
+/* The corner toolbar never covers the reading view's own buttons. */
+.ax-app[data-desktop-view] .ax-mail-reading-head { padding-right: 132px; }

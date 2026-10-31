@@ -722,14 +722,22 @@ fn restore_shared(tx: &Connection, payload: &Payload, opts: RestoreOptions, curr
             params![a.address, a.name, a.last_used, a.use_count],
         )?;
     }
-    for b in &payload.blocked_senders {
-        tx.execute(
-            "INSERT OR IGNORE INTO mail_blocked_senders (address, name, added_at) VALUES (?1, ?2, ?3)",
-            params![b.address, b.name, b.added_at],
-        )?;
+    let blocked: Vec<(String, String, i64)> = payload.blocked_senders.iter().map(|b| (b.address.clone(), b.name.clone(), b.added_at)).collect();
+    let safe: Vec<(String, i64)> = payload.safe_senders.iter().map(|s| (s.address.clone(), s.added_at)).collect();
+    crate::store::junk_import_legacy(tx, &blocked, &safe)?;
+    for r in &payload.sender_rules {
+        // A rule of an account that isn't restored is dropped, never widened.
+        let account = match r.account_id {
+            None => None,
+            Some(a) => match ids.accounts.get(&a) {
+                Some(&mapped) => Some(mapped),
+                None => continue,
+            },
+        };
+        crate::store::junk_restore_rule(tx, &crate::junk::SenderRule { id: 0, account_id: account, ..r.clone() })?;
     }
-    for s in &payload.safe_senders {
-        tx.execute("INSERT OR IGNORE INTO mail_safe_senders (address, added_at) VALUES (?1, ?2)", params![s.address, s.added_at])?;
+    for s in &payload.image_senders {
+        crate::store::junk_restore_image_sender(tx, &s.address, s.added_at, s.subdomains)?;
     }
     for o in &payload.inference_overrides {
         tx.execute(

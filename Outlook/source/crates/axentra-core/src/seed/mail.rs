@@ -30,6 +30,7 @@ struct M {
     conversation: Option<String>,
     meeting: Option<(MeetingMessageKind, EventId)>,
     snooze_hours: Option<i64>,
+    reply_to: Vec<EmailAddress>,
 }
 
 impl Default for M {
@@ -52,6 +53,7 @@ impl Default for M {
             conversation: None,
             meeting: None,
             snooze_hours: None,
+            reply_to: Vec::new(),
         }
     }
 }
@@ -121,6 +123,7 @@ impl Seeder<'_> {
             from: m.from.clone(),
             to: if m.to.is_empty() { vec![self.ctx.me.clone()] } else { m.to.clone() },
             cc: m.cc.clone(),
+            reply_to: m.reply_to.clone(),
             subject: m.subject.clone(),
             preview: crate::text::preview(&text, 200),
             received_at: received,
@@ -616,6 +619,38 @@ pub(super) fn seed(store: &Store, ctx: &SeedCtx) -> Result<()> {
             ..Default::default()
         })?;
     }
+
+    // ---------------------------------------------------------------- warning signs
+    // Mail the junk checks flag in the Inbox (they only advise; nothing moves).
+    s.add(inbox, M {
+        from: EmailAddress::new("PayPal Service", "service@paypa1-billing.example"),
+        subject: "Your account is on hold".into(),
+        html: para(&[
+            "We noticed unusual activity and placed a temporary hold on your account.",
+            "<a href=\"https://paypa1-billing.example/restore?id=88213\">https://www.paypal.com/signin</a>",
+            "If you don't confirm within 24 hours your account will be closed.",
+        ]),
+        ago_min: 95,
+        other: true,
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: EmailAddress::new("Elena Fischer", "elena.fischer@lurnen.example"),
+        subject: "Updated brand assets (new link)".into(),
+        html: para(&["Hi Alex, the folder moved. Please sign in again to download the files:", "<a href=\"https://lurnen.example/share/login\">Open shared folder</a>"]),
+        ago_min: 150,
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: EmailAddress::new("Accounts Payable", "ap@supplies-direct.example"),
+        subject: "Invoice 4471 overdue".into(),
+        html: para(&["Please find the overdue invoice attached and arrange payment today."]),
+        attachments: vec![("Invoice_4471.pdf.exe", "application/octet-stream", 182_000, None)],
+        reply_to: vec![EmailAddress::new("", "payments@collect-now.example")],
+        ago_min: 210,
+        other: true,
+        ..Default::default()
+    })?;
 
     // ---------------------------------------------------------------- older history
     for i in 0..320usize {

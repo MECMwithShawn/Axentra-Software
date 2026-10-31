@@ -56,8 +56,9 @@ fn enrich(store: &Store) {
     let inbox = store.folder_by_role(acct, FolderRole::Inbox).unwrap().unwrap().id;
     let receipts = store.folders(Some(acct)).unwrap().into_iter().find(|f| f.name == "Receipts").unwrap().id;
     store.sweep(inbox, "deals@shop.example", "move_all_future", receipts).unwrap();
-    store.block_sender(&EmailAddress::new("Spam", "spam@junk.example")).unwrap();
-    store.add_safe_sender("friend@safe.example").unwrap();
+    store.set_sender_rule(Some(acct), "spam@junk.example", "Spam", crate::junk::RuleAction::Block).unwrap();
+    store.set_sender_rule(None, "safe.example", "", crate::junk::RuleAction::Allow).unwrap();
+    store.allow_images_from("friend@safe.example").unwrap();
     store.kv_set(&format!("shell.ribbon.{acct}.mail_home"), r#"{"groups":[]}"#).unwrap();
     store.kv_set("calendar.day_count", "3").unwrap();
     store.kv_set("shell.notifications", "{\"seen\":[1]}").unwrap();
@@ -222,8 +223,12 @@ fn round_trip_into_a_fresh_store() {
     assert_eq!(dst.kv_get(&format!("shell.ribbon.{acct}.mail_home")).unwrap().as_deref(), Some(r#"{"groups":[]}"#));
     assert_eq!(dst.kv_get("calendar.day_count").unwrap().as_deref(), Some("3"));
     assert_eq!(dst.kv_get("shell.notifications").unwrap(), None, "not on the allowlist");
-    assert!(dst.is_sender_blocked("spam@junk.example").unwrap());
-    assert!(dst.is_safe_sender("friend@safe.example").unwrap());
+    // Sender rules follow their account to its new id; pictures stay separate.
+    assert!(dst.is_sender_blocked(acct, "spam@junk.example").unwrap());
+    let allow = dst.sender_decision(acct, "friend@safe.example").unwrap().unwrap();
+    assert_eq!((allow.account_id, allow.action()), (None, crate::junk::RuleAction::Allow));
+    assert!(dst.images_allowed_for("friend@safe.example").unwrap());
+    assert!(!dst.images_allowed_for("other@safe.example").unwrap());
     // The restored draft still opens with its stored attachment.
     let draft_id = dst.account_messages(acct).unwrap().into_iter().find(|m| m.subject == "Unsent plan").unwrap().id;
     let draft = dst.draft(draft_id).unwrap().unwrap();
@@ -873,4 +878,70 @@ fn retention_never_deletes_the_new_backup_or_another_computers() {
     assert!(!ahead.path.exists() && !w2.path.exists());
     assert_eq!(w3.removed, 2);
     assert!(future.exists() && other.exists());
+}
+
+#[test]
+fn an_old_backups_sender_lists_restore_as_all_account_rules_without_new_trust() {
+    let src = demo();
+    let dir = TempDir::new();
+    let w = create_backup_with(&src, &dir.0, PW, now(), 12, TEST_KDF).unwrap();
+    let mut payload = open_backup(&w.path, PW).unwrap();
+    // What 0.1.4 wrote: the old lists, no rules, no picture list.
+    payload.sender_rules.clear();
+    payload.image_senders.clear();
+    payload.blocked_senders = vec![BlockedSender { address: "junk.example".into(), name: String::new(), added_at: 1 }];
+    payload.safe_senders = vec![
+        SafeSender { address: "friend@safe.example".into(), added_at: 2, ..Default::default() },
+        SafeSender { address: "example.com".into(), added_at: 1_600_000_000, ..Default::default() },
+    ];
+    let dst = Store::open_in_memory().unwrap();
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    let acct = primary(&dst);
+    let rules = dst.sender_rules().unwrap();
+    assert_eq!(rules.len(), 3);
+    assert!(rules.iter().all(|r| r.account_id.is_none() && r.source == crate::junk::RuleSource::Legacy));
+    assert!(dst.is_sender_blocked(acct, "x@junk.example").unwrap());
+    // As in 0.1.4, a domain entry is that domain only.
+    assert!(!dst.is_sender_blocked(acct, "x@mail.junk.example").unwrap());
+    // The old safe sender meant "pictures too"; nobody else gains anything.
+    assert!(dst.images_allowed_for("friend@safe.example").unwrap());
+    assert!(!dst.images_allowed_for("x@safe.example").unwrap());
+    assert!(dst.images_allowed_for("a@example.com").unwrap());
+    assert!(!dst.images_allowed_for("attacker@tenant.example.com").unwrap(), "old permission was exact-domain only");
+    assert!(!dst.images_allowed_for("a@notexample.com").unwrap());
+}
+
+#[test]
+fn picture_permissions_and_rule_scopes_round_trip() {
+    let src = demo();
+    let acct = primary(&src);
+    src.allow_images_from("wide.example").unwrap();
+    src.set_sender_rule(Some(acct), "blocked.example", "", crate::junk::RuleAction::Block).unwrap();
+    let mut payload = super::collect::collect(&src, now()).unwrap();
+    // An old safe-list domain in the same backup stays exact.
+    payload.image_senders.push(SafeSender { address: "narrow.example".into(), added_at: 1, ..Default::default() });
+    let before = src.sender_rules().unwrap().into_iter().find(|r| r.pattern == "blocked.example").unwrap();
+    let json = serde_json::to_string(&payload).unwrap();
+    let payload: Payload = serde_json::from_str(&json).unwrap();
+    let dst = Store::open_in_memory().unwrap();
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    assert!(dst.images_allowed_for("a@cdn.wide.example").unwrap(), "chosen with subdomains: still");
+    assert!(dst.images_allowed_for("a@narrow.example").unwrap());
+    assert!(!dst.images_allowed_for("a@cdn.narrow.example").unwrap());
+    let after = dst.sender_rules().unwrap().into_iter().find(|r| r.pattern == "blocked.example").unwrap();
+    assert_eq!((after.exact_domain, after.effective_at), (before.exact_domain, before.effective_at), "when blocking took effect comes back too");
+}
+
+#[test]
+fn junk_reports_and_learned_models_stay_out_of_backups() {
+    let src = demo();
+    let acct = primary(&src);
+    let id = src.account_messages(acct).unwrap()[0].id;
+    src.label_messages(&[id], crate::junk::Label::Spam).unwrap();
+    let fp: String = src.conn().query_row("SELECT fingerprint FROM junk_labels LIMIT 1", [], |r| r.get(0)).unwrap();
+    let payload = super::collect::collect(&src, now()).unwrap();
+    let json = serde_json::to_string(&payload).unwrap();
+    assert!(!json.contains(&fp), "a report's fingerprint is in the backup");
+    assert!(!json.contains("junk.label_revision") && !json.contains("junk.active_model"));
 }

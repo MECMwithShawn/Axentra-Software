@@ -10,6 +10,7 @@ mod dates;
 mod dialogs;
 mod files;
 mod folders;
+mod junk_pass;
 mod keyboard;
 mod list;
 mod menus;
@@ -121,7 +122,7 @@ pub fn MailModule() -> Element {
                 };
                 actions::go_to_folder(app, ctx, m.folder_id);
                 let settings = app.settings.peek().clone();
-                if settings.focused_inbox && store().folder(m.folder_id).ok().flatten().is_some_and(|f| f.role == FolderRole::Inbox) {
+                if settings.focused_inbox_shown() && store().folder(m.folder_id).ok().flatten().is_some_and(|f| f.role == FolderRole::Inbox) {
                     ctx.tab.set(m.inference);
                 }
                 actions::open_message(ctx, &m, settings.conversation_view);
@@ -183,6 +184,33 @@ pub fn MailModule() -> Element {
                 }
             }
             tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    });
+
+    // Junk checks: mail gets its warning signs (and the learned model's
+    // score) in the background, in batches off the UI thread, until none is
+    // left; a changed set of reports trains and checks a new model version.
+    // See `junk_pass` for when it runs.
+    use_future(move || async move {
+        let mut pass = junk_pass::JunkPass::default();
+        loop {
+            let rev = *app.mail_rev.peek();
+            let wait = if pass.due(rev) {
+                let out = tokio::task::spawn_blocking(|| junk_pass::run_batch(store()))
+                    .await
+                    .unwrap_or_else(|_| Err("the check stopped unexpectedly".into()));
+                if let Err(e) = &out {
+                    // The error only, never message content.
+                    eprintln!("axentra: junk check incomplete, retrying later: {e}");
+                }
+                if out.as_ref().is_ok_and(|b| b.model_changed || b.checked > 0) {
+                    app.bump_mail();
+                }
+                pass.finished(rev, &out)
+            } else {
+                Duration::from_secs(2)
+            };
+            tokio::time::sleep(wait).await;
         }
     });
 
@@ -268,7 +296,8 @@ pub fn MailModule() -> Element {
     let tabs = ribbon::tabs(app, ctx, &model_now);
     // Ribbon customisation is per account: the selected folder's account.
     let ribbon_account = model_now.folder.as_ref().map(|f| f.account_id);
-    let collapsed = settings.folder_pane_collapsed;
+    let desktop = settings.desktop_view();
+    let collapsed = settings.folder_pane_collapsed || desktop;
     let live = resize();
     let fw = match live {
         Some(r) if r.which == Splitter::Folders => r.value as u32,
@@ -283,7 +312,7 @@ pub fn MailModule() -> Element {
         Some(r) if r.which == Splitter::ListHeight => r.value,
         _ => prefs.list_height_pct.unwrap_or(LIST_HEIGHT_DEFAULT) as f64,
     };
-    let rp = settings.reading_pane;
+    let rp = settings.reading_pane_shown();
     let full_view = *ctx.full_view.read() && ctx.open.read().is_some();
 
     let mut start_resize = move |which: Splitter, pos: f64, value: f64| {
@@ -317,7 +346,7 @@ pub fn MailModule() -> Element {
             },
             // A fresh ribbon (Home selected) when the contextual compose or
             // search tabs come and go; the keyed list forces the remount.
-            for ribbon_key in [format!("{compose_inline}-{searching}")] {
+            for ribbon_key in [format!("{compose_inline}-{searching}")].into_iter().filter(|_| !desktop) {
                 Ribbon {
                     key: "{ribbon_key}",
                     tabs: tabs.clone(),

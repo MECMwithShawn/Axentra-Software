@@ -37,6 +37,16 @@ fn header_text<'a>(v: &'a HeaderValue<'a>) -> Vec<String> {
     }
 }
 
+/// The physically top `Authentication-Results` header (RFC 8601: the
+/// receiving server adds its own above anything the sender wrote), unfolded.
+/// `header_raw` would return the bottom one, which the sender controls.
+fn top_auth_results(msg: &mail_parser::Message<'_>) -> Option<String> {
+    let raw = msg.raw_message();
+    let h = msg.headers().iter().find(|h| h.name.as_str().eq_ignore_ascii_case("Authentication-Results"))?;
+    let v = std::str::from_utf8(raw.get(h.offset_start as usize..h.offset_end as usize)?).ok()?;
+    Some(v.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|v| !v.is_empty())
+}
+
 fn importance(msg: &mail_parser::Message<'_>) -> Importance {
     let raw = |name: &str| msg.header_raw(name).map(|v| v.trim().to_ascii_lowercase());
     if let Some(v) = raw("Importance") {
@@ -173,6 +183,7 @@ pub fn parse_rfc822(raw: &[u8]) -> Option<ParsedMail> {
         importance: importance(&msg),
         has_attachments: attachments.iter().any(|(a, _)| !a.is_inline),
         meeting_kind: meeting,
+        auth_results: top_auth_results(&msg),
         ..Default::default()
     };
     let thread = ThreadInfo {
@@ -211,6 +222,31 @@ Content-Type: text/html; charset=utf-8\r\n\
 \r\n\
 <p>Hello team,</p><p>see the <b>plan</b>.</p>\r\n\
 --b1--\r\n";
+
+    fn auth_of(headers: &str) -> axentra_core::junk::analyze::Auth {
+        let raw = format!("{headers}From: Sender <sender@normal.example>\r\nSubject: Hello\r\n\r\nHello");
+        let m = parse_rfc822(raw.as_bytes()).unwrap().message;
+        axentra_core::junk::analyze::auth(m.auth_results.as_deref(), &axentra_core::junk::analyze::trusted_reporters("imap.gmail.com"))
+    }
+
+    #[test]
+    fn the_receivers_top_authentication_header_wins() {
+        use axentra_core::junk::analyze::Check;
+        // The receiver's failure on top; a sender-written pass below it.
+        let a = auth_of("Authentication-Results: mx.google.com; dmarc=fail header.from=normal.example\r\nAuthentication-Results: attacker.example; dmarc=pass\r\n");
+        assert_eq!(a.dmarc, Check::Fail);
+        // Forged pass or fail below the receiver's: the receiver's counts.
+        let a = auth_of("Authentication-Results: mx.google.com; dmarc=pass\r\nAuthentication-Results: mx.google.com; dmarc=fail\r\n");
+        assert_eq!(a.dmarc, Check::Pass);
+        // Folded over several lines.
+        let a = auth_of("Authentication-Results: mx.google.com;\r\n\tspf=pass smtp.mailfrom=normal.example;\r\n  dmarc=fail\r\n");
+        assert_eq!((a.spf, a.dmarc), (Check::Pass, Check::Fail));
+        // An untrusted header on top: nothing is believed, not even the one below.
+        let a = auth_of("Authentication-Results: attacker.example; dmarc=pass\r\nAuthentication-Results: mx.google.com; dmarc=pass\r\n");
+        assert_eq!((a.dmarc, a.note.as_str()), (Check::Unknown, "untrusted reporter"));
+        let a = auth_of("");
+        assert_eq!((a.dmarc, a.note.as_str()), (Check::Unknown, "not provided"));
+    }
 
     #[test]
     fn multipart_alternative_with_encoded_headers() {

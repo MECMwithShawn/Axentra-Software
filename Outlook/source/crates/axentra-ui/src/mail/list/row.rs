@@ -84,6 +84,13 @@ fn long_time(t: DateTime<Utc>, h24: bool) -> String {
 
 fn accessible_name(row: &Row, time: &str) -> String {
     let mut parts = Vec::new();
+    // Warnings first, as the icon is the first thing seen in the row.
+    match row.advice {
+        junk::Advice::Phishing => parts.push("Warning: might be phishing".to_string()),
+        junk::Advice::Caution => parts.push("Has warning signs".to_string()),
+        junk::Advice::LooksLikeJunk => parts.push("Looks like junk (suggestion)".to_string()),
+        junk::Advice::None => {}
+    }
     if row.unread > 0 {
         parts.push("Unread".to_string());
     }
@@ -144,6 +151,12 @@ fn highlighted(text: &str, terms: &[String]) -> Element {
 fn StatusIcons(row: Rc<Row>) -> Element {
     rsx! {
         span { class: "ax-mail-icons",
+            match row.advice {
+                junk::Advice::Phishing => rsx! { span { class: "ax-mail-ico ax-junk-danger", title: "Might be phishing. Open it to see why.", Icon { name: "shield_error", size: 16 } } },
+                junk::Advice::LooksLikeJunk => rsx! { span { class: "ax-mail-ico ax-junk-caution", title: "Looks like junk (a suggestion; nothing was moved)", Icon { name: "mail_prohibited", size: 16 } } },
+                junk::Advice::Caution => rsx! { span { class: "ax-mail-ico ax-junk-caution", title: "Has warning signs. Open it to see why.", Icon { name: "warning", size: 16 } } },
+                junk::Advice::None => rsx! {},
+            }
             if row.importance == Importance::High {
                 span { class: "ax-mail-ico ax-important", title: "High importance", Icon { name: "important", size: 16 } }
             }
@@ -307,7 +320,7 @@ fn open_context_menu(ctx: super::super::ctx::MailCtx, model: &super::super::mode
     let settings = app.settings.peek().clone();
     let role = if model.searching { None } else { model.folder.as_ref().map(|f| f.role) };
     let folder = model.folder.as_ref().map(|f| f.id);
-    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox, settings.use_24h_time);
+    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox_shown(), settings.use_24h_time);
     let items = menus::message_menu(&t, folder);
     ctx.menu.set(Some(ContextMenu { x, y, items, target: MenuTarget::Messages(ids) }));
 }
@@ -694,6 +707,7 @@ mod tests {
             importance: Importance::Normal,
             mentions_me: false,
             meeting: None,
+            advice: Default::default(),
             categories: Vec::new(),
             draft: false,
             folder_tag: None,
@@ -706,5 +720,17 @@ mod tests {
         assert_eq!(row_height(&look, &row), 114.0);
         assert_eq!(row_height(&RowLook { density: Density::Compact, ..look }, &row), 52.0);
         assert_eq!(row_height(&RowLook { columns: true, density: Density::Cozy, ..look }, &row), 37.0);
+
+        // Junk advice is announced, not only drawn (normal and desktop
+        // layouts share this name).
+        assert!(!accessible_name(&row, "9:00 AM").contains("phishing"));
+        for (advice, said) in [
+            (junk::Advice::Phishing, "Warning: might be phishing"),
+            (junk::Advice::Caution, "Has warning signs"),
+            (junk::Advice::LooksLikeJunk, "Looks like junk (suggestion)"),
+        ] {
+            row.advice = advice;
+            assert!(accessible_name(&row, "9:00 AM").starts_with(said), "{advice:?}");
+        }
     }
 }

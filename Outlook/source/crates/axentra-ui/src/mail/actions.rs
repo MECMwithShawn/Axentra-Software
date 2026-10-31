@@ -181,22 +181,35 @@ pub fn archive(app: AppState, mut ctx: MailCtx, model: &ListModel, ids: Vec<Mess
     app.bump_mail();
 }
 
+/// Report junk / Report phishing: the user's confirmed label, the move to
+/// Junk Email and (when asked) a block rule for each sender in that account,
+/// recorded as one change (all or nothing) and undone together. Phishing
+/// reports stay in Junk Email with their warning; nothing is deleted or sent
+/// anywhere.
 pub fn report(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId>, phishing: bool, block: bool) {
-    let s = store();
-    if block {
-        for m in messages(&ids) {
-            let _ = s.block_sender(&m.from);
-        }
-    }
-    let result = if phishing {
-        s.delete_messages(&ids)
-    } else {
-        s.mark_junk(&ids)
-    };
-    let Some(records) = app.check(result) else { return };
+    let label = if phishing { junk::Label::Phishing } else { junk::Label::Spam };
+    let Some(op) = app.check(store().report_junk(&ids, label, block)) else { return };
     select_after_removal(app, ctx, model, &ids);
     let text = if phishing { "Reported as phishing" } else { "Reported as junk" };
-    toast_moves(app, text.into(), records);
+    app.toast_with_undo(text, UndoAction::Junk { events: op.events, rules: op.rules, moves: op.moves });
+    app.bump_mail();
+}
+
+/// "Not junk": a confirmed label, then the messages go back where they came
+/// from. Only this records a label; a plain Restore from Deleted Items
+/// doesn't.
+pub fn not_junk(app: AppState, ctx: MailCtx, model: &ListModel, ids: Vec<MessageId>) {
+    let s = store();
+    let Some(op) = app.check(s.mark_not_junk(&ids)) else { return };
+    let (events, moves) = (op.events, op.moves);
+    let in_junk: Vec<MessageId> = moves.iter().map(|m| m.message_id).collect();
+    select_after_removal(app, ctx, model, &in_junk);
+    let text = match moves.as_slice() {
+        [] => "Marked as not junk".to_string(),
+        [one] => s.message(one.message_id).ok().flatten().map(|m| format!("Not junk. Moved to {}", folder_name(m.folder_id))).unwrap_or_else(|| "Not junk".into()),
+        many => format!("Not junk. Moved {}", items(many.len())),
+    };
+    app.toast_with_undo(text, UndoAction::Junk { events, rules: Vec::new(), moves });
     app.bump_mail();
 }
 
@@ -503,7 +516,8 @@ pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, id
                 ctx.dialog.set(Some(MailDialog::Report { ids, phishing: cmd == "report_phishing" }));
             }
         }
-        "not_junk" | "restore" => restore(app, ctx, model, ids),
+        "not_junk" => not_junk(app, ctx, model, ids),
+        "restore" => restore(app, ctx, model, ids),
         "sweep" => {
             if let Some(id) = first {
                 ctx.dialog.set(Some(MailDialog::Sweep(id)));
@@ -586,10 +600,18 @@ pub fn run(mut app: AppState, mut ctx: MailCtx, model: &ListModel, cmd: &str, id
             }
         }
         "never_block" => {
+            // An allow rule for this account only. It doesn't load pictures
+            // or quiet phishing warnings.
+            let mut rules = Vec::new();
             for m in messages(&ids) {
-                let _ = s.add_safe_sender(&m.from.address);
+                if let Some(change) = app.check(s.set_sender_rule(Some(m.account_id), &m.from.address, &m.from.name, junk::RuleAction::Allow)) {
+                    rules.push(change);
+                }
             }
-            app.toast("Added to safe senders");
+            if !rules.is_empty() {
+                app.toast_with_undo("Never blocked in this account", UndoAction::Junk { events: Vec::new(), rules, moves: Vec::new() });
+                app.bump_mail();
+            }
         }
         "details" => {
             if let Some(id) = primary_message(ctx, model).map(|m| m.id).or(first) {

@@ -281,6 +281,11 @@ pub struct Message {
     /// first. Replies get the original's list plus its own Message-ID.
     #[serde(default)]
     pub references: Vec<String>,
+    /// The top `Authentication-Results` header as received (IMAP only;
+    /// Graph doesn't deliver headers). Believed only when written by the
+    /// account's own provider, see [`crate::junk::analyze::auth`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_results: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -842,6 +847,9 @@ pub struct Settings {
     pub mark_as_read: MarkAsRead,
     pub mark_as_read_delay_secs: u32,
     pub block_external_images: bool,
+    /// Show "This looks like junk" suggestions from the model Axentra
+    /// learns locally. Warning signs (phishing, risky links) show either way.
+    pub junk_suggestions: bool,
     pub empty_deleted_on_exit: bool,
     pub undo_send_secs: u32,
     pub signature_html: String,
@@ -939,6 +947,35 @@ pub struct Settings {
     // ---- Added for client-side decorations (docs/spec/shell.md §12.4). ----
     /// Use the desktop's own title bar instead of the header (read at startup).
     pub system_title_bar: bool,
+    // ---- Added for the glass window and Pin to desktop. ----
+    /// How see-through the window's backgrounds are, in percent (0 = solid,
+    /// at most [`MAX_WINDOW_GLASS`]). Text, icons and message bodies stay
+    /// solid. Only with the header as the title bar (a see-through window).
+    pub window_glass: u32,
+    /// Keep the window below other windows, like part of the desktop.
+    pub pin_to_desktop: bool,
+}
+
+/// The most see-through the window's backgrounds may be, in percent.
+pub const MAX_WINDOW_GLASS: u32 = 60;
+
+impl Settings {
+    /// Pinned to the desktop, the window shows a streamlined layout: just
+    /// the inbox, no app bar, ribbon or folder pane.
+    pub fn desktop_view(&self) -> bool {
+        self.pin_to_desktop
+    }
+
+    /// Focused / Other as shown: the desktop view lists all mail together.
+    pub fn focused_inbox_shown(&self) -> bool {
+        self.focused_inbox && !self.desktop_view()
+    }
+
+    /// The reading pane as shown: hidden in the desktop view (a message
+    /// opens over the list, with Back), else as set.
+    pub fn reading_pane_shown(&self) -> ReadingPanePosition {
+        if self.desktop_view() { ReadingPanePosition::Hidden } else { self.reading_pane }
+    }
 }
 
 impl Default for Settings {
@@ -959,6 +996,7 @@ impl Default for Settings {
             mark_as_read: MarkAsRead::OnSelect,
             mark_as_read_delay_secs: 5,
             block_external_images: true,
+            junk_suggestions: true,
             empty_deleted_on_exit: false,
             undo_send_secs: 5,
             signature_html: String::new(),
@@ -1016,6 +1054,8 @@ impl Default for Settings {
             backup_dir: None,
             backup_keep: 12,
             system_title_bar: false,
+            window_glass: 0,
+            pin_to_desktop: false,
         }
     }
 }

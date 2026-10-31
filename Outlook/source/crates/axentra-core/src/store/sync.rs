@@ -428,7 +428,11 @@ impl Store {
                 message.conversation_id = format!("local-{}", uuid::Uuid::new_v4());
             }
             message.id = 0;
+            let rule = Self::route_incoming_in(tx, message)?;
             let id = Self::insert_doc_in(tx, message)?;
+            if let Some(rule) = rule {
+                super::junk::record_routing_in(tx, id, &rule)?;
+            }
             tx.execute(
                 "INSERT OR REPLACE INTO message_bodies (message_id, html, text) VALUES (?1, ?2, ?3)",
                 params![id, body.html, body.text],

@@ -351,10 +351,6 @@ fn group_by_conversation(msgs: Vec<Message>) -> Vec<Vec<Message>> {
     groups
 }
 
-fn domain_of(address: &str) -> &str {
-    address.rsplit_once('@').map(|(_, d)| d).unwrap_or("")
-}
-
 impl Store {
     // ------------------------------------------------------------ folders
 
@@ -611,16 +607,19 @@ impl Store {
 
     /// Insert a message (and optionally its body). Fills in `id`.
     ///
-    /// New mail for the Inbox goes through the local filters first: blocked
-    /// senders land in Junk Email, ignored conversations in Deleted Items, and
+    /// New mail for the Inbox goes through the local filters first: senders
+    /// with a block rule land in Junk Email, ignored conversations in Deleted Items, and
     /// "Always move to Focused/Other" overrides set the inference class.
     pub fn insert_message(&self, message: &mut Message, body: Option<&MessageBody>) -> Result<MessageId> {
         self.tx(|tx| {
             if message.conversation_id.is_empty() {
                 message.conversation_id = format!("local-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0));
             }
-            Self::route_incoming_in(tx, message)?;
+            let rule = Self::route_incoming_in(tx, message)?;
             let id = Self::insert_doc_in(tx, message)?;
+            if let Some(rule) = rule {
+                super::junk::record_routing_in(tx, id, &rule)?;
+            }
             if let Some(b) = body {
                 tx.execute(
                     "INSERT OR REPLACE INTO message_bodies (message_id, html, text) VALUES (?1, ?2, ?3)",
@@ -637,9 +636,11 @@ impl Store {
         })
     }
 
-    fn route_incoming_in(conn: &Connection, m: &mut Message) -> Result<()> {
+    /// Local filters for new Inbox mail (also used for synced mail). Returns
+    /// the block rule when one sent the message to Junk Email.
+    pub(crate) fn route_incoming_in(conn: &Connection, m: &mut Message) -> Result<Option<crate::junk::SenderRule>> {
         if m.is_draft || folder_role_in(conn, m.folder_id)?.as_deref() != Some("inbox") {
-            return Ok(());
+            return Ok(None);
         }
         let me: Option<String> = conn
             .query_row("SELECT lower(json_extract(json, '$.email')) FROM accounts WHERE id = ?1", [m.account_id], |r| r.get(0))
@@ -647,7 +648,7 @@ impl Store {
             .flatten();
         let from = m.from.address.trim().to_lowercase();
         if from.is_empty() || me.as_deref() == Some(from.as_str()) {
-            return Ok(());
+            return Ok(None);
         }
         let class: Option<String> = conn
             .query_row("SELECT inference FROM mail_inference_overrides WHERE address = ?1", [&from], |r| r.get(0))
@@ -657,18 +658,24 @@ impl Store {
             Some("Focused") => m.inference = InferenceClass::Focused,
             _ => {}
         }
-        let blocked: bool = conn.query_row(
-            "SELECT EXISTS (SELECT 1 FROM mail_blocked_senders WHERE address = ?1 OR address = ?2)",
-            params![from, domain_of(&from)],
-            |r| r.get(0),
-        )?;
-        if blocked {
+        // A block rule applies to mail that arrives after blocking took
+        // effect (a day of slack for clocks), so a first sync doesn't sweep
+        // old mail. An arrival time more than a day ahead isn't a server's
+        // (it came from the sender's Date header): treated as unknown, so the
+        // rule doesn't move it.
+        let now = Utc::now().timestamp();
+        let arrived = m.received_at.timestamp();
+        if let Some(rule) = super::junk::decide_in(conn, m.account_id, &from)?
+            && rule.action() == crate::junk::RuleAction::Block
+            && arrived >= rule.effective_since() - 86_400
+            && arrived <= now + 86_400
+        {
             if let Some(junk) = role_folder_in(conn, m.account_id, FolderRole::Junk)? {
                 m.folder_id = junk;
+                return Ok(Some(rule));
             }
-            return Ok(());
+            return Ok(None);
         }
-        let now = Utc::now().timestamp();
         let last: Option<i64> = conn
             .query_row(
                 "SELECT last_activity FROM mail_ignored_conversations WHERE conversation_id = ?1",
@@ -686,7 +693,7 @@ impl Store {
                 params![now, m.conversation_id],
             )?;
         }
-        Ok(())
+        Ok(None)
     }
 
     pub fn update_message(&self, message: &Message) -> Result<()> {
@@ -1308,27 +1315,32 @@ impl Store {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
-        self.tx(|tx| {
-            let msgs: Vec<Message> = Self::query_docs_in(tx, &format!("WHERE id IN ({})", id_list(ids)), [])?;
-            let target_role = folder_role_in(tx, folder_id)?.ok_or_else(|| Error::NotFound(format!("folder {folder_id}")))?;
-            let mut records = Vec::new();
-            for mut m in msgs {
-                if m.folder_id == folder_id {
-                    continue;
-                }
-                records.push(MoveRecord { message_id: m.id, from_folder: m.folder_id });
-                m.folder_id = folder_id;
-                if m.snoozed_until.is_some() {
-                    // Moving a snoozed message out of Snoozed cancels the snooze.
-                    m.snoozed_until = None;
-                }
-                Self::update_doc_in(tx, &m)?;
+        self.tx(|tx| Self::move_messages_in(tx, ids, folder_id))
+    }
+
+    pub(crate) fn move_messages_in(conn: &Connection, ids: &[MessageId], folder_id: FolderId) -> Result<Vec<MoveRecord>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let msgs: Vec<Message> = Self::query_docs_in(conn, &format!("WHERE id IN ({})", id_list(ids)), [])?;
+        let target_role = folder_role_in(conn, folder_id)?.ok_or_else(|| Error::NotFound(format!("folder {folder_id}")))?;
+        let mut records = Vec::new();
+        for mut m in msgs {
+            if m.folder_id == folder_id {
+                continue;
             }
-            if is_holding_role(&target_role) {
-                record_origins_in(tx, &records)?;
+            records.push(MoveRecord { message_id: m.id, from_folder: m.folder_id });
+            m.folder_id = folder_id;
+            if m.snoozed_until.is_some() {
+                // Moving a snoozed message out of Snoozed cancels the snooze.
+                m.snoozed_until = None;
             }
-            Ok(records)
-        })
+            Self::update_doc_in(conn, &m)?;
+        }
+        if is_holding_role(&target_role) {
+            record_origins_in(conn, &records)?;
+        }
+        Ok(records)
     }
 
     /// Copy messages (with bodies and attachments) into `folder_id`.
@@ -1371,15 +1383,17 @@ impl Store {
 
     /// Reverse a move / delete / archive.
     pub fn undo_moves(&self, records: &[MoveRecord]) -> Result<()> {
-        self.tx(|tx| {
-            for r in records {
-                if let Some(mut m) = Self::get_doc_in::<Message>(tx, r.message_id)? {
-                    m.folder_id = r.from_folder;
-                    Self::update_doc_in(tx, &m)?;
-                }
+        self.tx(|tx| Self::undo_moves_in(tx, records))
+    }
+
+    pub(crate) fn undo_moves_in(conn: &Connection, records: &[MoveRecord]) -> Result<()> {
+        for r in records {
+            if let Some(mut m) = Self::get_doc_in::<Message>(conn, r.message_id)? {
+                m.folder_id = r.from_folder;
+                Self::update_doc_in(conn, &m)?;
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
     /// Delete messages: moved to the account's Deleted Items, or removed for
@@ -1425,11 +1439,16 @@ impl Store {
 
     /// Move to Junk Email.
     pub fn mark_junk(&self, ids: &[MessageId]) -> Result<Vec<MoveRecord>> {
-        let msgs: Vec<Message> = self.query_docs(&format!("WHERE id IN ({})", id_list(ids)), [])?;
+        self.tx(|tx| Self::mark_junk_in(tx, ids))
+    }
+
+    pub(crate) fn mark_junk_in(conn: &Connection, ids: &[MessageId]) -> Result<Vec<MoveRecord>> {
+        let msgs: Vec<Message> = Self::query_docs_in(conn, &format!("WHERE id IN ({})", id_list(ids)), [])?;
         let mut records = Vec::new();
         for m in msgs {
-            let junk = self.folder_id_by_role(m.account_id, FolderRole::Junk)?;
-            records.extend(self.move_messages(&[m.id], junk)?);
+            let junk = role_folder_in(conn, m.account_id, FolderRole::Junk)?
+                .ok_or_else(|| Error::NotFound(format!("junk folder for account {}", m.account_id)))?;
+            records.extend(Self::move_messages_in(conn, &[m.id], junk)?);
         }
         Ok(records)
     }
@@ -1450,18 +1469,28 @@ impl Store {
     /// "Restore" / "Not junk": move messages back to the folder they came
     /// from, or to the Inbox when that is unknown or gone.
     pub fn restore_messages(&self, ids: &[MessageId]) -> Result<Vec<MoveRecord>> {
+        self.tx(|tx| Self::restore_messages_in(tx, ids))
+    }
+
+    pub(crate) fn restore_messages_in(conn: &Connection, ids: &[MessageId]) -> Result<Vec<MoveRecord>> {
         let mut records = Vec::new();
-        for m in self.messages_by_ids(ids)? {
-            let origin = self
-                .message_origin(m.id)?
-                .filter(|f| *f != m.folder_id)
-                .filter(|f| self.get_doc::<Folder>(*f).ok().flatten().is_some_and(|fd| fd.account_id == m.account_id));
+        let msgs: Vec<Message> = Self::query_docs_in(conn, &format!("WHERE id IN ({})", id_list(ids)), [])?;
+        for m in msgs {
+            let origin: Option<FolderId> = conn
+                .query_row(
+                    "SELECT o.folder_id FROM mail_origins o JOIN folders f ON f.id = o.folder_id
+                     WHERE o.message_id = ?1 AND f.account_id = ?2 AND o.folder_id != ?3",
+                    params![m.id, m.account_id, m.folder_id],
+                    |r| r.get(0),
+                )
+                .optional()?;
             let target = match origin {
                 Some(f) => f,
-                None => self.folder_id_by_role(m.account_id, FolderRole::Inbox)?,
+                None => role_folder_in(conn, m.account_id, FolderRole::Inbox)?
+                    .ok_or_else(|| Error::NotFound(format!("inbox folder for account {}", m.account_id)))?,
             };
-            records.extend(self.move_messages(&[m.id], target)?);
-            self.conn().execute("DELETE FROM mail_origins WHERE message_id = ?1", [m.id])?;
+            records.extend(Self::move_messages_in(conn, &[m.id], target)?);
+            conn.execute("DELETE FROM mail_origins WHERE message_id = ?1", [m.id])?;
         }
         Ok(records)
     }
@@ -1470,85 +1499,6 @@ impl Store {
     pub fn empty_folder(&self, folder_id: FolderId) -> Result<()> {
         self.conn().execute("DELETE FROM messages WHERE folder_id = ?1", [folder_id])?;
         Ok(())
-    }
-
-    // ------------------------------------------------------------ senders
-
-    /// Block a sender (an address, or a bare domain): their future mail goes
-    /// to Junk Email. Removes them from the safe senders.
-    pub fn block_sender(&self, sender: &EmailAddress) -> Result<()> {
-        let addr = sender.address.trim().to_lowercase();
-        if addr.is_empty() {
-            return Err(Error::Invalid("sender address is empty".into()));
-        }
-        let conn = self.conn();
-        conn.execute(
-            "INSERT INTO mail_blocked_senders (address, name, added_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT(address) DO UPDATE SET name = excluded.name",
-            params![addr, sender.name, Utc::now().timestamp()],
-        )?;
-        conn.execute("DELETE FROM mail_safe_senders WHERE address = ?1", [&addr])?;
-        Ok(())
-    }
-
-    pub fn unblock_sender(&self, address: &str) -> Result<()> {
-        self.conn().execute("DELETE FROM mail_blocked_senders WHERE address = lower(?1)", [address.trim()])?;
-        Ok(())
-    }
-
-    pub fn blocked_senders(&self) -> Result<Vec<EmailAddress>> {
-        let conn = self.conn();
-        let mut stmt = conn.prepare_cached("SELECT name, address FROM mail_blocked_senders ORDER BY address")?;
-        let rows = stmt.query_map([], |r| Ok(EmailAddress::new(r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-        Ok(rows.collect::<std::result::Result<_, _>>()?)
-    }
-
-    /// True when the address (or its domain) is blocked.
-    pub fn is_sender_blocked(&self, address: &str) -> Result<bool> {
-        let a = address.trim().to_lowercase();
-        Ok(self.conn().query_row(
-            "SELECT EXISTS (SELECT 1 FROM mail_blocked_senders WHERE address = ?1 OR address = ?2)",
-            params![a, domain_of(&a)],
-            |r| r.get(0),
-        )?)
-    }
-
-    /// Trust a sender: remote content in their mail loads automatically
-    /// ("Always show content from …" / "Never block sender").
-    pub fn add_safe_sender(&self, address: &str) -> Result<()> {
-        let a = address.trim().to_lowercase();
-        if a.is_empty() {
-            return Err(Error::Invalid("sender address is empty".into()));
-        }
-        let conn = self.conn();
-        conn.execute(
-            "INSERT OR IGNORE INTO mail_safe_senders (address, added_at) VALUES (?1, ?2)",
-            params![a, Utc::now().timestamp()],
-        )?;
-        conn.execute("DELETE FROM mail_blocked_senders WHERE address = ?1", [&a])?;
-        Ok(())
-    }
-
-    pub fn remove_safe_sender(&self, address: &str) -> Result<()> {
-        self.conn().execute("DELETE FROM mail_safe_senders WHERE address = lower(?1)", [address.trim()])?;
-        Ok(())
-    }
-
-    pub fn safe_senders(&self) -> Result<Vec<String>> {
-        let conn = self.conn();
-        let mut stmt = conn.prepare_cached("SELECT address FROM mail_safe_senders ORDER BY address")?;
-        let rows = stmt.query_map([], |r| r.get(0))?;
-        Ok(rows.collect::<std::result::Result<_, _>>()?)
-    }
-
-    /// True when the address (or its domain) is a safe sender.
-    pub fn is_safe_sender(&self, address: &str) -> Result<bool> {
-        let a = address.trim().to_lowercase();
-        Ok(self.conn().query_row(
-            "SELECT EXISTS (SELECT 1 FROM mail_safe_senders WHERE address = ?1 OR address = ?2)",
-            params![a, domain_of(&a)],
-            |r| r.get(0),
-        )?)
     }
 
     // ------------------------------------------------------------ ignore
@@ -2116,26 +2066,25 @@ mod tests {
     }
 
     #[test]
-    fn blocked_senders_go_to_junk_and_safe_senders_unblock() {
+    fn block_rules_send_new_mail_to_junk_and_an_exact_allow_wins() {
+        use crate::junk::RuleAction;
         let (store, acct) = store_with_account();
         let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
         let junk = store.folder_for_role(acct, FolderRole::Junk).unwrap();
         let spammer = EmailAddress::new("Deals", "deals@spam.example");
-        store.block_sender(&spammer).unwrap();
-        assert!(store.is_sender_blocked("DEALS@spam.example").unwrap());
+        store.set_sender_rule(Some(acct), &spammer.address, "Deals", RuleAction::Block).unwrap();
         let id = msg_from(&store, acct, inbox, spammer.clone(), "Win", 0, "w");
         assert_eq!(store.message(id).unwrap().unwrap().folder_id, junk);
-        // Domain entries block the whole domain.
-        store.block_sender(&EmailAddress::new("", "spam.example")).unwrap();
-        let id2 = msg_from(&store, acct, inbox, EmailAddress::new("X", "x@spam.example"), "Win 2", 0, "w2");
+        assert_eq!(store.routed_by_rule(id).unwrap().as_deref(), Some("deals@spam.example"), "audited");
+        // Domain rules cover the whole domain and its subdomains.
+        store.set_sender_rule(Some(acct), "spam.example", "", RuleAction::Block).unwrap();
+        let id2 = msg_from(&store, acct, inbox, EmailAddress::new("X", "x@mx.spam.example"), "Win 2", 0, "w2");
         assert_eq!(store.message(id2).unwrap().unwrap().folder_id, junk);
-        store.add_safe_sender("deals@spam.example").unwrap();
-        store.unblock_sender("spam.example").unwrap();
-        assert!(!store.is_sender_blocked("deals@spam.example").unwrap());
-        assert!(store.is_safe_sender("deals@spam.example").unwrap());
+        // An exact allow is an exception to the blocked domain.
+        store.set_sender_rule(Some(acct), &spammer.address, "", RuleAction::Allow).unwrap();
         let id3 = msg_from(&store, acct, inbox, spammer, "Win 3", 0, "w3");
         assert_eq!(store.message(id3).unwrap().unwrap().folder_id, inbox);
-        assert!(store.blocked_senders().unwrap().is_empty());
+        assert_eq!(store.routed_by_rule(id3).unwrap(), None);
     }
 
     #[test]

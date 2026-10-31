@@ -420,13 +420,16 @@ impl MailSync<'_> {
         m.flag = flag;
         m.is_draft = is_draft;
         m.conversation_id = self.conversation(&parsed);
+        // The shadow is what the server has; when a local rule routed the
+        // message elsewhere (a block rule to Junk), the next push moves it.
+        let server = MessageState::of(&m);
         let id = self.store.insert_synced_message(&mut m, &parsed.body, &parsed.attachments)?;
         let shadow = Shadow {
             remote_id: key.clone(),
             container: mailbox.to_string(),
             uid: Some(f.uid),
             etag: f.modseq.map(|m| m.to_string()),
-            state: MessageState::of(&m).to_value(),
+            state: server.to_value(),
             extra: serde_json::Value::Null,
         };
         self.store.sync_put(account_id, KIND_MESSAGE, id, &key, mailbox, &shadow)?;

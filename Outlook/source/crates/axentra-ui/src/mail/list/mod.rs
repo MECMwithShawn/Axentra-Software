@@ -94,7 +94,7 @@ fn ListEmpty() -> Element {
         };
     }
     let filtered = view.filter != MessageFilter::All;
-    let (icon, title, body) = empty_copy(&m, tab, filtered, settings.focused_inbox);
+    let (icon, title, body) = empty_copy(&m, tab, filtered, settings.focused_inbox_shown());
     // A favourite person with no mail yet.
     let person_title = m.person.as_ref().filter(|_| !m.searching && !filtered).map(|p| format!("No messages from {}", p.name));
     let icon = if person_title.is_some() { "person" } else { icon };
@@ -405,6 +405,7 @@ fn dummy_row() -> super::model::Row {
         importance: Importance::Normal,
         mentions_me: false,
         meeting: None,
+        advice: Default::default(),
         categories: Vec::new(),
         draft: false,
         folder_tag: None,

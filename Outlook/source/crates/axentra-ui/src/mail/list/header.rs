@@ -105,7 +105,7 @@ pub fn ListHeader(narrow: bool, on_jump: EventHandler<String>) -> Element {
         folder.as_ref().map(|f| f.name.clone()).unwrap_or_default()
     };
     let is_fav = folder.as_ref().is_some_and(|f| f.is_favorite);
-    let pivot = !searching && settings.focused_inbox && folder.as_ref().is_some_and(|f| f.role == FolderRole::Inbox);
+    let pivot = !searching && settings.focused_inbox_shown() && folder.as_ref().is_some_and(|f| f.role == FolderRole::Inbox);
     let tab = *ctx.tab.read();
     let groups = m.groups.clone();
     let total = m.total;

@@ -169,7 +169,8 @@ impl Look {
                 Density::Compact => "ax-density-compact",
             },
             color_theme,
-            chrome: if s.classic_look { "flat" } else { "cards" },
+            // The desktop view runs edge to edge (no canvas margins round the list).
+            chrome: if s.classic_look || s.desktop_view() { "flat" } else { "cards" },
             contrast: theme::follow_system(s.high_contrast, system.high_contrast, "high", "normal"),
             motion: theme::follow_system(s.reduce_motion, system.reduce_motion, "reduce", "normal"),
             ribbon: if s.simplified_ribbon { "simplified" } else { "classic" },
@@ -184,6 +185,7 @@ pub fn Shell() -> Element {
     let saved = app.settings.read().clone();
     // While Settings previews appearance, the frame shows the draft.
     let previewing = (app.settings_dialog)().is_some();
+    let shown_glass = shell.preview.read().as_ref().filter(|_| previewing).unwrap_or(&saved).window_glass;
     let look = Look::of(shell.preview.read().as_ref().filter(|_| previewing).unwrap_or(&saved));
     let accent = saved.accent.clone();
     let theme_css = use_memo(move || theme::theme_css(accent.as_deref()));
@@ -252,6 +254,29 @@ pub fn Shell() -> Element {
     // Caption-button counts per side: the search box and modal overlays
     // make room for them (shell.css).
     let window_style = controls.map(|c| format!("--ax-wc-start-n:{};--ax-wc-end-n:{}", c.layout.start().count(), c.layout.end().count()));
+    // Glass: see-through backgrounds need the see-through window, which only
+    // the header title bar has.
+    let glass = controls.and(window::glass_percent(shown_glass));
+    let window_style = window_style.map(|w| match glass {
+        Some(g) => format!("{w};--ax-glass:{g}%"),
+        None => w,
+    });
+    // The desktop view shows only Mail.
+    use_effect(move || {
+        if app.settings.read().desktop_view() && (app.module)() != Module::Mail {
+            app.module.clone().set(Module::Mail);
+        }
+    });
+    // Pin to desktop: the host keeps the window below the others.
+    let pin = try_use_context::<window::WindowPin>();
+    // Keyed by the view, so the click hook starts and stops with it.
+    let desktop_view_now = saved.desktop_view();
+    let pinned = saved.pin_to_desktop;
+    use_effect(use_reactive!(|pinned| {
+        if let Some(pin) = pin {
+            pin.set.call(pinned);
+        }
+    }));
 
     let module = (app.module)();
     let pane = (shell.pane)();
@@ -271,6 +296,8 @@ pub fn Shell() -> Element {
             "data-side-pane": if side_pane { "true" },
             "data-window": window_state,
             "data-tiled": tiled_edges,
+            "data-glass": glass.map(|_| "true"),
+            "data-desktop-view": if saved.desktop_view() { "true" },
             style: window_style,
             tabindex: "-1",
             onkeydown: move |e: KeyboardEvent| on_global_key(app, shell, &e),
@@ -280,9 +307,15 @@ pub fn Shell() -> Element {
                 onclick: move |_| dom::enter_region(".ax-module [data-ax-region], .ax-module .ax-panes > .ax-pane"),
                 "Skip to main content"
             }
-            header::Header {}
+            if saved.desktop_view() {
+                header::DesktopBar {}
+            } else {
+                header::Header {}
+            }
             div { class: "ax-body",
-                rail::AppRail {}
+                if !saved.desktop_view() {
+                    rail::AppRail {}
+                }
                 main { id: "ax-main", class: "ax-module", tabindex: "-1", "aria-label": module.label(),
                     match module {
                         Module::Mail => rsx! { crate::mail::MailModule {} },
@@ -298,6 +331,9 @@ pub fn Shell() -> Element {
                 } else if pane == Some(SidePane::Help) {
                     help::HelpPane {}
                 }
+            }
+            for k in [desktop_view_now].into_iter().filter(|v| *v) {
+                SendBack { key: "{k}" }
             }
             toasts::Toasts {}
             // Settles typed text the page held back (kit/typed_text.js).
@@ -399,4 +435,11 @@ pub fn settings_page_for(module: Module) -> SettingsPage {
         Module::People => SettingsPage::People,
         Module::Tasks => SettingsPage::General,
     }
+}
+
+/// While the desktop view is on: a click in the page sends the window back.
+#[component]
+fn SendBack() -> Element {
+    window::use_send_back_on_click(try_use_context::<window::WindowPin>(), true);
+    rsx! {}
 }
