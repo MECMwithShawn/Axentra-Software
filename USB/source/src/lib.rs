@@ -1,4 +1,5 @@
 pub mod device;
+pub mod download;
 pub mod image;
 pub mod operation;
 pub type Progress<'a> = dyn FnMut(&str, u64, u64) + 'a;
@@ -11,3 +12,5 @@ pub fn check_cancel(cancel: &Cancel<'_>) -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+pub mod raid;
