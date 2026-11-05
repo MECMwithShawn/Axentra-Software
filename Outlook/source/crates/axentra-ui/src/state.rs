@@ -84,6 +84,14 @@ pub enum UndoAction {
     Junk { events: Vec<i64>, rules: Vec<axentra_core::junk::RuleChange>, moves: Vec<MoveRecord> },
     /// Put back a sender rule removed in Settings.
     RestoreRule(axentra_core::junk::SenderRule),
+    /// Put back the topic correction a Change topic replaced.
+    Topic(axentra_core::store::TopicChange),
+    /// The same for a Change topic that covered several senders.
+    Topics(Vec<axentra_core::store::TopicChange>),
+    /// Put back an order's previous state (hidden, status override).
+    OrderState { key: String, previous: Option<axentra_core::orders::OrderUserState> },
+    /// Track orders from this sender again (the ignored pattern).
+    OrderIgnore(String),
 }
 
 /// What a custom toast button does (besides Undo).
@@ -96,6 +104,8 @@ pub enum ToastAction {
     Navigate(NavRequest),
     /// Open the Settings dialog on a page.
     OpenSettings(SettingsPage),
+    /// Open a carrier's tracking page in the browser.
+    OpenUrl(String),
 }
 
 /// A countdown on a toast ("Sending…" while Undo send waits): the toast
@@ -149,11 +159,14 @@ pub struct ComposeRequest {
     pub subject: Option<String>,
     /// Open in a separate window-like overlay instead of the reading pane.
     pub popout: bool,
+    /// The pop-out window is shrunk to a bar at the bottom so other mail
+    /// can be read; the form stays open underneath.
+    pub minimized: bool,
 }
 
 impl ComposeRequest {
     pub fn new_message() -> Self {
-        Self { kind: ComposeKind::New, source: None, draft: None, to: Vec::new(), subject: None, popout: false }
+        Self { kind: ComposeKind::New, source: None, draft: None, to: Vec::new(), subject: None, popout: false, minimized: false }
     }
 
     pub fn reply(kind: ComposeKind, source: MessageId) -> Self {
@@ -163,6 +176,14 @@ impl ComposeRequest {
     pub fn to(addrs: Vec<EmailAddress>) -> Self {
         Self { to: addrs, ..Self::new_message() }
     }
+}
+
+/// A Mail view that isn't a folder: found on this device, across folders.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MailView {
+    Packages,
+    /// One topic, or all of them (`None`).
+    Topics(Option<axentra_core::topics::Topic>),
 }
 
 /// Cross-module navigation (e.g. open the email behind a flagged task).
@@ -183,13 +204,15 @@ pub enum NavRequest {
     NewEventWith { start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>, attendees: Vec<EmailAddress> },
     /// A task: To Do opens its list, selects it and shows the detail pane.
     Task(TaskId),
+    /// Mail's Packages or a topic list.
+    MailView(MailView),
 }
 
 impl NavRequest {
     /// The module that consumes this request.
     pub fn module(&self) -> Module {
         match self {
-            NavRequest::Folder(_) | NavRequest::Message(_) => Module::Mail,
+            NavRequest::Folder(_) | NavRequest::Message(_) | NavRequest::MailView(_) => Module::Mail,
             NavRequest::Event(_) | NavRequest::CalendarDate(_) | NavRequest::NewEvent { .. } | NavRequest::NewEventWith { .. } => Module::Calendar,
             NavRequest::Contact(_) | NavRequest::NewContact { .. } => Module::People,
             NavRequest::TaskList(_) | NavRequest::SmartList(_) | NavRequest::Task(_) => Module::Tasks,
@@ -451,6 +474,7 @@ impl AppState {
             }
             ToastAction::Navigate(req) => self.navigate(req.clone()),
             ToastAction::OpenSettings(page) => self.settings_dialog.set(Some(*page)),
+            ToastAction::OpenUrl(url) => crate::calendar::actions::open_external(url),
         }
     }
 
@@ -471,6 +495,10 @@ impl AppState {
                 .undo_junk_operation(&axentra_core::store::JunkOperation { events: events.clone(), rules: rules.clone(), moves: moves.clone() })
                 .map(|_| self.bump_mail()),
             UndoAction::RestoreRule(rule) => s.restore_sender_rule(rule).map(|_| self.bump_mail()),
+            UndoAction::Topic(change) => s.undo_topic(change).map(|_| self.bump_mail()),
+            UndoAction::Topics(changes) => s.undo_topics(changes).map(|_| self.bump_mail()),
+            UndoAction::OrderState { key, previous } => s.restore_order_state(key, previous.clone()).map(|_| self.bump_mail()),
+            UndoAction::OrderIgnore(pattern) => s.remove_order_sender_ignore(pattern).map(|_| self.bump_mail()),
         };
         if let Err(e) = result {
             self.error(format!("Couldn't undo: {e}"));
@@ -505,6 +533,8 @@ mod tests {
         assert_eq!(NavRequest::Task(7).module(), Module::Tasks);
         assert_eq!(NavRequest::Message(1).module(), Module::Mail);
         assert_eq!(NavRequest::SmartList(SmartList::MyDay).module(), Module::Tasks);
+        assert_eq!(NavRequest::MailView(MailView::Packages).module(), Module::Mail);
+        assert_eq!(NavRequest::MailView(MailView::Topics(None)).module(), Module::Mail);
     }
 
     #[test]
@@ -521,6 +551,11 @@ mod tests {
         push_bounded(&mut list, with_action);
         assert_eq!(list.len(), 3);
         assert!(list.last().is_some_and(|t| t.action.as_ref().is_some_and(|(l, _)| l == "Open folder")));
+        // Track opens the carrier's page from a toast too.
+        let track = Toast { action: Some(("Track".into(), ToastAction::OpenUrl("https://www.ups.com/track?tracknum=1Z999AA10123456784".into()))), ..Toast::new("Shipped".into()) };
+        push_bounded(&mut list, track);
+        assert_eq!(list.len(), 3);
+        assert!(matches!(list.last().and_then(|t| t.action.as_ref()), Some((_, ToastAction::OpenUrl(u))) if u.starts_with("https://www.ups.com/")));
     }
 
     /// The account photos are in the state from the first frame, and

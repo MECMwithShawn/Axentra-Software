@@ -729,6 +729,7 @@ mod tests {
         assert_eq!(mailbox_name(Some("INBOX"), "Clients", ".", ""), "INBOX.Clients");
         assert_eq!(mailbox_name(None, "a/b", "/", ""), "a b", "the delimiter can't be part of a name");
         assert_eq!(mailbox_name(None, "Café", "/", "INBOX/"), "INBOX/Caf&AOk-");
+        assert_eq!(mailbox_name(Some("Archive"), "Orders & shipping", "/", ""), "Archive/Orders &- shipping");
         let remote = vec![rf("INBOX", &[]), rf("INBOX/Sent", &[]), rf("INBOX/Trash", &[])];
         assert_eq!(personal_prefix(&remote, "/"), "INBOX/");
         assert_eq!(personal_prefix(&[rf("INBOX", &[]), rf("Sent", &[])], "/"), "");

@@ -1335,3 +1335,60 @@ async fn an_imap_first_sync_leaves_mail_from_before_a_block() {
     let log = state.lock().unwrap().log.clone();
     assert!(!log.iter().any(|c| c.starts_with("UID MOVE") || c.starts_with("UID COPY") || c.starts_with("UID STORE")), "{log:?}");
 }
+
+/// A message over the `sendMail` limit goes up as a server draft: MIME
+/// without the big file, Bcc added, the file through an upload session,
+/// then `/send`. A failure deletes the server copy.
+#[tokio::test]
+async fn graph_large_message_goes_through_a_server_draft() {
+    use crate::graph::client::{Graph, StaticToken};
+    use crate::mime::build::{OutAttachment, Outgoing, build};
+    let fail_send = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let fs = fail_send.clone();
+    let (base, log) = serve_http(move |r: Request| {
+        let fail = fs.load(std::sync::atomic::Ordering::SeqCst);
+        async move {
+            let (status, body) = match (r.method.as_str(), r.path.as_str()) {
+                ("POST", "/me/messages") => (201, r#"{"id":"S1","internetMessageId":"<srv-1@outlook.example>"}"#.to_string()),
+                ("POST", "/me/messages/S1/attachments/createUploadSession") => (200, format!(r#"{{"uploadUrl":"{}/up/1"}}"#, r.base)),
+                ("PUT", "/up/1") => (200, "{}".into()),
+                ("POST", "/me/messages/S1/send") if fail => (400, r#"{"error":{"code":"ErrorInvalidRecipients","message":"no"}}"#.into()),
+                ("POST", "/me/messages/S1/send") => (202, String::new()),
+                ("PATCH", "/me/messages/S1") | ("DELETE", "/me/messages/S1") => (200, "{}".into()),
+                _ => (404, r#"{"error":{"code":"ErrorItemNotFound","message":"nope"}}"#.into()),
+            };
+            Some(Answer { status, body: body.into_bytes(), headers: vec![("Content-Type", "application/json".into())], ..Default::default() })
+        }
+    })
+    .await;
+    let out = Outgoing {
+        from: axentra_core::EmailAddress::new("Me", "me@outlook.example"),
+        to: vec![axentra_core::EmailAddress::new("", "friend@example.com")],
+        bcc: vec![axentra_core::EmailAddress::new("", "hidden@example.com")],
+        subject: "Guide".into(),
+        html: "<p>Hi</p>".into(),
+        message_id: "local-1@outlook.example".into(),
+        date: chrono::Utc::now(),
+        attachments: vec![OutAttachment { name: "Guide.zip".into(), content_type: "application/zip".into(), data: vec![b'z'; 4 * 1024 * 1024], content_id: None }],
+        ..Default::default()
+    };
+    let built = build(&out).unwrap();
+    assert!(built.transmit.len() > 3_500_000);
+    let ready = crate::outbox::Ready { message: Default::default(), built, outgoing: out, message_id: "local-1@outlook.example".into() };
+    let graph = Graph::with_base(reqwest::Client::new(), Arc::new(StaticToken(Secret::new("tok"))), &base);
+
+    let id = crate::engine::graph_send_large(&graph, &ready).await.unwrap();
+    assert_eq!(id, "srv-1@outlook.example");
+    let lines: Vec<String> = log.lock().unwrap().iter().map(|l| l.chars().take(120).collect()).collect();
+    let starts = |p: &str| lines.iter().filter(|l| l.starts_with(p)).count();
+    let mime = log.lock().unwrap().iter().find(|l| l.starts_with("POST /me/messages ")).unwrap().clone();
+    assert!(mime.len() < 100_000, "the file is not in the MIME");
+    assert!(lines.iter().any(|l| l.starts_with("PATCH /me/messages/S1") && l.contains("hidden@example.com")));
+    assert_eq!(starts("PUT /up/1"), 2);
+    assert_eq!(starts("POST /me/messages/S1/send"), 1);
+    assert_eq!(starts("DELETE"), 0);
+
+    fail_send.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(crate::engine::graph_send_large(&graph, &ready).await.is_err());
+    assert_eq!(log.lock().unwrap().iter().filter(|l| l.starts_with("DELETE /me/messages/S1")).count(), 1);
+}

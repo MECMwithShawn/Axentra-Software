@@ -112,6 +112,14 @@ pub struct Payload {
     /// Senders whose pictures load automatically.
     pub image_senders: Vec<SafeSender>,
     pub inference_overrides: Vec<InferenceOverride>,
+    /// Topic corrections by sender or domain. Corrections of single
+    /// messages aren't backed up (message ids change on restore), nor are
+    /// the topics and orders found: they are worked out again from the mail.
+    pub topic_sender_rules: Vec<TopicRuleRowBackup>,
+    /// Your changes to orders (hidden, marked delivered), by order key.
+    pub order_user_state: Vec<crate::orders::OrderUserState>,
+    /// "Don't track orders from…".
+    pub order_sender_ignores: Vec<OrderSenderIgnoreBackup>,
     /// App-wide key/value entries from the allowlist (see `collect.rs`).
     pub kv: Vec<KvEntry>,
     pub accounts: Vec<AccountData>,
@@ -275,6 +283,29 @@ pub struct SafeSender {
 pub struct InferenceOverride {
     pub address: String,
     pub inference: String,
+}
+
+/// A topic correction (`topic_sender_rules`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TopicRuleRowBackup {
+    /// `None`: all accounts.
+    pub account_id: Option<AccountId>,
+    pub pattern: String,
+    pub is_domain: bool,
+    /// A [`crate::topics::Topic`] id.
+    pub topic: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// An ignored order sender (`order_sender_ignores`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OrderSenderIgnoreBackup {
+    pub pattern: String,
+    pub is_domain: bool,
+    pub created_at: i64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

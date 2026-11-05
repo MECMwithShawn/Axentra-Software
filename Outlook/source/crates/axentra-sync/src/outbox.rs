@@ -16,6 +16,8 @@ use crate::mime::split_ids;
 pub struct Ready {
     pub message: Message,
     pub built: BuiltMessage,
+    /// What `built` was made from (Graph rebuilds it without large files).
+    pub outgoing: Outgoing,
     /// Message-ID used on the wire (no angle brackets).
     pub message_id: String,
 }
@@ -79,7 +81,8 @@ pub fn prepare(store: &Store, account: &Account, message: &Message) -> SyncResul
         };
         attachments.push(OutAttachment {
             name: a.name.clone(),
-            content_type: if a.content_type.is_empty() { "application/octet-stream".into() } else { a.content_type.clone() },
+            // Files attached before types were checked may be labelled wrongly.
+            content_type: axentra_core::text::attachment_content_type(&a.name, &a.content_type, &data),
             data,
             content_id: None,
         });
@@ -126,7 +129,7 @@ pub fn prepare(store: &Store, account: &Account, message: &Message) -> SyncResul
         return Err(SyncError::User("Add at least one recipient.".into()));
     }
     let built = build(&out).map_err(|e| SyncError::protocol(format!("Couldn't build the message: {e}")))?;
-    Ok(Ready { message: message.clone(), built, message_id })
+    Ok(Ready { message: message.clone(), built, outgoing: out, message_id })
 }
 
 /// Sent: move to Sent Items and record the Message-ID.

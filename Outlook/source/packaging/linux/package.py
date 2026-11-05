@@ -8,11 +8,16 @@ Layout follows the rest of the Axentra suite, so Axentra Command finds it:
   /usr/share/applications/axentra-outlook.desktop
   /usr/share/icons/hicolor/<n>x<n>/apps/axentra-outlook.png
   /usr/share/axentra/command/apps/outlook.json   Command app manifest
+  /opt/axentra/outlook/models/bge-small-en-v1.5/  search model (meaning search)
+
+The search model (BAAI/bge-small-en-v1.5, MIT licence) is downloaded once at a
+pinned revision, checked against its SHA-256, and halved to 16-bit floats
+(crates/axentra-embed/examples/to_f16.rs) into target/models/.
 
 Usage: cargo build --release --locked -p axentra-desktop
        python3 packaging/linux/package.py --output dist
 """
-import argparse, hashlib, json, pathlib, shutil, subprocess, tempfile, tomllib
+import argparse, hashlib, json, pathlib, shutil, subprocess, tempfile, tomllib, urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -33,6 +38,13 @@ DEPENDS = ", ".join([
     "xdg-utils",
 ])
 RECOMMENDS = "gnome-keyring | kwalletmanager"
+MODEL = "bge-small-en-v1.5"
+MODEL_URL = "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/"
+MODEL_FILES = {
+    "config.json": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750",
+    "vocab.txt": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+    "model.safetensors": "3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad",
+}
 # A copy still running from before the upgrade keeps the old program; the new
 # one won't start beside it (it tells the user so), so say it here too.
 POSTINST = """#!/bin/sh
@@ -50,6 +62,39 @@ if [ "$1" = configure ]; then
 fi
 exit 0
 """
+
+
+def sha256(path: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def search_model() -> pathlib.Path:
+    """The shipped model directory, fetched and converted on first use."""
+    out = ROOT / "target/models" / MODEL
+    if (out / "model.safetensors").is_file():
+        return out
+    raw = ROOT / "target/models" / f"{MODEL}-download"
+    raw.mkdir(parents=True, exist_ok=True)
+    for name, digest in MODEL_FILES.items():
+        dest = raw / name
+        if not dest.is_file() or sha256(dest) != digest:
+            print(f"Downloading {MODEL}/{name}")
+            urllib.request.urlretrieve(MODEL_URL + name, dest)
+        if sha256(dest) != digest:
+            raise SystemExit(f"{name}: checksum mismatch, not packaging it")
+    tmp = ROOT / "target/models" / f"{MODEL}-tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+    for name in ("config.json", "vocab.txt"):
+        shutil.copy2(raw / name, tmp / name)
+    subprocess.run(["cargo", "run", "--release", "--locked", "-q", "-p", "axentra-embed", "--example", "to_f16", "--",
+                    str(raw / "model.safetensors"), str(tmp / "model.safetensors")], check=True, cwd=ROOT)
+    tmp.rename(out)
+    return out
 
 
 def main() -> None:
@@ -70,6 +115,8 @@ def main() -> None:
         shutil.copy2(a.binary, app / "axentra-outlook")
         subprocess.run(["strip", "--strip-unneeded", str(app / "axentra-outlook")], check=True)
         (app / "VERSION").write_text(version + "\n")
+        shutil.copytree(search_model(), app / "models" / MODEL)
+        shutil.copy2(HERE / f"LICENSE-{MODEL}.txt", app / "models" / MODEL / "LICENSE.txt")
 
         bin_dir = stage / "usr/bin"
         bin_dir.mkdir(parents=True)
@@ -95,6 +142,9 @@ def main() -> None:
         (doc / "copyright").write_text(
             "Axentra Outlook\nCopyright Axentra contributors\n\n"
             "Icons: Fluent UI System Icons, MIT License, (c) Microsoft Corporation.\n"
+            "Search model: BAAI/bge-small-en-v1.5, MIT License, (c) 2022 staoxiao (see\n"
+            "/opt/axentra/outlook/models/bge-small-en-v1.5/LICENSE.txt); stored as\n"
+            "16-bit floats.\n"
             "\"Outlook\" is a trademark of Microsoft Corporation. Axentra Outlook is an\n"
             "independent client and is not affiliated with or endorsed by Microsoft.\n"
         )

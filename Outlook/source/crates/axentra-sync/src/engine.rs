@@ -125,6 +125,9 @@ pub struct Inner {
     tokens: Mutex<HashMap<(AccountId, Resource), CachedToken>>,
     refresh_locks: Mutex<HashMap<AccountId, Arc<tokio::sync::Mutex<()>>>>,
     outbox_retry: Mutex<HashMap<i64, OutboxRetry>>,
+    /// The last error sending each Outbox message, and whether it was final
+    /// (the message went back to Drafts).
+    send_errors: Mutex<HashMap<i64, (String, bool)>>,
     notices: Mutex<Vec<Notice>>,
     last_total_changes: Mutex<u64>,
     /// Microsoft Graph endpoint (tests point it at a fake server).
@@ -160,6 +163,7 @@ impl Inner {
             tokens: Mutex::new(HashMap::new()),
             refresh_locks: Mutex::new(HashMap::new()),
             outbox_retry: Mutex::new(HashMap::new()),
+            send_errors: Mutex::new(HashMap::new()),
             notices: Mutex::new(Vec::new()),
             last_total_changes: Mutex::new(0),
             graph_base: graph_base.to_string(),
@@ -712,7 +716,13 @@ impl Inner {
         lock(&self.outbox_retry).get(&id).is_none_or(|r| Instant::now() >= r.next)
     }
 
+    /// Why sending message `id` failed last, and whether that was final.
+    pub fn send_error(&self, id: axentra_core::MessageId) -> Option<(String, bool)> {
+        lock(&self.send_errors).get(&id).cloned()
+    }
+
     fn outbox_failed(&self, account: &Account, m: &axentra_core::Message, e: SyncError) -> SyncResult<()> {
+        lock(&self.send_errors).insert(m.id, (e.to_string(), !e.is_transient()));
         if e.is_transient() {
             let mut retry = lock(&self.outbox_retry);
             let r = retry.entry(m.id).or_insert(OutboxRetry { attempts: 0, next: Instant::now() });
@@ -912,15 +922,17 @@ impl Inner {
                     continue;
                 }
             };
-            // sendMail with MIME is limited to about 4 MB per request.
-            if ready.built.transmit.len() > 3_500_000 {
-                self.outbox_failed(account, &m, SyncError::User(copy::TOO_LARGE.into()))?;
-                continue;
-            }
-            let b64 = base64::engine::general_purpose::STANDARD.encode(&ready.built.transmit);
-            match graph.post_text("/me/sendMail", "text/plain", b64).await {
-                Ok(()) => {
-                    outbox::finish(&self.store, account, m.id, &ready.message_id)?;
+            // sendMail with MIME is limited to about 4 MB per request;
+            // larger messages go through a server draft (`graph_send_large`).
+            let sent = if ready.built.transmit.len() > GRAPH_MIME_LIMIT {
+                graph_send_large(graph, &ready).await
+            } else {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&ready.built.transmit);
+                graph.post_text("/me/sendMail", "text/plain", b64).await.map(|()| ready.message_id.clone())
+            };
+            match sent {
+                Ok(message_id) => {
+                    outbox::finish(&self.store, account, m.id, &message_id)?;
                     lock(&self.outbox_retry).remove(&m.id);
                     sent_count += 1;
                     self.notifier.bump();
@@ -976,4 +988,50 @@ impl TokenSource for AccountTokens {
     fn token(&self, force: bool) -> BoxFuture<'_, SyncResult<Secret>> {
         Box::pin(self.inner.access_token(self.account_id, Resource::Graph, force))
     }
+}
+
+/// Largest MIME message `sendMail` takes in one request (base64 grows it
+/// to about 4.7 MB, near Graph's 4 MB-per-request guidance after headers).
+const GRAPH_MIME_LIMIT: usize = 3_500_000;
+
+/// Send a message too large for `sendMail`: create it on the server from
+/// its MIME without the attached files, add Bcc, upload the files
+/// (pieces for large ones) and send it. Graph files it in Sent Items. On
+/// a failure the server copy is deleted, so a retry starts clean. Returns
+/// the Message-ID the server gave it.
+pub(crate) async fn graph_send_large(graph: &Graph, ready: &outbox::Ready) -> SyncResult<String> {
+    use base64::Engine as _;
+    let mut small = ready.outgoing.clone();
+    let (inline, files): (Vec<_>, Vec<_>) = std::mem::take(&mut small.attachments).into_iter().partition(|a| a.content_id.is_some());
+    small.attachments = inline;
+    let built = crate::mime::build::build(&small).map_err(|e| SyncError::protocol(format!("Couldn't build the message: {e}")))?;
+    if built.transmit.len() > GRAPH_MIME_LIMIT {
+        // Pictures in the body alone are too big.
+        return Err(SyncError::User(copy::TOO_LARGE.into()));
+    }
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&built.transmit);
+    let created = graph.post_text_json("/me/messages", "text/plain", b64).await?;
+    let Some(id) = created["id"].as_str() else {
+        return Err(SyncError::protocol("Microsoft 365 didn't create the message."));
+    };
+    let path = format!("/me/messages/{}", crate::graph::client::seg(id));
+    let result: SyncResult<()> = async {
+        if !small.bcc.is_empty() {
+            let bcc: Vec<_> = small.bcc.iter().map(|a| serde_json::json!({ "emailAddress": { "name": a.name, "address": a.address } })).collect();
+            graph.patch(&path, serde_json::json!({ "bccRecipients": bcc })).await?;
+        }
+        for f in &files {
+            graph.attach_file(&path, &f.name, &f.content_type, &f.data).await?;
+        }
+        graph.post_empty(&format!("{path}/send")).await
+    }
+    .await;
+    if let Err(e) = result {
+        if let Err(d) = graph.delete(&path).await {
+            tracing::warn!("couldn't delete the unsent server copy: {d}");
+        }
+        return Err(e);
+    }
+    let server_id = created["internetMessageId"].as_str().map(|s| s.trim().trim_matches(['<', '>']).to_string()).filter(|s| !s.is_empty());
+    Ok(server_id.unwrap_or_else(|| ready.message_id.clone()))
 }

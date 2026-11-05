@@ -3,7 +3,7 @@
 //! own. See `docs/JUNK.md` for the data flow and rule precedence.
 //!
 //! Everything here runs on this computer. Nothing in this module talks to
-//! the network.
+//! the network ([`shadow`] only builds requests for `axentra_sync::ollama`).
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -11,7 +11,9 @@ use sha2::{Digest, Sha256};
 use crate::model::{AccountId, Message, MessageId};
 
 pub mod analyze;
+pub mod filter;
 pub mod learn;
+pub mod shadow;
 
 static BASE_MODEL_BYTES: &[u8] = include_bytes!("base_model.bin");
 static GATE_FIXTURES_BYTES: &[u8] = include_bytes!("gate_fixtures.bin");

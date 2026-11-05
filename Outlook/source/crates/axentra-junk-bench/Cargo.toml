@@ -1,0 +1,11 @@
+[package]
+name = "axentra-junk-bench"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Bake-off for junk filters: runs every candidate on the same labelled mail (see docs/junk/BENCH.md)"
+
+[dependencies]
+axentra-core.workspace = true
+axentra-embed.workspace = true
+serde_json.workspace = true

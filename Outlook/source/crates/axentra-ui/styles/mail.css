@@ -61,6 +61,13 @@
 .ax-mail-node.ax-bold .ax-mail-node-name { font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }
 .ax-mail-node.ax-drop { background: var(--ax-info-bg); box-shadow: inset 0 0 0 1px var(--ax-stroke-brand); color: var(--ax-fg-1); }
 .ax-mail-node.ax-no-drop { cursor: not-allowed; }
+.ax-mail-tree.ax-dragging .ax-mail-node > * { pointer-events: none; }
+/* Reordering: a line above or below the row the folder will go next to. */
+.ax-mail-node.ax-drop-before::after, .ax-mail-node.ax-drop-after::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 2px; border-radius: 1px; background: var(--ax-stroke-brand); z-index: 1; pointer-events: none;
+}
+.ax-mail-node.ax-drop-before::after { top: -1px; }
+.ax-mail-node.ax-drop-after::after { bottom: -1px; }
 .ax-mail-tree:focus-visible .ax-mail-node.ax-focused,
 :where(html[data-ax-kbd]) .ax-mail-tree:focus .ax-mail-node.ax-focused { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; }
 .ax-mail-node-chevron { width: 16px; height: 16px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--ax-fg-2); }
@@ -575,4 +582,38 @@
 @media (forced-colors: active) {
   .ax-mail-node.ax-selected::before, .ax-mail-bar { background: Highlight; }
   .ax-mail-item.ax-selected, .ax-mail-crow.ax-selected { outline: 2px solid Highlight; outline-offset: -2px; }
+  /* Forced colours drop backgrounds: the "needs attention" dot keeps one. */
+  .ax-mail-node .ax-mail-node-attention { forced-color-adjust: none; background: CanvasText; }
 }
+
+/* ---------------------------------------------------------------- views (Packages, Topics) */
+.ax-mail-node-views { margin-top: 4px; }
+.ax-mail-node-view.ax-dim .ax-mail-node-name, .ax-mail-node-view.ax-dim .ax-mail-node-icon { color: var(--ax-fg-4); }
+.ax-mail-node-attention {
+  flex: none; width: 8px; height: 8px; margin-left: 6px; border-radius: var(--ax-radius-circle); background: var(--ax-warning-fg);
+}
+.ax-mail-node:hover .ax-mail-node-attention { display: none; }
+.ax-mail-title-icon { flex: none; display: inline-flex; color: var(--ax-fg-2); margin-right: 2px; }
+.ax-app .ax-btn.ax-mail-switcher {
+  min-width: 0; height: 32px; padding: 0 6px; font-size: var(--ax-text-500); font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1);
+}
+.ax-mail-switcher .ax-btn-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Scrolls sideways: a thin scrollbar shows there are more topics (the
+   mouse wheel scrolls it too, see keyboard::HELPERS_JS). */
+.ax-mail-topic-pivot { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding-bottom: 2px; }
+.ax-mail-topic-pivot::-webkit-scrollbar { height: 6px; }
+.ax-mail-topic-pivot::-webkit-scrollbar-thumb { border-width: 1px; background-color: var(--ax-stroke-1); }
+.ax-mail-topic-pivot .ax-pivot-tab { white-space: nowrap; }
+.ax-mail-sorting { margin: 4px 8px 4px 0; }
+.ax-mail-topic-hint {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 4px 8px 6px 0;
+  color: var(--ax-fg-3); font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
+}
+.ax-mail-topic-hint .ax-link-btn { font-size: inherit; }
+.ax-mail-topic-suggest {
+  display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 12px; border-radius: var(--ax-radius-m);
+  background: var(--ax-info-bg); color: var(--ax-fg-1);
+}
+.ax-mail-topic-suggest > .ax-icon { color: var(--ax-info-fg); }
+.ax-mail-dialog-group { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.ax-mail-dialog-label { font-weight: var(--ax-weight-semibold); color: var(--ax-fg-1); }

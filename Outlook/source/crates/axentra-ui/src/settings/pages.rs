@@ -40,7 +40,7 @@ impl Category {
             Category::Accounts => &[EmailAccounts, Signatures, Categories, AutomaticReplies, SharedWithMe, Storage, Backup],
             Category::General => &[LanguageTime, Appearance, Notifications, Accessibility, Search, Offline, Privacy, DistributionGroups, About],
             Category::Mail => &[
-                MessageList, ReadingPane, FolderPane, ComposeReply, Attachments, Rules, Sweep, Junk, QuickSteps, CustomizeActions,
+                MessageList, ReadingPane, FolderPane, ComposeReply, Attachments, Rules, Sweep, AutoArchive, Junk, Packages, Topics, QuickSteps, CustomizeActions,
                 MessageHandling, Forwarding, ConditionalFormatting, SearchFolders, Smime, RetentionPolicies, Groups,
             ],
             Category::Calendar => &[CalendarView, EventsInvitations, Weather, SharedCalendars, CalendarActions, EventsFromEmail],
@@ -97,7 +97,10 @@ pub enum PageId {
     Attachments,
     Rules,
     Sweep,
+    AutoArchive,
     Junk,
+    Packages,
+    Topics,
     QuickSteps,
     CustomizeActions,
     MessageHandling,
@@ -149,7 +152,10 @@ impl PageId {
             Attachments => "Attachments",
             Rules => "Rules",
             Sweep => "Sweep",
+            AutoArchive => "Auto-archive",
             Junk => "Junk email",
+            Packages => "Packages",
+            Topics => "Topics",
             QuickSteps => "Quick steps",
             CustomizeActions | CalendarActions => "Customize actions",
             MessageHandling => "Message handling",
@@ -169,7 +175,8 @@ impl PageId {
     }
 
     /// Pages that edit the settings draft and end with Save / Discard.
-    /// The others act immediately (accounts, categories) or are read-only.
+    /// The others act immediately (accounts, categories, Packages, Topics)
+    /// or are read-only.
     pub fn uses_draft(self) -> bool {
         use PageId::*;
         matches!(
@@ -271,7 +278,19 @@ pub const INDEX: &[(PageId, &str, &str)] = &[
     (PageId::Attachments, "Attachment reminder", "Warn me when I send a message that may be missing an attachment"),
     (PageId::Junk, "Blocked senders and domains", "Blocked senders and domains"),
     (PageId::Junk, "Safe senders and domains", "Safe senders and domains"),
+    (PageId::Packages, "Package tracking", "Find orders and deliveries in my mail"),
+    (PageId::Packages, "Package tracking", "Show package info at the top of messages"),
+    (PageId::Packages, "Delivered packages", "Keep delivered packages for"),
+    (PageId::Packages, "Senders not tracked", "Senders not tracked"),
+    (PageId::Packages, "Hidden orders", "Show hidden orders again"),
+    (PageId::Topics, "Topic sorting", "Sort mail by topic"),
+    (PageId::Topics, "Shown topics", "Show in the folder pane"),
+    (PageId::Topics, "Your corrections", "Your corrections"),
+    (PageId::Topics, "Your corrections", "Forget all corrections"),
     (PageId::Sweep, "Sweep rules", "Sweep rules"),
+    (PageId::AutoArchive, "Archive older mail", "Archive older Inbox mail automatically"),
+    (PageId::AutoArchive, "Archive older mail", "Include unread messages"),
+    (PageId::AutoArchive, "Archive older mail", "Sort into topic folders"),
     (PageId::MessageHandling, "Mark as read", "Mark as read"),
     (PageId::MessageHandling, "Mark as read", "Mark as read after"),
     (PageId::MessageHandling, "Message options", "Empty Deleted Items when Axentra Outlook closes"),
@@ -350,6 +369,20 @@ mod tests {
         assert!(search("restore").iter().any(|h| h.page == PageId::Backup));
         assert!(search("title bar").iter().any(|h| h.page == PageId::Appearance));
         assert!(search("   ").is_empty());
+        assert!(search("track").iter().any(|h| h.page == PageId::Packages && h.label == "Find orders and deliveries in my mail"));
+        assert!(search("topic").iter().any(|h| h.page == PageId::Topics && h.label == "Sort mail by topic"));
+        assert!(search("packages").iter().any(|h| h.page == PageId::Packages && h.crumb == "Mail"));
+    }
+
+    #[test]
+    fn packages_and_topics_follow_junk_and_save_at_once() {
+        let mail = Category::Mail.pages();
+        let junk = mail.iter().position(|p| *p == PageId::Junk).unwrap();
+        assert_eq!(&mail[junk + 1..junk + 3], &[PageId::Packages, PageId::Topics]);
+        assert!(!PageId::Packages.uses_draft() && !PageId::Topics.uses_draft());
+        for (page, section, _) in INDEX.iter().filter(|(p, ..)| matches!(p, PageId::Packages | PageId::Topics)) {
+            assert_ne!(*section, page.title(), "a section named like its page: {page:?}");
+        }
     }
 
     #[test]

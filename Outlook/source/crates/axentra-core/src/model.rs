@@ -321,6 +321,17 @@ pub struct MessageQuery {
     /// all folders of all accounts when `folder_id` is `None`.
     pub search: Option<String>,
     pub limit: Option<u32>,
+    /// Only mail sorted into a topic (Mail > Topics), across folders.
+    #[serde(default)]
+    pub topic: Option<TopicScope>,
+}
+
+/// Which topics a topic list shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TopicScope {
+    /// Every sorted message ("All topics").
+    Any,
+    One(crate::topics::Topic),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -850,6 +861,15 @@ pub struct Settings {
     /// Show "This looks like junk" suggestions from the model Axentra
     /// learns locally. Warning signs (phishing, risky links) show either way.
     pub junk_suggestions: bool,
+    /// Move mail that is clearly junk, from senders you've never dealt
+    /// with, to Junk Email (see `junk::filter`).
+    pub junk_filter: bool,
+    /// Local AI review, a pilot: models on this computer recommend, nothing
+    /// moves (see `junk::shadow`).
+    pub junk_shadow: bool,
+    /// Search also finds mail about the same thing as the words typed (a
+    /// small model on this computer, see `axentra-embed`).
+    pub meaning_search: bool,
     pub empty_deleted_on_exit: bool,
     pub undo_send_secs: u32,
     pub signature_html: String,
@@ -954,12 +974,56 @@ pub struct Settings {
     pub window_glass: u32,
     /// Keep the window below other windows, like part of the desktop.
     pub pin_to_desktop: bool,
+    // ---- Added for auto-archive. ----
+    /// Once a day, move Inbox mail older than [`Settings::auto_archive_days`]
+    /// to each account's Archive folder (`Store::auto_archive`).
+    pub auto_archive: bool,
+    /// How old (in days) Inbox mail gets before it is archived; one of
+    /// [`AUTO_ARCHIVE_DAYS`].
+    pub auto_archive_days: u32,
+    /// Archive unread mail too (off: it stays in the Inbox until read).
+    pub auto_archive_unread: bool,
+    /// Put archived mail in a folder for its topic inside Archive
+    /// ("Orders & shipping"), made when first needed.
+    pub auto_archive_by_topic: bool,
+    /// When auto-archive last ran; it runs again a day later.
+    pub auto_archive_last_run: Option<DateTime<Utc>>,
+    // ---- Added for packages and topics. ----
+    /// Find orders and deliveries in mail on this device (Mail > Packages).
+    pub order_tracking: bool,
+    /// Show "Part of order …" at the top of order emails.
+    pub order_banner: bool,
+    /// How long delivered/cancelled orders stay listed; one of
+    /// [`crate::orders::KEEP_DAYS`].
+    pub orders_keep_delivered_days: u32,
+    /// Sort mail into topics on this device (Mail > Topics).
+    pub topics_view: bool,
+    /// Topic ids hidden from the folder pane.
+    pub topics_hidden: Vec<String>,
 }
+
+/// The ages auto-archive offers, in days.
+pub const AUTO_ARCHIVE_DAYS: [u32; 7] = [7, 14, 30, 60, 90, 180, 365];
 
 /// The most see-through the window's backgrounds may be, in percent.
 pub const MAX_WINDOW_GLASS: u32 = 60;
 
 impl Settings {
+    /// Auto-archive is on and hasn't run in the last day.
+    pub fn auto_archive_due(&self, now: DateTime<Utc>) -> bool {
+        self.auto_archive && self.auto_archive_last_run.is_none_or(|t| now - t >= chrono::Duration::hours(24) || t > now)
+    }
+
+    /// [`Settings::auto_archive_days`], kept to a sensible range.
+    pub fn auto_archive_age(&self) -> u32 {
+        self.auto_archive_days.clamp(1, 3650)
+    }
+
+    /// [`Settings::orders_keep_delivered_days`], one of [`crate::orders::KEEP_DAYS`].
+    pub fn orders_keep_days(&self) -> u32 {
+        crate::orders::KEEP_DAYS.iter().copied().find(|d| *d == self.orders_keep_delivered_days).unwrap_or(30)
+    }
+
     /// Pinned to the desktop, the window shows a streamlined layout: just
     /// the inbox, no app bar, ribbon or folder pane.
     pub fn desktop_view(&self) -> bool {
@@ -997,6 +1061,9 @@ impl Default for Settings {
             mark_as_read_delay_secs: 5,
             block_external_images: true,
             junk_suggestions: true,
+            junk_filter: true,
+            junk_shadow: false,
+            meaning_search: true,
             empty_deleted_on_exit: false,
             undo_send_secs: 5,
             signature_html: String::new(),
@@ -1056,6 +1123,16 @@ impl Default for Settings {
             system_title_bar: false,
             window_glass: 0,
             pin_to_desktop: false,
+            auto_archive: false,
+            auto_archive_days: 30,
+            auto_archive_unread: false,
+            auto_archive_by_topic: false,
+            auto_archive_last_run: None,
+            order_tracking: true,
+            order_banner: true,
+            orders_keep_delivered_days: 30,
+            topics_view: true,
+            topics_hidden: Vec::new(),
         }
     }
 }

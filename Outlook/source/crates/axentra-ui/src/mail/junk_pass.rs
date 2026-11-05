@@ -4,8 +4,10 @@
 //! while a batch runs gets a pass of its own. A batch that fails is retried
 //! later, and the other messages still get checked (a single message that
 //! can't be checked is recorded as incomplete by the store, not skipped).
+//! It also schedules `insights_pass` (packages and topics), which runs the
+//! same way with a [`JunkPass`] of its own.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axentra_core::Store;
 
@@ -38,9 +40,9 @@ impl JunkPass {
     }
 
     /// Record a batch that started at `rev`; returns how long to wait before
-    /// looking again. Work was done: the list should refresh (which changes
-    /// the revision, so the next look runs another batch). Nothing to do:
-    /// `rev` is done. Failure: `rev` is not done, retried after a pause.
+    /// looking again. Work was done: another batch runs next (and the list
+    /// refreshes, see [`Refresh`]). Nothing to do: `rev` is done. Failure:
+    /// `rev` is not done, retried after a pause.
     pub fn finished(&mut self, rev: u64, outcome: &Result<Batch, String>) -> Duration {
         match outcome {
             Ok(b) if b.model_changed || b.checked > 0 => BUSY,
@@ -53,12 +55,41 @@ impl JunkPass {
     }
 }
 
-/// One batch: retrain if the reports changed, then check what is due. A
+/// How often a background pass refreshes the mail view while it works. A
+/// refresh rebuilds the message list and the folder pane: after every batch,
+/// a large mailbox kept the window busy (no scrolling, drags that never
+/// started) until all of it was checked.
+pub const REFRESH_EVERY: Duration = Duration::from_secs(4);
+
+/// When a pass's results show: the first batch at once, then at most every
+/// [`REFRESH_EVERY`], and once more when it has finished.
+#[derive(Debug, Default)]
+pub struct Refresh {
+    last: Option<Instant>,
+    pending: bool,
+}
+
+impl Refresh {
+    /// After a look at the pass (`changed`: a batch did something the view
+    /// shows): whether to refresh now.
+    pub fn now(&mut self, changed: bool, at: Instant) -> bool {
+        self.pending |= changed;
+        if !self.pending || self.last.is_some_and(|t| at.duration_since(t) < REFRESH_EVERY) {
+            return false;
+        }
+        self.pending = false;
+        self.last = Some(at);
+        true
+    }
+}
+
+/// One batch: retrain if the reports changed, check what is due, then
+/// move what the junk filter finds clearly junk. A
 /// failed training run doesn't hold up the checks; it is tried again with
 /// the next batch.
 pub fn run_batch(s: &Store) -> Result<Batch, String> {
     let retrain = s.retrain_if_needed();
-    let checked = s.assess_pending(BATCH).map_err(|e| e.to_string())?;
+    let checked = s.assess_pending(BATCH).map_err(|e| e.to_string())? + s.filter_junk(BATCH).map_err(|e| e.to_string())?;
     match retrain {
         Ok(model_changed) => Ok(Batch { model_changed, checked }),
         Err(e) if checked == 0 => Err(e.to_string()),
@@ -99,6 +130,23 @@ mod tests {
             }
         }
         panic!("the pass never settled");
+    }
+
+    #[test]
+    fn results_show_at_once_then_every_few_seconds_and_at_the_end() {
+        let t0 = Instant::now();
+        let mut r = Refresh::default();
+        assert!(!r.now(false, t0), "nothing to show");
+        assert!(r.now(true, t0), "the first batch shows at once");
+        assert!(!r.now(true, t0 + Duration::from_millis(300)));
+        assert!(!r.now(true, t0 + Duration::from_secs(2)));
+        assert!(r.now(true, t0 + REFRESH_EVERY), "a backlog shows every few seconds");
+        // The last batch's results show once the wait is over, though the
+        // pass is idle by then.
+        assert!(!r.now(true, t0 + REFRESH_EVERY + Duration::from_secs(1)));
+        assert!(!r.now(false, t0 + REFRESH_EVERY + Duration::from_secs(2)));
+        assert!(r.now(false, t0 + REFRESH_EVERY * 2));
+        assert!(!r.now(false, t0 + REFRESH_EVERY * 3), "then rests");
     }
 
     #[test]

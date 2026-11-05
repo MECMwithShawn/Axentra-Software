@@ -10,11 +10,15 @@ mod dates;
 mod dialogs;
 mod files;
 mod folders;
+mod insights_pass;
+pub(crate) mod meaning_pass;
 mod junk_pass;
+pub(crate) mod shadow_pass;
 mod keyboard;
 mod list;
 mod menus;
 mod model;
+mod packages;
 mod reading;
 mod ribbon;
 
@@ -27,7 +31,7 @@ use dioxus::prelude::*;
 
 use crate::kit::Menu;
 use crate::shell::ribbon::Ribbon;
-use crate::state::{AppState, NavRequest, store, use_app};
+use crate::state::{AppState, MailView, NavRequest, store, use_app};
 use ctx::{ListMemo, MailCtx, MenuTarget, RowKey};
 
 /// Folder pane width measured on the reference (216 px at 1440 px). The
@@ -92,7 +96,8 @@ pub fn MailModule() -> Element {
         document::eval(&format!("window.__axMailIcon = {icon};"));
     });
 
-    // The shown folder disappeared (deleted for good, account removed): back to an Inbox.
+    // The shown folder disappeared (deleted for good, account removed): back
+    // to an Inbox (a view on screen stays there; see `actions::folder_gone`).
     use_effect(move || {
         let _ = app.mail_rev();
         let current = *ctx.folder.peek();
@@ -100,7 +105,7 @@ pub fn MailModule() -> Element {
         if current.is_some_and(|f| s.folder(f).ok().flatten().is_none())
             && let Some(inbox) = s.primary_account().ok().flatten().and_then(|a| s.folder_by_role(a.id, FolderRole::Inbox).ok().flatten())
         {
-            actions::go_to_folder(app, ctx, inbox.id);
+            actions::folder_gone(app, ctx, inbox.id);
         }
     });
 
@@ -132,8 +137,20 @@ pub fn MailModule() -> Element {
                 ctx.focus.set(Some(key.clone()));
                 ctx.reveal(key);
             }
+            NavRequest::MailView(v) => {
+                app.nav.set(None);
+                ctx.popout.set(None);
+                actions::show_view(app, ctx, v);
+            }
             _ => {}
         }
+    });
+
+    // Packages or Topics switched off in Settings while shown, or the topic
+    // shown hidden from the folder pane: somewhere the panes can show.
+    use_effect(move || {
+        let settings = app.settings.read().clone();
+        actions::check_view(app, ctx, &settings);
     });
 
     // Mark as read: on select, after a delay, or never (Settings > Mail).
@@ -158,7 +175,8 @@ pub fn MailModule() -> Element {
     });
 
     // Background work: snoozed mail comes back, sweep rules run on launch
-    // and daily, date groups roll over at midnight.
+    // and daily, auto-archive daily (when on), date groups roll over at
+    // midnight.
     use_future(move || async move {
         let s = store();
         if s.run_sweep_rules().unwrap_or(0) > 0 {
@@ -166,6 +184,7 @@ pub fn MailModule() -> Element {
         }
         let mut last_sweep = std::time::Instant::now();
         loop {
+            auto_archive_if_due(app).await;
             match s.wake_snoozed(Utc::now()) {
                 Ok(n) if n > 0 => {
                     app.bump_mail();
@@ -193,9 +212,10 @@ pub fn MailModule() -> Element {
     // See `junk_pass` for when it runs.
     use_future(move || async move {
         let mut pass = junk_pass::JunkPass::default();
+        let mut refresh = junk_pass::Refresh::default();
         loop {
             let rev = *app.mail_rev.peek();
-            let wait = if pass.due(rev) {
+            let (wait, changed) = if pass.due(rev) {
                 let out = tokio::task::spawn_blocking(|| junk_pass::run_batch(store()))
                     .await
                     .unwrap_or_else(|_| Err("the check stopped unexpectedly".into()));
@@ -203,13 +223,77 @@ pub fn MailModule() -> Element {
                     // The error only, never message content.
                     eprintln!("axentra: junk check incomplete, retrying later: {e}");
                 }
-                if out.as_ref().is_ok_and(|b| b.model_changed || b.checked > 0) {
-                    app.bump_mail();
-                }
-                pass.finished(rev, &out)
+                let changed = out.as_ref().is_ok_and(|b| b.model_changed || b.checked > 0);
+                (pass.finished(rev, &out), changed)
             } else {
-                Duration::from_secs(2)
+                (Duration::from_secs(2), false)
             };
+            if refresh.now(changed, std::time::Instant::now()) {
+                app.bump_mail();
+            }
+            tokio::time::sleep(wait).await;
+        }
+    });
+
+    // Local AI review (a pilot): one message at a time, and only what's new
+    // from strangers. See `shadow_pass`.
+    use_future(move || async move {
+        loop {
+            let out = tokio::task::spawn_blocking(|| shadow_pass::run_one(store(), shadow_pass::addr()))
+                .await
+                .unwrap_or(shadow_pass::Step::Failed);
+            if out == shadow_pass::Step::Recommended {
+                app.bump_mail();
+            }
+            tokio::time::sleep(out.wait()).await;
+        }
+    });
+
+    // Meaning search: the model reads mail that has no vector yet, a batch
+    // at a time on low-priority threads, then rests until new mail comes.
+    // Vectors don't change what the list shows, so no refresh.
+    use_future(move || async move {
+        meaning_pass::set_enabled(store(), app.settings.peek().meaning_search);
+        loop {
+            let out = tokio::task::spawn_blocking(|| meaning_pass::run_batch(store()))
+                .await
+                .unwrap_or_else(|_| Err("stopped unexpectedly".into()));
+            let wait = match out {
+                Ok(n) if n > 0 => Duration::from_millis(200),
+                Ok(_) => Duration::from_secs(10),
+                Err(e) => {
+                    eprintln!("axentra: meaning search indexing incomplete, retrying later: {e}");
+                    Duration::from_secs(60)
+                }
+            };
+            tokio::time::sleep(wait).await;
+        }
+    });
+
+    // Packages and topics: orders are found and topics sorted in the
+    // background the same way, newest mail first; switched off in Settings,
+    // a batch does nothing. See `insights_pass`.
+    use_future(move || async move {
+        let mut pass = junk_pass::JunkPass::default();
+        let mut refresh = junk_pass::Refresh::default();
+        loop {
+            let rev = *app.mail_rev.peek();
+            let (wait, changed) = if pass.due(rev) {
+                let out = tokio::task::spawn_blocking(|| insights_pass::run_batch(store()))
+                    .await
+                    .unwrap_or_else(|_| Err("the sorting stopped unexpectedly".into()));
+                if let Err(e) = &out {
+                    // The error only, never message content.
+                    eprintln!("axentra: package and topic sorting incomplete, retrying later: {e}");
+                }
+                let changed = out.as_ref().is_ok_and(|b| b.checked > 0);
+                (pass.finished(rev, &out), changed)
+            } else {
+                (Duration::from_secs(2), false)
+            };
+            if refresh.now(changed, std::time::Instant::now()) {
+                app.bump_mail();
+            }
             tokio::time::sleep(wait).await;
         }
     });
@@ -244,29 +328,18 @@ pub fn MailModule() -> Element {
                 return;
             }
             last.set((active, serial));
-            let folder = *ctx.folder.peek();
             if active {
-                if !was_active && let Some(f) = folder {
-                    let memory = ctx::FolderMemory {
-                        selection: ctx.selection.peek().clone(),
-                        anchor: ctx.anchor.peek().clone(),
-                        focus: ctx.focus.peek().clone(),
-                        open: ctx.open.peek().clone(),
-                        tab: *ctx.tab.peek(),
-                        scroll: *ctx.list_scroll.peek(),
-                    };
-                    ctx.memory.write().insert(f, memory);
+                if !was_active {
+                    actions::search_started(ctx);
+                } else {
+                    ctx.clear_selection();
+                    ctx.focus.set(None);
+                    ctx.expanded.set(None);
+                    ctx.full_view.set(false);
                 }
-                ctx.clear_selection();
-                ctx.focus.set(None);
-                ctx.expanded.set(None);
-                ctx.full_view.set(false);
                 ctx.request_list_focus();
-            } else if let Some(m) = folder.and_then(|f| ctx.memory.peek().get(&f).cloned()) {
-                ctx.selection.set(m.selection);
-                ctx.anchor.set(m.anchor);
-                ctx.focus.set(m.focus);
-                ctx.open.set(m.open);
+            } else {
+                actions::search_ended(ctx);
             }
         });
     }
@@ -329,7 +402,15 @@ pub fn MailModule() -> Element {
     let popout = compose.clone().filter(|c| c.popout);
     let read_window = ctx.popout.read().clone();
 
-    let list_pane = |columns: bool, style: String| rsx! { list::MessageList { columns, style } };
+    // Packages' cards take the message list's place.
+    let packages = model_now.view == Some(MailView::Packages);
+    let list_pane = |columns: bool, style: String| {
+        if packages {
+            rsx! { packages::PackagesPane { columns, style } }
+        } else {
+            rsx! { list::MessageList { columns, style } }
+        }
+    };
 
     rsx! {
         div {
@@ -478,5 +559,12 @@ fn SplitterBar(vertical: bool, label: &'static str, onstart: EventHandler<f64>, 
             },
             ondoubleclick: move |_| onreset.call(()),
         }
+    }
+}
+
+/// Auto-archive's daily run (Settings › Mail › Auto-archive), with Undo.
+async fn auto_archive_if_due(app: AppState) {
+    if app.settings.peek().auto_archive_due(Utc::now()) {
+        crate::settings::run_auto_archive(app, false).await;
     }
 }

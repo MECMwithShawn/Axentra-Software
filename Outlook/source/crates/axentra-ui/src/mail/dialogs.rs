@@ -1,14 +1,15 @@
 //! Mail dialogs: confirmations, folder picker, sweep, block, report,
-//! ignore, message details, categories, snooze / flag dates and the
-//! keyboard shortcuts sheet. Copy is Axentra's own where the spec says so.
+//! ignore, message details, categories, snooze / flag dates, Change topic
+//! and the keyboard shortcuts sheet. Copy is Axentra's own where the spec
+//! says so.
 
 use axentra_core::*;
 use chrono::{Local, NaiveDate, NaiveTime, TimeZone, Utc};
 use dioxus::prelude::*;
 
 use super::actions::{self, items};
-use super::ctx::{MailCtx, MailDialog, use_mail, use_model};
-use crate::kit::{Button, Checkbox, Dialog, Icon, Select, TextField, Variant, keys};
+use super::ctx::{MailCtx, MailDialog, TopicScopeChoice, use_mail, use_model};
+use crate::kit::{Button, Checkbox, Dialog, Icon, RadioGroup, RadioOption, Select, TextField, Variant, keys};
 use crate::state::{AppState, store, use_app};
 
 #[component]
@@ -34,6 +35,7 @@ pub fn MailDialogs() -> Element {
         MailDialog::SetUpArchive(ids) => rsx! { SetUpArchiveDialog { ids } },
         MailDialog::Shortcuts => rsx! { ShortcutsDialog {} },
         MailDialog::Help => rsx! { HelpDialog {} },
+        MailDialog::ChangeTopic { ids } => rsx! { ChangeTopicDialog { ids } },
     }
 }
 
@@ -176,7 +178,7 @@ fn folder_rows(account: Option<AccountId>) -> Vec<(Folder, usize)> {
     let snoozed = s.snoozed_folder_ids().unwrap_or_default();
     let accounts = s.accounts().unwrap_or_default();
     let prefs = super::ctx::FolderPrefs { favorites_hidden: true, ..Default::default() };
-    let nodes = super::folders::build_nodes(&accounts, &folders, &[], &[], &snoozed, &prefs, None);
+    let nodes = super::folders::build_nodes(&accounts, &folders, &[], &[], &snoozed, &prefs, None, &Default::default());
     nodes
         .into_iter()
         .filter_map(|n| match n.kind {
@@ -478,6 +480,83 @@ fn BlockDialog(id: MessageId) -> Element {
                     app.bump_mail();
                 }
             },
+        }
+    }
+}
+
+/// Whether to suggest a domain correction: the user already sent two or
+/// more addresses at `domain` (not a free mail provider) to `topic`.
+pub fn suggest_domain_rule(rules: &[topics::TopicRule], domain: &str, topic: topics::Topic) -> bool {
+    !domain.is_empty()
+        && !topics::is_freemail(domain)
+        && rules.iter().filter(|r| !r.is_domain && r.topic == topic && actions::domain_of(&r.pattern) == domain).count() >= 2
+}
+
+/// Change topic for the keyboard: a topic and what the change covers. It
+/// only suggests a whole domain; it never makes one on its own.
+#[component]
+fn ChangeTopicDialog(ids: Vec<MessageId>) -> Element {
+    let app = use_app();
+    let mut ctx = use_mail();
+    let model = use_model();
+    let msgs = store().messages_by_ids(&ids).unwrap_or_default();
+    let current = super::menus::shared_topic(&ids);
+    let mut choice = use_signal(|| current.map(|t| t.id().to_string()).unwrap_or_else(|| "auto".into()));
+    // A remembered "Everything from …" only where a single domain is offered.
+    let mut scope = use_signal(|| actions::topic_scope_for(*ctx.topic_scope.peek(), &msgs).id().to_string());
+    let mut senders: Vec<String> = msgs.iter().map(|m| m.from.address.trim().to_lowercase()).collect();
+    senders.sort();
+    senders.dedup();
+    let domain = actions::offered_domain(senders.iter().map(String::as_str));
+    let who = if senders.len() == 1 { senders[0].clone() } else { "these senders".to_string() };
+    let mut topic_options = vec![RadioOption::new("auto", "Automatic").description("Let Axentra choose")];
+    topic_options.extend(topics::Topic::ALL.into_iter().map(|t| RadioOption::new(t.id(), t.label())));
+    let mut scope_options = vec![
+        RadioOption::new("message", if ids.len() == 1 { "Only this message" } else { "Only these messages" }),
+        RadioOption::new("sender", format!("Always for {who}")),
+    ];
+    if let Some(d) = &domain {
+        scope_options.push(RadioOption::new("domain", format!("Everything from {d}")));
+    }
+    let picked = topics::Topic::parse(&choice());
+    let rules: Vec<topics::TopicRule> = store().topic_rules().unwrap_or_default().into_iter().map(|r| r.rule).collect();
+    let suggest = match (&domain, picked) {
+        (Some(d), Some(t)) => scope() == "sender" && suggest_domain_rule(&rules, d, t),
+        _ => false,
+    };
+    let apply = move |_| {
+        let sc = TopicScopeChoice::parse(&scope.peek()).unwrap_or_default();
+        let topic = topics::Topic::parse(&choice.peek());
+        ctx.topic_scope.set(sc);
+        close(ctx);
+        let m = model.read();
+        actions::change_topic(app, ctx, &m, &ids, topic, sc);
+    };
+    rsx! {
+        Dialog {
+            title: "Change topic",
+            width: 448,
+            on_close: move |_| close(ctx),
+            actions: rsx! {
+                Button { label: "Change", variant: Variant::Primary, default_action: true, onclick: apply }
+                Button { label: "Cancel", onclick: move |_| close(ctx) }
+            },
+            p { class: "ax-mail-dialog-text", "Topics are sorted on this device. Nothing is moved." }
+            div { class: "ax-mail-dialog-group",
+                span { class: "ax-mail-dialog-label", "Topic" }
+                RadioGroup { label: "Topic", value: choice(), options: topic_options, onchange: move |v: String| choice.set(v) }
+            }
+            div { class: "ax-mail-dialog-group",
+                span { class: "ax-mail-dialog-label", "Applies to" }
+                RadioGroup { label: "Applies to", value: scope(), options: scope_options, onchange: move |v: String| scope.set(v) }
+            }
+            if suggest && let Some(d) = domain.clone() {
+                div { class: "ax-mail-topic-suggest", role: "note",
+                    Icon { name: "info", size: 16 }
+                    span { class: "ax-grow", "Do the same for everything from {d}?" }
+                    Button { label: "Use for {d}", small: true, onclick: move |_| scope.set("domain".into()) }
+                }
+            }
         }
     }
 }

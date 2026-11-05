@@ -1,4 +1,5 @@
-//! Folder pane: Favorites and one tree per account (docs/spec/mail.md §2).
+//! Folder pane: Favorites, Views (Packages and Topics) and one tree per
+//! account (docs/spec/mail.md §2).
 //!
 //! The tree is rendered flat (each node carries its `aria-level`) so the
 //! keyboard model (§4.1 of the keyboard spec) can walk the visible nodes in
@@ -13,10 +14,13 @@ use axentra_core::*;
 use dioxus::prelude::*;
 
 use super::actions;
-use super::ctx::{ContextMenu, Drag, FolderEdit, MailCtx, MailDialog, MenuTarget, PersonView, use_mail, use_model};
+use super::ctx::{ContextMenu, Drag, DropPlace, FolderEdit, FolderPrefs, MailCtx, MailDialog, MenuTarget, PersonView, use_mail, use_model};
 use super::menus;
 use crate::kit::{Avatar, Icon, keys};
-use crate::state::{AppState, SettingsPage, store, use_app};
+use crate::settings::PageId;
+use crate::state::{AppState, MailView, SettingsPage, store, use_app};
+use axentra_core::store::{OrdersSummary, TopicCount};
+use axentra_core::topics::Topic;
 
 /// Display order of the well-known folders (one place, per §2.5).
 const ROLE_ORDER: [FolderRole; 9] = [
@@ -52,6 +56,120 @@ pub enum NodeKind {
     NewFolder { account: AccountId, parent: Option<FolderId> },
     /// "Create new folder" entry under an account's tree.
     CreateEntry(AccountId),
+    /// "Views": Packages and Topics, found on this device.
+    ViewsHeader,
+    /// Active orders, and how many need attention.
+    Packages { active: u32, attention: u32 },
+    TopicsParent { expanded: bool },
+    /// A topic with its unread and total counts.
+    Topic(Topic, u32, u32),
+}
+
+/// What the Views section shows; `None` = that feature is off.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ViewsInfo {
+    pub packages: Option<OrdersSummary>,
+    pub topics: Option<Vec<TopicCount>>,
+    /// Topic ids hidden from the folder pane (`settings.topics_hidden`).
+    pub hidden: Vec<String>,
+}
+
+/// The node's view (Packages, All topics or one topic).
+fn view_of(node: &Node) -> Option<MailView> {
+    match node.kind {
+        NodeKind::Packages { .. } => Some(MailView::Packages),
+        NodeKind::TopicsParent { .. } => Some(MailView::Topics(None)),
+        NodeKind::Topic(t, ..) => Some(MailView::Topics(Some(t))),
+        _ => None,
+    }
+}
+
+/// A view node drawn dimmed: a topic with no mail at all. Never Packages,
+/// which always opens a working page (delivered orders, or the first look
+/// through the mail), whatever is on the way.
+fn dimmed(kind: &NodeKind) -> bool {
+    matches!(kind, NodeKind::Topic(_, _, 0))
+}
+
+/// The name type-ahead matches: a folder's name or a view's label.
+fn node_name(node: &Node) -> Option<String> {
+    match &node.kind {
+        NodeKind::Favorite(f) | NodeKind::Folder(f) => Some(f.name.clone()),
+        NodeKind::Packages { .. } => Some("Packages".into()),
+        NodeKind::TopicsParent { .. } => Some("Topics".into()),
+        NodeKind::Topic(t, ..) => Some(t.label().into()),
+        _ => None,
+    }
+}
+
+/// Type-ahead: the next node from `start` (wrapping) whose name starts with `typed`.
+fn typeahead_target(nodes: &[Node], start: usize, typed: &str) -> Option<usize> {
+    if nodes.is_empty() {
+        return None;
+    }
+    (0..nodes.len()).map(|k| (start + k) % nodes.len()).find(|&i| node_name(&nodes[i]).is_some_and(|n| n.to_lowercase().starts_with(typed)))
+}
+
+/// The Views section: after Favorites, before the accounts. Hidden when
+/// both features are off.
+fn views_nodes(views: &ViewsInfo, prefs: &super::ctx::FolderPrefs) -> Vec<Node> {
+    let mut nodes = Vec::new();
+    if views.packages.is_none() && views.topics.is_none() {
+        return nodes;
+    }
+    let header = "ax-mail-node-views".to_string();
+    nodes.push(Node {
+        dom_id: header.clone(),
+        kind: NodeKind::ViewsHeader,
+        level: 1,
+        expandable: true,
+        expanded: !prefs.views_collapsed,
+        parent: None,
+        suffix: None,
+    });
+    if prefs.views_collapsed {
+        return nodes;
+    }
+    if let Some(p) = views.packages {
+        nodes.push(Node {
+            dom_id: "ax-mail-node-packages".into(),
+            kind: NodeKind::Packages { active: p.active, attention: p.attention },
+            level: 2,
+            expandable: false,
+            expanded: false,
+            parent: Some(header.clone()),
+            suffix: None,
+        });
+    }
+    if let Some(counts) = &views.topics {
+        let parent = "ax-mail-node-topics".to_string();
+        let expanded = !prefs.topics_collapsed;
+        nodes.push(Node {
+            dom_id: parent.clone(),
+            kind: NodeKind::TopicsParent { expanded },
+            level: 2,
+            expandable: true,
+            expanded,
+            parent: Some(header),
+            suffix: None,
+        });
+        if expanded {
+            // Topic::ALL order (Other last), without the hidden ones.
+            for t in Topic::ALL.into_iter().filter(|t| !views.hidden.iter().any(|h| h == t.id())) {
+                let c = counts.iter().find(|c| c.topic == t);
+                nodes.push(Node {
+                    dom_id: format!("ax-mail-node-topic-{}", t.id()),
+                    kind: NodeKind::Topic(t, c.map(|c| c.unread).unwrap_or(0), c.map(|c| c.total).unwrap_or(0)),
+                    level: 3,
+                    expandable: false,
+                    expanded: false,
+                    parent: Some(parent.clone()),
+                    suffix: None,
+                });
+            }
+        }
+    }
+    nodes
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -92,8 +210,104 @@ fn folder_icon(f: &Folder, snoozed: bool) -> &'static str {
     }
 }
 
-/// Sort siblings: well-known folders in [`ROLE_ORDER`], then custom A to Z.
-fn sort_siblings(folders: &mut [Folder], snoozed: &[FolderId]) {
+/// Sort siblings: the order the user dragged them into (`custom`), and
+/// otherwise well-known folders in [`ROLE_ORDER`], then custom A to Z.
+/// Folders missing from `custom` (made since) go after the ones in it.
+fn sort_siblings(folders: &mut [Folder], snoozed: &[FolderId], custom: Option<&Vec<FolderId>>) {
+    sort_default(folders, snoozed);
+    if let Some(order) = custom {
+        folders.sort_by_key(|f| order.iter().position(|o| *o == f.id).unwrap_or(usize::MAX));
+    }
+}
+
+/// `current` with `moving` placed just before (or after) `target`.
+fn reordered(current: &[FolderId], moving: FolderId, target: FolderId, after: bool) -> Vec<FolderId> {
+    if moving == target {
+        return current.to_vec();
+    }
+    let mut ids: Vec<FolderId> = current.iter().copied().filter(|i| *i != moving).collect();
+    let pos = ids.iter().position(|i| *i == target).map(|p| if after { p + 1 } else { p }).unwrap_or(ids.len());
+    ids.insert(pos, moving);
+    ids
+}
+
+/// The folders beside `folder` (same account and parent), as the pane
+/// shows them now.
+fn siblings_in_order(folder: &Folder, prefs: &FolderPrefs, snoozed: &[FolderId]) -> Vec<FolderId> {
+    let mut sibs: Vec<Folder> =
+        store()
+            .folders(Some(folder.account_id))
+            .unwrap_or_default()
+            .into_iter()
+            // As shown: an empty Outbox isn't in the pane (see build_nodes).
+            .filter(|f| f.parent_id == folder.parent_id && !(f.role == FolderRole::Outbox && f.total_count == 0))
+            .collect();
+    sort_siblings(&mut sibs, snoozed, prefs.folder_order.get(&FolderPrefs::order_key(folder.account_id, folder.parent_id)));
+    sibs.into_iter().map(|f| f.id).collect()
+}
+
+/// Put `moving` before or after its sibling `target` in the folder pane.
+fn place_folder(ctx: MailCtx, moving: FolderId, target: &Folder, after: bool) {
+    let current = siblings_in_order(target, &ctx.prefs.peek(), &snoozed_ids());
+    let order = reordered(&current, moving, target.id, after);
+    let key = FolderPrefs::order_key(target.account_id, target.parent_id);
+    ctx.update_prefs(|p| {
+        p.folder_order.insert(key, order);
+    });
+}
+
+/// Move a folder one place up or down among its siblings (Move up / Move
+/// down, for the keyboard).
+fn nudge_folder(ctx: MailCtx, folder: &Folder, up: bool) {
+    let current = siblings_in_order(folder, &ctx.prefs.peek(), &snoozed_ids());
+    let Some(pos) = current.iter().position(|i| *i == folder.id) else { return };
+    // Past the next folder shown, not a hidden one.
+    let prefs = ctx.prefs.peek().clone();
+    let all = store().folders(Some(folder.account_id)).unwrap_or_default();
+    let shown = |i: &usize| all.iter().find(|f| f.id == current[*i]).is_none_or(|f| !left_out(f, &all, &prefs));
+    let to = if up { (0..pos).rev().find(shown) } else { (pos + 1..current.len()).find(shown) };
+    if let Some(to) = to {
+        place_folder(ctx, folder.id, &Folder { id: current[to], ..folder.clone() }, !up);
+    }
+}
+
+/// True when `folder` is left out of the list: hidden, with no unread
+/// mail in it or its subfolders (new mail brings it back until read).
+fn left_out(folder: &Folder, folders: &[Folder], prefs: &FolderPrefs) -> bool {
+    fn unread_within(f: &Folder, folders: &[Folder], depth: u32) -> bool {
+        f.unread_count > 0
+            || (depth < 64 && folders.iter().any(|c| c.account_id == f.account_id && c.parent_id == Some(f.id) && unread_within(c, folders, depth + 1)))
+    }
+    prefs.hidden_folders.contains(&folder.id) && !unread_within(folder, folders, 0)
+}
+
+/// The hidden folders of `account` (those still there).
+fn hidden_in(account: AccountId, prefs: &FolderPrefs) -> Vec<FolderId> {
+    let ids: Vec<FolderId> = store().folders(Some(account)).unwrap_or_default().iter().map(|f| f.id).collect();
+    prefs.hidden_folders.iter().copied().filter(|id| ids.contains(id)).collect()
+}
+
+/// Ids of the Snoozed folders (sorted with the well-known ones).
+fn snoozed_ids() -> Vec<FolderId> {
+    store().snoozed_folder_ids().unwrap_or_default()
+}
+
+/// Which part of a row the pointer is over: top quarter, middle, bottom
+/// quarter. `edges` false: only the top or bottom half.
+fn drop_zone(y: f64, height: f64, edges: bool) -> DropPlace {
+    if !edges {
+        return if y < height / 2.0 { DropPlace::Before } else { DropPlace::After };
+    }
+    if y < height / 4.0 {
+        DropPlace::Before
+    } else if y > height * 3.0 / 4.0 {
+        DropPlace::After
+    } else {
+        DropPlace::Into
+    }
+}
+
+fn sort_default(folders: &mut [Folder], snoozed: &[FolderId]) {
     let rank = |f: &Folder| -> usize {
         if snoozed.contains(&f.id) {
             return 3;
@@ -107,6 +321,7 @@ fn sort_siblings(folders: &mut [Folder], snoozed: &[FolderId]) {
 }
 
 /// The visible nodes of the pane, in order.
+#[allow(clippy::too_many_arguments)]
 pub fn build_nodes(
     accounts: &[Account],
     folders: &[Folder],
@@ -115,6 +330,7 @@ pub fn build_nodes(
     snoozed: &[FolderId],
     prefs: &super::ctx::FolderPrefs,
     edit: Option<&FolderEdit>,
+    views: &ViewsInfo,
 ) -> Vec<Node> {
     let mut nodes = Vec::new();
     if !prefs.favorites_hidden {
@@ -153,15 +369,16 @@ pub fn build_nodes(
             }
         }
     }
+    nodes.extend(views_nodes(views, prefs));
     let mut children: HashMap<(AccountId, Option<FolderId>), Vec<Folder>> = HashMap::new();
     for f in folders {
-        if f.role == FolderRole::Outbox && f.total_count == 0 {
+        if (f.role == FolderRole::Outbox && f.total_count == 0) || left_out(f, folders, prefs) {
             continue;
         }
         children.entry((f.account_id, f.parent_id)).or_default().push(f.clone());
     }
-    for v in children.values_mut() {
-        sort_siblings(v, snoozed);
+    for ((account, parent), v) in children.iter_mut() {
+        sort_siblings(v, snoozed, prefs.folder_order.get(&FolderPrefs::order_key(*account, *parent)));
     }
     for a in accounts {
         let acct_id = format!("ax-mail-node-acct-{}", a.id);
@@ -307,6 +524,33 @@ pub fn run_folder_command(mut app: AppState, mut ctx: MailCtx, cmd: &str, target
             }
         }
         ("f_move", Some(f)) => ctx.dialog.set(Some(MailDialog::MoveFolder(f.id))),
+        ("f_order_up", Some(f)) | ("f_order_down", Some(f)) => nudge_folder(ctx, f, cmd == "f_order_up"),
+        ("f_hide", Some(f)) => {
+            ctx.update_prefs(|p| {
+                if !p.hidden_folders.contains(&f.id) {
+                    p.hidden_folders.push(f.id);
+                }
+            });
+            let all = s.folders(Some(f.account_id)).unwrap_or_default();
+            app.toast(if left_out(f, &all, &ctx.prefs.peek()) {
+                format!("{} is hidden. It comes back while it has unread mail; to keep it in the list, right-click the account and choose Show hidden folders.", f.name)
+            } else {
+                format!("{} will hide once its mail is read, and come back when new mail arrives.", f.name)
+            });
+        }
+        ("f_unhide", Some(f)) => ctx.update_prefs(|p| p.hidden_folders.retain(|id| *id != f.id)),
+        ("a_show_hidden", _) => {
+            if let MenuTarget::Account(a) = target {
+                let shown = hidden_in(*a, &ctx.prefs.peek());
+                ctx.update_prefs(|p| p.hidden_folders.retain(|id| !shown.contains(id)));
+            }
+        }
+        ("a_reset_order", _) => {
+            if let MenuTarget::Account(a) = target {
+                let prefix = format!("{a}:");
+                ctx.update_prefs(|p| p.folder_order.retain(|k, _| !k.starts_with(&prefix)));
+            }
+        }
         ("fav_pin", _) => ctx.update_prefs(|p| p.favorites_pinned = true),
         ("fav_unpin", _) => ctx.update_prefs(|p| p.favorites_pinned = false),
         ("fav_hide", _) => {
@@ -328,6 +572,25 @@ pub fn run_folder_command(mut app: AppState, mut ctx: MailCtx, cmd: &str, target
             }
         }
         ("a_settings", _) => app.settings_dialog.set(Some(SettingsPage::Accounts)),
+        ("v_open", _) => match target {
+            MenuTarget::Packages => actions::show_view(app, ctx, MailView::Packages),
+            MenuTarget::Topic(t) => actions::show_view(app, ctx, MailView::Topics(*t)),
+            _ => {}
+        },
+        ("v_hide_topic", _) => {
+            if let MenuTarget::Topic(Some(t)) = target {
+                let id = t.id().to_string();
+                app.update_settings(|s| {
+                    if !s.topics_hidden.contains(&id) {
+                        s.topics_hidden.push(id.clone());
+                    }
+                });
+                app.toast(format!("{} is hidden. Show it again in Settings > Mail > Topics.", t.label()));
+            }
+        }
+        ("v_package_settings", _) => actions::open_settings_page(app, PageId::Packages),
+        ("v_topic_settings", _) => actions::open_settings_page(app, PageId::Topics),
+        ("v_collapse", _) | ("v_expand", _) => ctx.update_prefs(|p| p.views_collapsed = cmd == "v_collapse"),
         ("p_email", _) | ("p_fav_remove", _) | ("p_contact", _) => {
             let MenuTarget::Person(id) = target else { return };
             let Some(c) = s.contact(*id).ok().flatten() else { return };
@@ -403,12 +666,184 @@ pub fn validate_name(name: &str, account: AccountId, parent: Option<FolderId>, e
 }
 
 /// True when the dragged item may be dropped on `folder`.
-fn drop_allowed(drag: &Drag, folder: &Folder, current: Option<FolderId>) -> bool {
+fn drop_allowed(drag: &Drag, folder: &Folder, current: Option<FolderId>, all: &AllFolders) -> bool {
     match drag {
         Drag::Messages(_) => {
             Some(folder.id) != current && !matches!(folder.role, FolderRole::Notes | FolderRole::ConversationHistory | FolderRole::Outbox)
         }
-        Drag::Folder(id) => *id != folder.id && !store().folder_is_within(folder.id, *id).unwrap_or(true),
+        // Well-known folders (Inbox, Drafts…) stay where the server keeps them.
+        Drag::Folder(id) => *id != folder.id && all.movable(*id) && !all.is_within(folder.id, *id),
+        Drag::Favorite(_) => false,
+    }
+}
+
+/// Every folder and the Snoozed folders, as the folder pane last read them,
+/// shared by its rows. While something is dragged each row asks whether it
+/// can take the drop, on every redraw: reading the store for each counted
+/// all the mail once per row, seconds in a large mailbox, so the drag
+/// stalled and never got going.
+#[derive(Clone)]
+struct AllFolders {
+    folders: Rc<Vec<Folder>>,
+    snoozed: Rc<Vec<FolderId>>,
+}
+
+impl PartialEq for AllFolders {
+    fn eq(&self, other: &Self) -> bool {
+        (Rc::ptr_eq(&self.folders, &other.folders) || self.folders == other.folders) && self.snoozed == other.snoozed
+    }
+}
+
+impl AllFolders {
+    fn new(folders: Vec<Folder>, snoozed: Vec<FolderId>) -> Self {
+        Self { folders: Rc::new(folders), snoozed: Rc::new(snoozed) }
+    }
+
+    /// Read now (an event that acts on the store).
+    fn current() -> Self {
+        Self::new(store().folders(None).unwrap_or_default(), snoozed_ids())
+    }
+
+    fn get(&self, id: FolderId) -> Option<&Folder> {
+        self.folders.iter().find(|f| f.id == id)
+    }
+
+    /// Your own folder (not Inbox, Drafts and the like): it can move.
+    fn movable(&self, id: FolderId) -> bool {
+        self.get(id).is_some_and(|f| !menus::is_fixed(f, &self.snoozed))
+    }
+
+    /// `folder` is `ancestor` or inside it (as `Store::folder_is_within`;
+    /// an unknown folder counts as inside).
+    fn is_within(&self, folder: FolderId, ancestor: FolderId) -> bool {
+        let mut cur = Some(folder);
+        for _ in 0..=self.folders.len() {
+            match cur {
+                Some(c) if c == ancestor => return true,
+                Some(c) => match self.get(c) {
+                    Some(f) => cur = f.parent_id,
+                    None => return true,
+                },
+                None => return false,
+            }
+        }
+        false
+    }
+}
+
+/// Where a drop on a row lands: `place` relative to `anchor`, with the
+/// line or highlight drawn on the row of `shown`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Landing {
+    place: DropPlace,
+    anchor: FolderId,
+    shown: FolderId,
+}
+
+impl Landing {
+    fn on(row: FolderId, place: DropPlace) -> Self {
+        Landing { place, anchor: row, shown: row }
+    }
+}
+
+/// The sibling of `moving` that `row` sits in (or is), walking up the
+/// parents; `None` when `row` isn't under one, or is inside `moving`.
+fn sibling_ancestor(folders: &[Folder], row: &Folder, moving: &Folder) -> Option<FolderId> {
+    let mut cur = row;
+    for _ in 0..64 {
+        if cur.id == moving.id || cur.account_id != moving.account_id {
+            return None;
+        }
+        if cur.parent_id == moving.parent_id {
+            return Some(cur.id);
+        }
+        cur = folders.iter().find(|f| Some(f.id) == cur.parent_id)?;
+    }
+    None
+}
+
+/// The last row shown under `folder` (itself when closed or childless):
+/// where a line meaning "after `folder`" goes.
+fn last_visible_descendant(folders: &[Folder], folder: &Folder, prefs: &FolderPrefs, snoozed: &[FolderId]) -> FolderId {
+    let mut cur = folder.clone();
+    for _ in 0..64 {
+        if !cur.is_expanded {
+            break;
+        }
+        let mut kids: Vec<Folder> = folders
+            .iter()
+            .filter(|f| {
+                f.account_id == cur.account_id
+                    && f.parent_id == Some(cur.id)
+                    && !(f.role == FolderRole::Outbox && f.total_count == 0)
+                    && !left_out(f, folders, prefs)
+            })
+            .cloned()
+            .collect();
+        sort_siblings(&mut kids, snoozed, prefs.folder_order.get(&FolderPrefs::order_key(cur.account_id, Some(cur.id))));
+        match kids.pop() {
+            Some(last) => cur = last,
+            None => break,
+        }
+    }
+    cur.id
+}
+
+/// Where a folder dragged over a row of the account tree lands (pure:
+/// `into` says whether the row may take it as a subfolder). Beside a
+/// sibling the edges reorder; under an open parent come its subfolders, so
+/// its bottom edge means "after it and all of them", drawn below the last.
+/// Over a sibling's subfolders, a folder that can't go into them lands
+/// after that sibling.
+#[allow(clippy::too_many_arguments)]
+fn folder_landing(
+    folders: &[Folder],
+    prefs: &FolderPrefs,
+    snoozed: &[FolderId],
+    moving: &Folder,
+    row: &Folder,
+    into: bool,
+    y: f64,
+    height: f64,
+    open: bool,
+) -> Option<Landing> {
+    if moving.id == row.id {
+        return None;
+    }
+    let after = |s: &Folder| Landing { place: DropPlace::After, anchor: s.id, shown: last_visible_descendant(folders, s, prefs, snoozed) };
+    let Some(sib) = sibling_ancestor(folders, row, moving) else {
+        return into.then(|| Landing::on(row.id, DropPlace::Into));
+    };
+    if sib == row.id {
+        return Some(match drop_zone(y, height, into) {
+            DropPlace::After if open && into => Landing::on(row.id, DropPlace::Into),
+            DropPlace::After => after(row),
+            p => Landing::on(row.id, p),
+        });
+    }
+    let sib = folders.iter().find(|f| f.id == sib)?;
+    let landing = after(sib);
+    // The bottom edge of the last row under a sibling means "after it".
+    if !into || (landing.shown == row.id && drop_zone(y, height, true) == DropPlace::After) {
+        Some(landing)
+    } else {
+        Some(Landing::on(row.id, DropPlace::Into))
+    }
+}
+
+/// Where `drag` lands on the row of `row` with the pointer `y` pixels into
+/// a row `height` tall, or `None` when it can't be dropped there.
+/// Favorites rows only reorder; see [`folder_landing`] for the tree.
+#[allow(clippy::too_many_arguments)]
+fn place_on(drag: &Drag, row: &Folder, is_fav: bool, current: Option<FolderId>, y: f64, height: f64, open: bool, prefs: &FolderPrefs, all: &AllFolders) -> Option<Landing> {
+    match drag {
+        Drag::Messages(_) => drop_allowed(drag, row, current, all).then(|| Landing::on(row.id, DropPlace::Into)),
+        Drag::Folder(id) | Drag::Favorite(id) if is_fav => (*id != row.id).then(|| Landing::on(row.id, drop_zone(y, height, false))),
+        Drag::Favorite(_) => None,
+        Drag::Folder(id) => {
+            let moving = all.get(*id)?;
+            folder_landing(&all.folders, prefs, &all.snoozed, moving, row, drop_allowed(drag, row, current, all), y, height, open)
+        }
     }
 }
 
@@ -417,7 +852,7 @@ fn drop_on(app: AppState, mut ctx: MailCtx, model: &super::model::ListModel, fol
     ctx.drag.set(None);
     ctx.drop_target.set(None);
     let Some(drag) = drag else { return };
-    if !drop_allowed(&drag, folder, *ctx.folder.peek()) {
+    if !drop_allowed(&drag, folder, *ctx.folder.peek(), &AllFolders::current()) {
         return;
     }
     match drag {
@@ -428,6 +863,7 @@ fn drop_on(app: AppState, mut ctx: MailCtx, model: &super::model::ListModel, fol
                 actions::move_to(app, ctx, model, ids, folder.id);
             }
         }
+        Drag::Favorite(_) => {}
         Drag::Folder(id) => {
             let s = store();
             let Some(f) = s.folder(id).ok().flatten() else { return };
@@ -461,10 +897,15 @@ pub fn FolderPane(width: u32) -> Element {
     let prefs = ctx.prefs.read().clone();
     let edit = ctx.folder_edit.read().clone();
     let people = favorite_people(&folders);
-    let nodes = build_nodes(&accounts, &folders, &favorites, &people, &snoozed, &prefs, edit.as_ref());
+    let settings = app.settings.read().clone();
+    let views = views_info(&settings);
+    let nodes = build_nodes(&accounts, &folders, &favorites, &people, &snoozed, &prefs, edit.as_ref(), &views);
+    let all = AllFolders::new(folders, snoozed.clone());
     let searching = model.read().searching;
     let person = ctx.person.read().as_ref().map(|p| p.contact);
-    let selected = if searching || person.is_some() { None } else { *ctx.folder.read() };
+    let view = *ctx.view.read();
+    let selected = selected_folder(searching, person.is_some(), view, *ctx.folder.read());
+    let selected_view = view.filter(|_| !searching);
     let focus = ctx.tree_focus.read().clone();
     let mut tree_el = use_signal(|| None::<Rc<MountedData>>);
     let mut typeahead = use_signal(|| (String::new(), std::time::Instant::now()));
@@ -506,8 +947,10 @@ pub fn FolderPane(width: u32) -> Element {
                     node: node.clone(),
                     selected,
                     selected_person: person,
+                    selected_view,
                     focused: active.as_deref() == Some(node.dom_id.as_str()),
                     snoozed: snoozed.clone(),
+                    all: all.clone(),
                 }
             }
         }
@@ -516,16 +959,21 @@ pub fn FolderPane(width: u32) -> Element {
         nav { class: "ax-mail-folders", style: "width:{width}px", "aria-label": "Navigation pane", "data-ax-region": "true",
             div {
                 class: "ax-mail-tree",
+                // While dragging, rows (not their parts) get the drag events,
+                // so the pointer's height in the row is measured from its top.
+                class: if ctx.drag.read().is_some() { "ax-dragging" },
                 role: "tree",
                 "aria-label": "Folders",
                 tabindex: "0",
                 "data-ax-default-focus": "true",
                 "aria-activedescendant": active.clone().unwrap_or_default(),
                 onmounted: move |e| tree_el.set(Some(e.data())),
-                onfocus: move |_| {
-                    if ctx.tree_focus.peek().is_none() {
-                        let first = selected.map(|f| format!("ax-mail-node-{f}"));
-                        ctx.tree_focus.set(first);
+                onfocus: {
+                    let nodes = nodes_rc.clone();
+                    move |_| {
+                        if ctx.tree_focus.peek().is_none() {
+                            ctx.tree_focus.set(start_node(&nodes, selected, selected_view));
+                        }
                     }
                 },
                 onkeydown,
@@ -555,6 +1003,37 @@ pub fn FolderPane(width: u32) -> Element {
             }
         }
     }
+}
+
+/// The node the tree starts on when it takes focus: the view shown (or,
+/// with its node collapsed or hidden, the closest one listed: Topics, then
+/// Views), else the folder shown.
+fn start_node(nodes: &[Node], folder: Option<FolderId>, view: Option<MailView>) -> Option<String> {
+    let candidates: Vec<String> = match view {
+        Some(MailView::Packages) => vec!["ax-mail-node-packages".into()],
+        Some(MailView::Topics(Some(t))) => vec![format!("ax-mail-node-topic-{}", t.id()), "ax-mail-node-topics".into()],
+        Some(MailView::Topics(None)) => vec!["ax-mail-node-topics".into()],
+        None => return folder.map(|f| format!("ax-mail-node-{f}")),
+    };
+    candidates.into_iter().chain(["ax-mail-node-views".to_string()]).find(|id| nodes.iter().any(|n| &n.dom_id == id))
+}
+
+/// The highlighted folder: none while searching or showing a person's
+/// mail, Packages or a topic list (those highlight their own node).
+fn selected_folder(searching: bool, person: bool, view: Option<MailView>, folder: Option<FolderId>) -> Option<FolderId> {
+    if searching || person || view.is_some() { None } else { folder }
+}
+
+/// The Views section's data: two queries, only for the features that are on.
+fn views_info(settings: &Settings) -> ViewsInfo {
+    let s = store();
+    let packages = settings.order_tracking.then(|| {
+        let now = chrono::Utc::now();
+        let today = chrono::Local::now().date_naive();
+        s.orders_summary(now, today, settings.orders_keep_days()).unwrap_or_default()
+    });
+    let topics = settings.topics_view.then(|| s.topic_counts().unwrap_or_default());
+    ViewsInfo { packages, topics, hidden: settings.topics_hidden.clone() }
 }
 
 /// Keyboard handling for the tree. Returns true when the key was used.
@@ -653,10 +1132,7 @@ fn tree_key(app: AppState, mut ctx: MailCtx, nodes: &[Node], e: &KeyboardEvent, 
             buf.push_str(&c.to_lowercase());
             typeahead.set((buf.clone(), std::time::Instant::now()));
             let start = idx.map(|i| if buf.chars().count() == 1 { i + 1 } else { i }).unwrap_or(0);
-            let found = (0..nodes.len()).map(|k| (start + k) % nodes.len()).find(|&i| {
-                folder_of(&nodes[i]).is_some_and(|f| f.name.to_lowercase().starts_with(&buf))
-            });
-            match found {
+            match typeahead_target(nodes, start, &buf) {
                 Some(i) => go(i),
                 None => return false,
             }
@@ -679,6 +1155,8 @@ fn toggle_node(app: AppState, ctx: MailCtx, n: &Node) {
             })
         }
         NodeKind::Folder(f) if app.check(store().set_folder_expanded(f.id, !n.expanded)).is_some() => app.bump_mail(),
+        NodeKind::ViewsHeader => ctx.update_prefs(|p| p.views_collapsed = !p.views_collapsed),
+        NodeKind::TopicsParent { .. } => ctx.update_prefs(|p| p.topics_collapsed = !p.topics_collapsed),
         _ => {}
     }
 }
@@ -690,25 +1168,38 @@ fn activate_node(app: AppState, mut ctx: MailCtx, n: &Node) {
             actions::show_person(app, ctx, PersonView { contact: p.contact, name: p.name.clone(), address: p.address.clone() });
         }
         NodeKind::CreateEntry(a) => ctx.folder_edit.set(Some(FolderEdit::Create { account: *a, parent: None })),
-        NodeKind::FavoritesHeader | NodeKind::Account(_) => toggle_node(app, ctx, n),
+        NodeKind::FavoritesHeader | NodeKind::Account(_) | NodeKind::ViewsHeader => toggle_node(app, ctx, n),
+        NodeKind::Packages { .. } | NodeKind::TopicsParent { .. } | NodeKind::Topic(..) => {
+            if let Some(v) = view_of(n) {
+                actions::show_view(app, ctx, v);
+            }
+        }
         NodeKind::NewFolder { .. } => {}
     }
 }
 
-fn node_menu(n: &Node) -> Option<(Vec<crate::kit::MenuItem>, MenuTarget)> {
+fn node_menu(n: &Node, prefs: &FolderPrefs) -> Option<(Vec<crate::kit::MenuItem>, MenuTarget)> {
     let snoozed = store().snoozed_folder_ids().unwrap_or_default();
     match &n.kind {
-        NodeKind::Folder(f) => Some((menus::folder_menu(f, false, &snoozed), MenuTarget::Folder(f.id))),
-        NodeKind::Favorite(f) => Some((menus::folder_menu(f, true, &snoozed), MenuTarget::Favorite(f.id))),
+        NodeKind::Folder(f) => Some((menus::folder_menu(f, false, prefs.hidden_folders.contains(&f.id), &snoozed), MenuTarget::Folder(f.id))),
+        NodeKind::Favorite(f) => Some((menus::folder_menu(f, true, false, &snoozed), MenuTarget::Favorite(f.id))),
         NodeKind::FavoritesHeader => Some((menus::favorites_header_menu(false), MenuTarget::FavoritesHeader)),
-        NodeKind::Account(a) => Some((menus::account_menu(), MenuTarget::Account(a.id))),
+        NodeKind::Account(a) => {
+            let hidden = hidden_in(a.id, prefs).len();
+            Some((menus::account_menu(hidden), MenuTarget::Account(a.id)))
+        }
         NodeKind::Person(p) => Some((menus::person_menu(), MenuTarget::Person(p.contact))),
+        NodeKind::Packages { .. } => Some((menus::packages_menu(), MenuTarget::Packages)),
+        NodeKind::Topic(t, ..) => Some((menus::topic_menu(false), MenuTarget::Topic(Some(*t)))),
+        NodeKind::TopicsParent { .. } => Some((menus::topic_menu(true), MenuTarget::Topic(None))),
+        NodeKind::ViewsHeader => Some((menus::views_header_menu(!n.expanded), MenuTarget::ViewsHeader)),
         _ => None,
     }
 }
 
 fn open_node_menu(mut ctx: MailCtx, n: &Node, x: f64, y: f64) {
-    if let Some((mut items, target)) = node_menu(n) {
+    let menu = node_menu(n, &ctx.prefs.peek());
+    if let Some((mut items, target)) = menu {
         if matches!(n.kind, NodeKind::FavoritesHeader) {
             items = menus::favorites_header_menu(ctx.prefs.peek().favorites_pinned);
         }
@@ -729,7 +1220,15 @@ fn open_node_menu_at_element(ctx: MailCtx, n: Node) {
 }
 
 #[component]
-fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<ContactId>, focused: bool, snoozed: Vec<FolderId>) -> Element {
+fn FolderNode(
+    node: Node,
+    selected: Option<FolderId>,
+    selected_person: Option<ContactId>,
+    selected_view: Option<MailView>,
+    focused: bool,
+    snoozed: Vec<FolderId>,
+    all: AllFolders,
+) -> Element {
     let app = use_app();
     let mut ctx = use_mail();
     let model = use_model();
@@ -745,6 +1244,7 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
             let n2 = node.clone();
             let n3 = node.clone();
             let n4 = node.clone();
+            let all_over = all.clone();
             let account_id = if let NodeKind::Account(a) = &node.kind { Some(a.id) } else { None };
             // Headers use negative drop-target ids: -1 for Favorites, -1000 - id for accounts.
             let header_target = account_id.map(|a| -1000 - a).unwrap_or(-1);
@@ -772,7 +1272,11 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                     // Folders dropped on Favorites become favourites; on an account, top-level folders.
                     ondragover: move |e: DragEvent| {
                         e.prevent_default();
-                        let ok = matches!(*ctx.drag.peek(), Some(Drag::Folder(_)));
+                        // Any folder can become a favourite; only your own folders move.
+                        let ok = match *ctx.drag.peek() {
+                            Some(Drag::Folder(id)) => account_id.is_none() || all_over.movable(id),
+                            _ => false,
+                        };
                         let want = ok.then_some(header_target);
                         if *ctx.drop_target.peek() != want {
                             ctx.drop_target.set(want);
@@ -793,6 +1297,7 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                             let result = match account_id {
                                 None => s.set_folder_favorite(id, true),
                                 Some(a) => match s.folder(id).ok().flatten() {
+                                    Some(f) if menus::is_fixed(&f, &snoozed_ids()) => Ok(()),
                                     Some(f) if f.account_id == a => s.move_folder(id, None),
                                     _ => Err(Error::Invalid("Folders can't move between accounts.".into())),
                                 },
@@ -884,6 +1389,122 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                 }
             }
         }
+        NodeKind::ViewsHeader => {
+            let n_toggle = node.clone();
+            let n_menu = node.clone();
+            rsx! {
+                div {
+                    id: "{node.dom_id}",
+                    class: "ax-mail-node ax-mail-node-header ax-mail-node-views",
+                    class: if focused { "ax-focused" },
+                    role: "treeitem",
+                    "aria-level": "{level}",
+                    "aria-expanded": if node.expanded { "true" } else { "false" },
+                    "aria-label": "Views",
+                    title: "Found in your mail on this device",
+                    style: "padding-left:{indent}px",
+                    onclick: move |_| {
+                        ctx.tree_focus.set(Some(n_toggle.dom_id.clone()));
+                        toggle_node(app, ctx, &n_toggle);
+                    },
+                    oncontextmenu: move |e: MouseEvent| {
+                        e.prevent_default();
+                        let c = e.client_coordinates();
+                        open_node_menu(ctx, &n_menu, c.x, c.y);
+                    },
+                    span { class: "ax-mail-node-chevron",
+                        Icon { name: if node.expanded { "chevron_down" } else { "chevron_right" }, size: 16 }
+                    }
+                    span { class: "ax-mail-node-name ax-ellipsis", "Views" }
+                }
+            }
+        }
+        NodeKind::Packages { .. } | NodeKind::TopicsParent { .. } | NodeKind::Topic(..) => {
+            let Some(view) = view_of(&node) else { return rsx! {} };
+            let is_selected = selected_view == Some(view);
+            let (icon, name, count, attention) = match node.kind {
+                NodeKind::Packages { active, attention } => ("box", "Packages".to_string(), active, attention),
+                NodeKind::Topic(t, unread, _) => (t.icon(), t.label().to_string(), unread, 0),
+                _ => ("tag", "Topics".to_string(), 0, 0),
+            };
+            let is_packages = matches!(node.kind, NodeKind::Packages { .. });
+            let accessible = match (is_packages, count, attention) {
+                (true, 0, _) => "Packages".to_string(),
+                (true, n, 0) => format!("Packages, {n} on the way"),
+                (true, n, 1) => format!("Packages, {n} on the way, 1 package needs attention"),
+                (true, n, a) => format!("Packages, {n} on the way, {a} packages need attention"),
+                (false, 0, _) => name.clone(),
+                (false, n, _) => format!("{name}, {n} unread"),
+            };
+            let empty = dimmed(&node.kind);
+            let icon_name = if is_selected { crate::kit::filled_icon(icon) } else { icon.to_string() };
+            let n_menu = node.clone();
+            let n_menu2 = node.clone();
+            let n_toggle = node.clone();
+            let dom = node.dom_id.clone();
+            let expandable = node.expandable;
+            let expanded = node.expanded;
+            let more_label = format!("More options for {name}");
+            rsx! {
+                div {
+                    id: "{node.dom_id}",
+                    class: "ax-mail-node ax-mail-node-view",
+                    class: if is_selected { "ax-selected" },
+                    class: if focused { "ax-focused" },
+                    class: if is_selected || (!is_packages && count > 0) { "ax-bold" },
+                    class: if empty { "ax-dim" },
+                    role: "treeitem",
+                    "aria-level": "{level}",
+                    "aria-selected": if is_selected { "true" } else { "false" },
+                    "aria-expanded": if expandable { if expanded { "true" } else { "false" } },
+                    "aria-label": "{accessible}",
+                    title: "{name}",
+                    style: "padding-left:{indent}px",
+                    onclick: move |_| {
+                        ctx.tree_focus.set(Some(dom.clone()));
+                        actions::show_view(app, ctx, view);
+                    },
+                    oncontextmenu: move |e: MouseEvent| {
+                        e.prevent_default();
+                        let c = e.client_coordinates();
+                        open_node_menu(ctx, &n_menu, c.x, c.y);
+                    },
+                    span {
+                        class: "ax-mail-node-chevron",
+                        onclick: move |e: MouseEvent| {
+                            if expandable {
+                                e.stop_propagation();
+                                toggle_node(app, ctx, &n_toggle);
+                            }
+                        },
+                        if expandable {
+                            Icon { name: if expanded { "chevron_down" } else { "chevron_right" }, size: 16 }
+                        }
+                    }
+                    span { class: "ax-mail-node-icon", Icon { name: icon_name, size: 20 } }
+                    span { class: "ax-mail-node-name ax-ellipsis", "{name}" }
+                    if count > 0 {
+                        span { class: if is_packages { "ax-mail-node-count ax-total" } else { "ax-mail-node-count" }, "aria-hidden": "true", "{count}" }
+                    }
+                    if attention > 0 {
+                        span { class: "ax-mail-node-attention", "aria-hidden": "true", title: "Needs attention" }
+                    }
+                    button {
+                        r#type: "button",
+                        class: "ax-mail-node-more",
+                        tabindex: "-1",
+                        title: "More options",
+                        "aria-label": "{more_label}",
+                        onclick: move |e: MouseEvent| {
+                            e.stop_propagation();
+                            let c = e.client_coordinates();
+                            open_node_menu(ctx, &n_menu2, c.x, c.y + 8.0);
+                        },
+                        Icon { name: "more_horizontal", size: 16 }
+                    }
+                }
+            }
+        }
         NodeKind::CreateEntry(account) => rsx! {
             div {
                 id: "{node.dom_id}",
@@ -920,8 +1541,12 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
             let is_selected = selected == Some(f.id);
             let count = folder_count(&f, is_snoozed);
             let drag = ctx.drag.read().clone();
-            let is_drop = *ctx.drop_target.read() == Some(f.id);
-            let can_drop = drag.as_ref().is_some_and(|d| drop_allowed(d, &f, selected));
+            // The drop line can belong to another row than the one hovered.
+            let is_drop = *ctx.drop_target.read() == Some(f.id) && *ctx.drop_fav.read() == is_fav;
+            let place = *ctx.drop_place.read();
+            let row_h = if app.settings.read().density == Density::Compact { 32.0 } else { 36.0 };
+            let open = node.expandable && node.expanded;
+            let can_drop = drag.as_ref().is_some_and(|d| place_on(d, &f, is_fav, selected, row_h / 2.0, row_h, open, &ctx.prefs.peek(), &all).is_some());
             let bold = is_selected || (f.unread_count > 0 && count.as_ref().is_some_and(|(_, u)| *u));
             let icon = folder_icon(&f, is_snoozed);
             let icon_name = if is_selected { format!("{icon}_filled") } else { icon.to_string() };
@@ -935,9 +1560,10 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                 Some((n, false)) => format!("{name}, {n} items"),
                 None => name.clone(),
             };
-            let draggable = !is_fav && !menus::is_fixed(&f, &snoozed);
             let (fid, fid2, fid3) = (f.id, f.id, f.id);
             let f_drop = f.clone();
+            let f_over = f.clone();
+            let (all_over, all_drop) = (all.clone(), all.clone());
             let n_menu = node.clone();
             let n_menu2 = node.clone();
             let n_toggle = node.clone();
@@ -951,7 +1577,9 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                     class: if is_selected { "ax-selected" },
                     class: if focused { "ax-focused" },
                     class: if bold { "ax-bold" },
-                    class: if is_drop && can_drop { "ax-drop" },
+                    class: if is_drop && place == DropPlace::Into { "ax-drop" },
+                    class: if is_drop && place == DropPlace::Before { "ax-drop-before" },
+                    class: if is_drop && place == DropPlace::After { "ax-drop-after" },
                     class: if drag.is_some() && !can_drop { "ax-no-drop" },
                     role: "treeitem",
                     "aria-level": "{level}",
@@ -960,7 +1588,9 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                     "aria-label": "{accessible}",
                     title: "{f.name}",
                     style: "padding-left:{indent}px",
-                    draggable: if draggable { "true" } else { "false" },
+                    // Every folder can be dragged: to reorder it, into Favorites,
+                    // and (your own folders) into another folder.
+                    draggable: "true",
                     onclick: move |_| {
                         ctx.tree_focus.set(Some(dom.clone()));
                         actions::go_to_folder(app, ctx, fid);
@@ -970,20 +1600,49 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                         let c = e.client_coordinates();
                         open_node_menu(ctx, &n_menu, c.x, c.y);
                     },
-                    ondragstart: move |_| ctx.drag.set(Some(Drag::Folder(fid2))),
+                    ondragstart: move |_| {
+                        ctx.drop_target.set(None);
+                        ctx.drop_place.set(DropPlace::Into);
+                        ctx.drag.set(Some(if is_fav { Drag::Favorite(fid2) } else { Drag::Folder(fid2) }));
+                    },
                     ondragend: move |_| {
                         ctx.drag.set(None);
                         ctx.drop_target.set(None);
+                        ctx.drop_place.set(DropPlace::Into);
+                        ctx.drag_hover.set(None);
                     },
                     ondragover: move |e: DragEvent| {
                         e.prevent_default();
-                        if *ctx.drop_target.peek() != Some(fid3) {
-                            ctx.drop_target.set(Some(fid3));
-                            // Hovering a collapsed parent for 700 ms expands it.
+                        let Some(drag) = ctx.drag.peek().clone() else { return };
+                        let landing = place_on(&drag, &f_over, is_fav, selected, e.element_coordinates().y, row_h, open, &ctx.prefs.peek(), &all_over);
+                        match landing {
+                            Some(l) => {
+                                if *ctx.drop_place.peek() != l.place {
+                                    ctx.drop_place.set(l.place);
+                                }
+                                if *ctx.drop_target.peek() != Some(l.shown) {
+                                    ctx.drop_target.set(Some(l.shown));
+                                }
+                                if *ctx.drop_fav.peek() != is_fav {
+                                    ctx.drop_fav.set(is_fav);
+                                }
+                            }
+                            None => {
+                                if ctx.drop_target.peek().is_some() {
+                                    ctx.drop_target.set(None);
+                                }
+                            }
+                        }
+                        // Holding a drag on a collapsed parent for 700 ms opens it,
+                        // even one that can't take the drop (not on its edges,
+                        // which reorder).
+                        if *ctx.drag_hover.peek() != Some(fid3) {
+                            ctx.drag_hover.set(Some(fid3));
                             if expandable && !expanded {
                                 spawn(async move {
                                     tokio::time::sleep(Duration::from_millis(700)).await;
-                                    if *ctx.drop_target.peek() == Some(fid3) && store().set_folder_expanded(fid3, true).is_ok() {
+                                    let reordering = ctx.drop_target.peek().is_some() && *ctx.drop_place.peek() != DropPlace::Into;
+                                    if *ctx.drag_hover.peek() == Some(fid3) && !reordering && store().set_folder_expanded(fid3, true).is_ok() {
                                         app.bump_mail();
                                     }
                                 });
@@ -991,14 +1650,44 @@ fn FolderNode(node: Node, selected: Option<FolderId>, selected_person: Option<Co
                         }
                     },
                     ondragleave: move |_| {
-                        if *ctx.drop_target.peek() == Some(fid3) {
+                        // The line may be on another row, so go by the hovered one.
+                        if *ctx.drag_hover.peek() == Some(fid3) {
                             ctx.drop_target.set(None);
+                            ctx.drag_hover.set(None);
                         }
                     },
                     ondrop: move |e: DragEvent| {
                         e.prevent_default();
+                        ctx.drag_hover.set(None);
                         let copy = e.modifiers().ctrl();
-                        drop_on(app, ctx, &model.read(), &f_drop, copy);
+                        let drag = ctx.drag.peek().clone();
+                        // Worked out again here: a row that refused the drag
+                        // must not act on where an earlier row would have put it.
+                        let landing = drag.as_ref().and_then(|d| place_on(d, &f_drop, is_fav, selected, e.element_coordinates().y, row_h, open, &ctx.prefs.peek(), &all_drop));
+                        let Some(landing) = landing else {
+                            ctx.drag.set(None);
+                            ctx.drop_target.set(None);
+                            ctx.drop_place.set(DropPlace::Into);
+                            return;
+                        };
+                        let after = landing.place == DropPlace::After;
+                        match drag {
+                            Some(Drag::Folder(id) | Drag::Favorite(id)) if is_fav => {
+                                ctx.drag.set(None);
+                                ctx.drop_target.set(None);
+                                if landing.place != DropPlace::Into && app.check(store().place_favorite(id, f_drop.id, after)).is_some() {
+                                    app.bump_mail();
+                                }
+                            }
+                            Some(Drag::Folder(id)) if landing.place != DropPlace::Into => {
+                                ctx.drag.set(None);
+                                ctx.drop_target.set(None);
+                                if let Some(anchor) = store().folder(landing.anchor).ok().flatten() {
+                                    place_folder(ctx, id, &anchor, after);
+                                }
+                            }
+                            _ => drop_on(app, ctx, &model.read(), &f_drop, copy),
+                        }
                     },
                     span {
                         class: "ax-mail-node-chevron",
@@ -1182,7 +1871,7 @@ mod tests {
         folders[4].parent_id = Some(11);
         use super::super::ctx::FolderPrefs;
         let prefs = FolderPrefs { favorites_hidden: true, ..Default::default() };
-        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[13], &prefs, None);
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[13], &prefs, None, &ViewsInfo::default());
         let names: Vec<(String, u32)> = nodes
             .iter()
             .filter_map(|n| folder_of(n).map(|f| (f.name.clone(), n.level)))
@@ -1200,6 +1889,17 @@ mod tests {
             ]
         );
         assert!(matches!(nodes.last().unwrap().kind, NodeKind::CreateEntry(1)));
+        // Hidden folders leave the list, with their subfolders.
+        let hiding = FolderPrefs { favorites_hidden: true, hidden_folders: vec![2, 11], ..Default::default() };
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[13], &hiding, None, &ViewsInfo::default());
+        let left: Vec<String> = nodes.iter().filter_map(|n| folder_of(n).map(|f| f.name.clone())).collect();
+        assert_eq!(left, vec!["Inbox", "Sent Items", "Snoozed", "zeta"]);
+        // Until they have unread mail, theirs or a subfolder's.
+        let mut unread = folders.clone();
+        unread[4].unread_count = 1;
+        let nodes = build_nodes(std::slice::from_ref(&account), &unread, &[], &[], &[13], &hiding, None, &ViewsInfo::default());
+        let left: Vec<String> = nodes.iter().filter_map(|n| folder_of(n).map(|f| f.name.clone())).collect();
+        assert_eq!(left, vec!["Inbox", "Sent Items", "Snoozed", "Alpha", "Child", "zeta"]);
         // Two Inboxes in Favorites are told apart by their account.
         let people = vec![FavoritePerson { contact: 7, name: "Priya Raman".into(), address: "priya@x.example".into(), unread: 2 }];
         let other = Account { id: 2, email: "me@y.example".into(), ..Default::default() };
@@ -1207,7 +1907,7 @@ mod tests {
         inbox2.account_id = 2;
         let favs = vec![folders[2].clone(), inbox2, folders[6].clone()];
         let shown = FolderPrefs { favorites_hidden: false, collapsed_accounts: vec![1, 2], ..Default::default() };
-        let nodes = build_nodes(&[account.clone(), other], &folders, &favs, &people, &[13], &shown, None);
+        let nodes = build_nodes(&[account.clone(), other], &folders, &favs, &people, &[13], &shown, None, &ViewsInfo::default());
         let suffixes: Vec<Option<String>> = nodes.iter().filter(|n| matches!(n.kind, NodeKind::Favorite(_))).map(|n| n.suffix.clone()).collect();
         assert_eq!(suffixes, vec![Some("me@x.example".into()), Some("me@y.example".into()), None]);
         // Favourite people follow the favourite folders.
@@ -1215,8 +1915,186 @@ mod tests {
         assert_eq!(nodes[4].dom_id, "ax-mail-node-person-7");
         // Creating a subfolder shows the field under its parent.
         let edit = FolderEdit::Create { account: 1, parent: Some(10) };
-        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[13], &prefs, Some(&edit));
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[13], &prefs, Some(&edit), &ViewsInfo::default());
         let zeta = nodes.iter().position(|n| n.dom_id == "ax-mail-node-10").unwrap();
         assert!(matches!(nodes[zeta + 1].kind, NodeKind::NewFolder { parent: Some(10), .. }));
+    }
+
+    fn views(packages: bool, topics: bool, hidden: &[&str]) -> ViewsInfo {
+        let counts = vec![
+            TopicCount { topic: Topic::Travel, total: 4, unread: 2 },
+            TopicCount { topic: Topic::Orders, total: 3, unread: 0 },
+        ];
+        ViewsInfo {
+            packages: packages.then_some(OrdersSummary { active: 2, attention: 1 }),
+            topics: topics.then_some(counts),
+            hidden: hidden.iter().map(|h| h.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn views_follow_favorites_and_lead_the_accounts() {
+        use super::super::ctx::FolderPrefs;
+        let account = Account { id: 1, email: "me@x.example".into(), ..Default::default() };
+        let folders = vec![folder(1, FolderRole::Inbox, "Inbox", 0, 0)];
+        let prefs = FolderPrefs::default();
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &folders, &[], &[], &prefs, None, &views(true, true, &[]));
+        let kinds: Vec<&str> = nodes
+            .iter()
+            .map(|n| match n.kind {
+                NodeKind::FavoritesHeader => "favorites",
+                NodeKind::Favorite(_) => "favorite",
+                NodeKind::ViewsHeader => "views",
+                NodeKind::Packages { .. } => "packages",
+                NodeKind::TopicsParent { .. } => "topics",
+                NodeKind::Topic(..) => "topic",
+                NodeKind::Account(_) => "account",
+                _ => "other",
+            })
+            .filter(|k| *k != "topic")
+            .collect();
+        assert_eq!(&kinds[..6], &["favorites", "favorite", "views", "packages", "topics", "account"]);
+        let topics: Vec<(Topic, u32, u32)> = nodes.iter().filter_map(|n| if let NodeKind::Topic(t, u, c) = n.kind { Some((t, u, c)) } else { None }).collect();
+        assert_eq!(topics.len(), Topic::ALL.len());
+        assert_eq!(topics.last().map(|t| t.0), Some(Topic::Other), "Other last");
+        assert!(topics.contains(&(Topic::Travel, 2, 4)) && topics.contains(&(Topic::People, 0, 0)));
+        assert!(matches!(nodes.iter().find(|n| matches!(n.kind, NodeKind::Packages { .. })).map(|n| &n.kind), Some(NodeKind::Packages { active: 2, attention: 1 })));
+        // Both off: no Views section at all.
+        let off = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &prefs, None, &views(false, false, &[]));
+        assert!(off.iter().all(|n| view_of(n).is_none() && !matches!(n.kind, NodeKind::ViewsHeader)));
+        // One feature off: only the other one.
+        let only_topics = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &prefs, None, &views(false, true, &[]));
+        assert!(only_topics.iter().all(|n| !matches!(n.kind, NodeKind::Packages { .. })));
+        assert!(only_topics.iter().any(|n| matches!(n.kind, NodeKind::ViewsHeader)));
+        // Collapsed: the header only; Topics collapsed: no topics.
+        let collapsed = FolderPrefs { views_collapsed: true, ..Default::default() };
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &collapsed, None, &views(true, true, &[]));
+        assert!(nodes.iter().all(|n| view_of(n).is_none()));
+        let topics_closed = FolderPrefs { topics_collapsed: true, ..Default::default() };
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &topics_closed, None, &views(true, true, &[]));
+        assert!(nodes.iter().any(|n| matches!(n.kind, NodeKind::TopicsParent { expanded: false })));
+        assert!(nodes.iter().all(|n| !matches!(n.kind, NodeKind::Topic(..))));
+    }
+
+    #[test]
+    fn the_tree_takes_focus_on_the_view_shown() {
+        use super::super::ctx::FolderPrefs;
+        let account = Account { id: 1, email: "me@x.example".into(), ..Default::default() };
+        let folders = vec![folder(1, FolderRole::Inbox, "Inbox", 0, 0)];
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &FolderPrefs::default(), None, &views(true, true, &["social"]));
+        let start = |view| start_node(&nodes, None, view);
+        assert_eq!(start(Some(MailView::Packages)).as_deref(), Some("ax-mail-node-packages"));
+        assert_eq!(start(Some(MailView::Topics(None))).as_deref(), Some("ax-mail-node-topics"));
+        assert_eq!(start(Some(MailView::Topics(Some(Topic::Travel)))).as_deref(), Some("ax-mail-node-topic-travel"));
+        assert_eq!(start(Some(MailView::Topics(Some(Topic::Social)))).as_deref(), Some("ax-mail-node-topics"), "hidden: its parent");
+        assert_eq!(start_node(&nodes, Some(1), None).as_deref(), Some("ax-mail-node-1"));
+        let collapsed = build_nodes(
+            std::slice::from_ref(&account),
+            &folders,
+            &[],
+            &[],
+            &[],
+            &FolderPrefs { views_collapsed: true, ..Default::default() },
+            None,
+            &views(true, true, &[]),
+        );
+        assert_eq!(start_node(&collapsed, None, Some(MailView::Packages)).as_deref(), Some("ax-mail-node-views"));
+    }
+
+    #[test]
+    fn hidden_topics_leave_the_pane_and_typeahead_finds_topics() {
+        use super::super::ctx::FolderPrefs;
+        let account = Account { id: 1, email: "me@x.example".into(), ..Default::default() };
+        let folders = vec![folder(1, FolderRole::Inbox, "Inbox", 0, 0), folder(9, FolderRole::Custom, "Trash talk", 0, 0)];
+        let nodes = build_nodes(std::slice::from_ref(&account), &folders, &[], &[], &[], &FolderPrefs::default(), None, &views(true, true, &["social", "newsletters"]));
+        let shown: Vec<Topic> = nodes.iter().filter_map(|n| if let NodeKind::Topic(t, ..) = n.kind { Some(t) } else { None }).collect();
+        assert!(!shown.contains(&Topic::Social) && !shown.contains(&Topic::Newsletters));
+        assert_eq!(shown.len(), Topic::ALL.len() - 2);
+        // "Tra" reaches Travel (before the "Trash talk" folder further down).
+        let travel = typeahead_target(&nodes, 0, "tra").unwrap();
+        assert!(matches!(nodes[travel].kind, NodeKind::Topic(Topic::Travel, ..)));
+        let trash = typeahead_target(&nodes, travel + 1, "tra").unwrap();
+        assert!(matches!(&nodes[trash].kind, NodeKind::Folder(f) if f.name == "Trash talk"));
+        assert!(matches!(nodes[typeahead_target(&nodes, 0, "pack").unwrap()].kind, NodeKind::Packages { .. }));
+        assert_eq!(typeahead_target(&nodes, 0, "zzz"), None);
+    }
+
+    #[test]
+    fn no_folder_is_selected_in_a_view() {
+        assert_eq!(selected_folder(false, false, None, Some(3)), Some(3));
+        assert_eq!(selected_folder(false, false, Some(MailView::Packages), Some(3)), None);
+        assert_eq!(selected_folder(false, false, Some(MailView::Topics(Some(Topic::Travel))), Some(3)), None);
+        assert_eq!(selected_folder(false, true, None, Some(3)), None);
+        assert_eq!(selected_folder(true, false, None, Some(3)), None);
+    }
+
+    #[test]
+    fn dragged_order_wins_and_new_folders_follow() {
+        let mut v = vec![
+            folder(1, FolderRole::Inbox, "Inbox", 0, 0),
+            folder(2, FolderRole::Drafts, "Drafts", 0, 0),
+            folder(3, FolderRole::Custom, "Zeta", 0, 0),
+            folder(4, FolderRole::Custom, "Alpha", 0, 0),
+        ];
+        sort_siblings(&mut v, &[], None);
+        assert_eq!(v.iter().map(|f| f.id).collect::<Vec<_>>(), vec![1, 2, 4, 3]);
+        // Zeta dragged above Inbox; Alpha was never placed, so it goes last.
+        let custom = reordered(&[1, 2, 3], 3, 1, false);
+        assert_eq!(custom, vec![3, 1, 2]);
+        sort_siblings(&mut v, &[], Some(&custom));
+        assert_eq!(v.iter().map(|f| f.id).collect::<Vec<_>>(), vec![3, 1, 2, 4]);
+        assert_eq!(reordered(&[1, 2, 3], 1, 3, true), vec![2, 3, 1]);
+        assert_eq!(reordered(&[1, 2, 3], 2, 2, false), vec![1, 2, 3]);
+        assert_eq!(FolderPrefs::order_key(5, None), "5:0");
+    }
+
+    #[test]
+    fn drop_zones_split_the_row() {
+        assert_eq!(drop_zone(2.0, 36.0, true), DropPlace::Before);
+        assert_eq!(drop_zone(18.0, 36.0, true), DropPlace::Into);
+        assert_eq!(drop_zone(34.0, 36.0, true), DropPlace::After);
+        assert_eq!(drop_zone(17.0, 36.0, false), DropPlace::Before);
+        assert_eq!(drop_zone(19.0, 36.0, false), DropPlace::After);
+    }
+
+    #[test]
+    fn a_folder_dragged_over_subfolders_lands_after_their_parent() {
+        // Inbox (1) holds Jobs (3) and Rent (4), and Rent holds Paid (5); Drafts (2) is beside Inbox.
+        let mut jobs = folder(3, FolderRole::Custom, "Jobs", 0, 0);
+        jobs.parent_id = Some(1);
+        let mut rent = folder(4, FolderRole::Custom, "Rent", 0, 0);
+        rent.parent_id = Some(1);
+        let mut paid = folder(5, FolderRole::Custom, "Paid", 0, 0);
+        paid.parent_id = Some(4);
+        let inbox = folder(1, FolderRole::Inbox, "Inbox", 0, 0);
+        let drafts = folder(2, FolderRole::Drafts, "Drafts", 0, 0);
+        let mut all = vec![inbox.clone(), drafts.clone(), jobs.clone(), rent.clone(), paid.clone()];
+        let prefs = FolderPrefs::default();
+        let land = |all: &[Folder], row: &Folder, into: bool, y: f64, open: bool| folder_landing(all, &prefs, &[], &drafts, row, into, y, 36.0, open);
+        let after_inbox = |shown| Some(Landing { place: DropPlace::After, anchor: 1, shown });
+
+        // Anywhere over Inbox's subfolders: after Inbox, the line under the last row shown.
+        assert_eq!(land(&all, &jobs, false, 2.0, false), after_inbox(5));
+        assert_eq!(land(&all, &paid, false, 30.0, false), after_inbox(5));
+        // Inbox's own bottom half means the same; its top half, before it.
+        assert_eq!(land(&all, &inbox, false, 30.0, true), after_inbox(5));
+        assert_eq!(land(&all, &inbox, false, 2.0, true), Some(Landing::on(1, DropPlace::Before)));
+        // Rent closed: the line goes under Rent.
+        all[3].is_expanded = false;
+        assert_eq!(land(&all, &jobs, false, 2.0, false), after_inbox(4));
+        // A folder that can go into a subfolder does, except on the last row's bottom edge.
+        assert_eq!(land(&all, &jobs, true, 18.0, false), Some(Landing::on(3, DropPlace::Into)));
+        assert_eq!(land(&all, &all[3].clone(), true, 34.0, false), after_inbox(4));
+        // Not onto itself, nor anywhere inside itself.
+        assert_eq!(folder_landing(&all, &prefs, &[], &inbox, &inbox, false, 30.0, 36.0, true), None);
+        assert_eq!(folder_landing(&all, &prefs, &[], &inbox, &jobs, false, 30.0, 36.0, false), None);
+    }
+
+    #[test]
+    fn only_a_topic_without_mail_is_dimmed() {
+        assert!(dimmed(&NodeKind::Topic(Topic::Travel, 0, 0)));
+        assert!(!dimmed(&NodeKind::Topic(Topic::Travel, 0, 3)));
+        assert!(!dimmed(&NodeKind::Packages { active: 0, attention: 0 }), "nothing on the way still opens Packages");
+        assert!(!dimmed(&NodeKind::TopicsParent { expanded: true }));
     }
 }

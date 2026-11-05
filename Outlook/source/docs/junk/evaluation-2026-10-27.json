@@ -1,5 +1,5 @@
 {
-  "analysis": 3,
+  "analysis": 4,
   "bootstrap_spamassassin": {
     "dev": {
       "caught": 147,
@@ -14,64 +14,64 @@
       "unwanted": 180,
       "wanted": 382
     },
-    "digest": "dc8c6e51f3b8daec",
+    "digest": "90be29353a502935",
     "fresh_validation": {
       "false_flags": [
         {
           "id": "fx-l02",
-          "score": 0.7922380566596985,
+          "score": 0.7922368049621582,
           "signs": [
             "It asks for your password. Real companies don't ask for this by email."
           ]
         },
         {
           "id": "fx-l05",
-          "score": 0.9056682586669922,
+          "score": 0.9056699872016907,
           "signs": []
         },
         {
           "id": "fx-l06",
-          "score": 0.9160962104797363,
+          "score": 0.9160993099212646,
           "signs": []
         },
         {
           "id": "fx-l11",
-          "score": 0.9651961922645569,
+          "score": 0.965195894241333,
           "signs": []
         },
         {
           "id": "fx-l12",
-          "score": 0.9116606116294861,
+          "score": 0.9116584658622742,
           "signs": []
         },
         {
           "id": "fx-l13",
-          "score": 0.8879143595695496,
+          "score": 0.8879088759422302,
           "signs": []
         },
         {
           "id": "fx-l15",
-          "score": 0.9742170572280884,
+          "score": 0.974215567111969,
           "signs": []
         },
         {
           "id": "fx-l17",
-          "score": 0.8691721558570862,
+          "score": 0.8691655397415161,
           "signs": []
         },
         {
           "id": "fx-l18",
-          "score": 0.8623797297477722,
+          "score": 0.8623769283294678,
           "signs": []
         },
         {
           "id": "fx-l19",
-          "score": 0.9519827365875244,
+          "score": 0.9519823789596558,
           "signs": []
         }
       ],
-      "latency_ms_median": 0.069006,
-      "latency_ms_p95": 0.149708,
+      "latency_ms_median": 0.073837,
+      "latency_ms_p95": 0.152599,
       "legitimate": 25,
       "legitimate_flagged_by_model": 9,
       "legitimate_with_any_banner": 10,
@@ -89,112 +89,112 @@
         {
           "id": "fx-s01",
           "phishing": false,
-          "score": 0.9283219575881958,
+          "score": 0.9283175468444824,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s02",
           "phishing": false,
-          "score": 0.973430335521698,
+          "score": 0.9734311103820801,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s03",
           "phishing": false,
-          "score": 0.9554559588432312,
+          "score": 0.9554576873779297,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s04",
           "phishing": false,
-          "score": 0.9694347381591797,
+          "score": 0.9694349765777588,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s05",
           "phishing": false,
-          "score": 0.9684557914733887,
+          "score": 0.968454897403717,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s06",
           "phishing": false,
-          "score": 0.5052270889282227,
+          "score": 0.5052123665809631,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s07",
           "phishing": false,
-          "score": 0.8242752552032471,
+          "score": 0.8242688775062561,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s08",
           "phishing": false,
-          "score": 0.9820590615272522,
+          "score": 0.982058584690094,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s09",
           "phishing": false,
-          "score": 0.97282874584198,
+          "score": 0.9728270769119263,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s10",
           "phishing": false,
-          "score": 0.9807275533676147,
+          "score": 0.9807265400886536,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s11",
           "phishing": false,
-          "score": 0.908349335193634,
+          "score": 0.9083428382873535,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s12",
           "phishing": false,
-          "score": 0.8893078565597534,
+          "score": 0.8892990946769714,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s13",
           "phishing": false,
-          "score": 0.9788230061531067,
+          "score": 0.9788222908973694,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s14",
           "phishing": false,
-          "score": 0.9892270565032959,
+          "score": 0.9892280101776123,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-s15",
           "phishing": false,
-          "score": 0.991929292678833,
+          "score": 0.9919291734695435,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-p01",
           "phishing": true,
-          "score": 0.6798033118247986,
+          "score": 0.6797934770584106,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows outlook.live.com but goes to outlook-mailbox-upgrade.example.",
@@ -205,7 +205,7 @@
         {
           "id": "fx-p02",
           "phishing": true,
-          "score": 0.8688641786575317,
+          "score": 0.8688642382621765,
           "severity": "Some(Danger)",
           "signs": [
             "The sender uses the name of your contact Priya Raman, but writes from priya.raman.northwind@gmail.com, which isn't their address."
@@ -214,7 +214,7 @@
         {
           "id": "fx-p03",
           "phishing": true,
-          "score": 0.8477739691734314,
+          "score": 0.847769558429718,
           "severity": "Some(Caution)",
           "signs": [
             "The sender calls itself DHL, but the message is from noreply@dhl-customs-fee.example."
@@ -223,7 +223,7 @@
         {
           "id": "fx-p04",
           "phishing": true,
-          "score": 0.9701696634292603,
+          "score": 0.970171332359314,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email.",
@@ -233,7 +233,7 @@
         {
           "id": "fx-p05",
           "phishing": true,
-          "score": 0.9409700632095337,
+          "score": 0.9409692287445068,
           "severity": "Some(Danger)",
           "signs": [
             "lnstagram-help.example looks like instagram.com but isn't.",
@@ -243,7 +243,7 @@
         {
           "id": "fx-p06",
           "phishing": true,
-          "score": 0.4996369779109955,
+          "score": 0.49964892864227295,
           "severity": "Some(Caution)",
           "signs": [
             "contoso-paystub.example uses the name of contoso.example but isn't it.",
@@ -253,7 +253,7 @@
         {
           "id": "fx-p07",
           "phishing": true,
-          "score": 0.95228511095047,
+          "score": 0.9522854089736938,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as Adobe, but adobe-doc-share.example doesn't belong to Adobe.",
@@ -263,7 +263,7 @@
         {
           "id": "fx-p08",
           "phishing": true,
-          "score": 0.7901484370231628,
+          "score": 0.7901423573493958,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows steamcommunity.com but goes to steamcommunlty-trade.example."
@@ -272,7 +272,7 @@
         {
           "id": "fx-p09",
           "phishing": true,
-          "score": 0.2670868933200836,
+          "score": 0.2670895755290985,
           "severity": "Some(Caution)",
           "signs": [
             "contoso-sso-portal.example uses the name of contoso.example but isn't it."
@@ -281,14 +281,14 @@
         {
           "id": "fx-p10",
           "phishing": true,
-          "score": 0.96755051612854,
+          "score": 0.9675496220588684,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-p11",
           "phishing": true,
-          "score": 0.9031766653060913,
+          "score": 0.9031757712364197,
           "severity": "Some(Caution)",
           "signs": [
             "chase-fraud-dept.example uses the name Chase but doesn't belong to it.",
@@ -298,7 +298,7 @@
         {
           "id": "fx-p12",
           "phishing": true,
-          "score": 0.846838116645813,
+          "score": 0.8468418717384338,
           "severity": "Some(Danger)",
           "signs": [
             "The sender uses the name of your contact Daniel Kim, but writes from dkim.contoso@outlook.com, which isn't their address."
@@ -307,7 +307,7 @@
         {
           "id": "fx-p13",
           "phishing": true,
-          "score": 0.9691131114959717,
+          "score": 0.969112753868103,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as Facebook, but facebook-security-check.example doesn't belong to Facebook."
@@ -316,7 +316,7 @@
         {
           "id": "fx-p14",
           "phishing": true,
-          "score": 0.5156708359718323,
+          "score": 0.5156638622283936,
           "severity": "Some(Danger)",
           "signs": [
             "Fax_3pages.xlsm is a kind of file that can run programs."
@@ -325,7 +325,7 @@
         {
           "id": "fx-p15",
           "phishing": true,
-          "score": 0.8896656036376953,
+          "score": 0.8896631598472595,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your recovery phrase and pressures you to act fast. Real companies don't ask for this by email."
@@ -334,7 +334,7 @@
         {
           "id": "fx-p16",
           "phishing": true,
-          "score": 0.9712902903556824,
+          "score": 0.9712889790534973,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your Social Security number and pressures you to act fast. Real companies don't ask for this by email."
@@ -343,7 +343,7 @@
         {
           "id": "fx-p17",
           "phishing": true,
-          "score": 0.6747918128967285,
+          "score": 0.6747869253158569,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows www.dropbox.com but goes to dropbox-filetransfer.example.",
@@ -353,14 +353,14 @@
         {
           "id": "fx-p18",
           "phishing": true,
-          "score": 0.8780776858329773,
+          "score": 0.878075122833252,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fx-p19",
           "phishing": true,
-          "score": 0.6790529489517212,
+          "score": 0.6790381073951721,
           "severity": "Some(Danger)",
           "signs": [
             "linkedln-recruiter.example looks like linkedin.com but isn't.",
@@ -370,7 +370,7 @@
         {
           "id": "fx-p20",
           "phishing": true,
-          "score": 0.9452195763587952,
+          "score": 0.9452170133590698,
           "severity": "Some(Danger)",
           "signs": [
             "Remittance_Advice.pdf.js hides its real file type behind a second extension."
@@ -389,12 +389,12 @@
       "false_flags": [
         {
           "id": "fv-l03",
-          "score": 0.9412537813186646,
+          "score": 0.9395920038223267,
           "signs": []
         },
         {
           "id": "fv-l05",
-          "score": 0.29637283086776733,
+          "score": 0.2963578701019287,
           "signs": [
             "riverbend-schools.example uses the name of riverbend.example but isn't it.",
             "www.riverbend-schools.example uses the name of riverbend.example but isn't it."
@@ -402,37 +402,37 @@
         },
         {
           "id": "fv-l08",
-          "score": 0.8892587423324585,
+          "score": 0.8892540335655212,
           "signs": []
         },
         {
           "id": "fv-l12",
-          "score": 0.8430009484291077,
+          "score": 0.8429981470108032,
           "signs": []
         },
         {
           "id": "fv-l16",
-          "score": 0.8715231418609619,
+          "score": 0.8715226054191589,
           "signs": []
         },
         {
           "id": "fv-l17",
-          "score": 0.9397218823432922,
+          "score": 0.9397205114364624,
           "signs": []
         },
         {
           "id": "fv-l19",
-          "score": 0.8545528054237366,
+          "score": 0.8545491099357605,
           "signs": []
         },
         {
           "id": "fv-l25",
-          "score": 0.8861000537872314,
+          "score": 0.8860933780670166,
           "signs": []
         }
       ],
-      "latency_ms_median": 0.070643,
-      "latency_ms_p95": 0.14714,
+      "latency_ms_median": 0.07550699999999999,
+      "latency_ms_p95": 0.150098,
       "legitimate": 25,
       "legitimate_flagged_by_model": 7,
       "legitimate_with_any_banner": 8,
@@ -450,112 +450,112 @@
         {
           "id": "fv-s01",
           "phishing": false,
-          "score": 0.430570513010025,
+          "score": 0.4305638372898102,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s02",
           "phishing": false,
-          "score": 0.9119687676429749,
+          "score": 0.9119636416435242,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s03",
           "phishing": false,
-          "score": 0.8790752291679382,
+          "score": 0.8790728449821472,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s04",
           "phishing": false,
-          "score": 0.9842216968536377,
+          "score": 0.9842221140861511,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s05",
           "phishing": false,
-          "score": 0.9178958535194397,
+          "score": 0.9178933501243591,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s06",
           "phishing": false,
-          "score": 0.9086853861808777,
+          "score": 0.9086846709251404,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s07",
           "phishing": false,
-          "score": 0.9685145020484924,
+          "score": 0.9685136675834656,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s08",
           "phishing": false,
-          "score": 0.9926639795303345,
+          "score": 0.9926633834838867,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s09",
           "phishing": false,
-          "score": 0.8819142580032349,
+          "score": 0.8819137811660767,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s10",
           "phishing": false,
-          "score": 0.7012341022491455,
+          "score": 0.7012267112731934,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s11",
           "phishing": false,
-          "score": 0.9817197918891907,
+          "score": 0.9817199110984802,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s12",
           "phishing": false,
-          "score": 0.9701601266860962,
+          "score": 0.9701606035232544,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s13",
           "phishing": false,
-          "score": 0.9922437071800232,
+          "score": 0.9922434687614441,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s14",
           "phishing": false,
-          "score": 0.9794874787330627,
+          "score": 0.9794867038726807,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-s15",
           "phishing": false,
-          "score": 0.9766818284988403,
+          "score": 0.976682722568512,
           "severity": "None",
           "signs": []
         },
         {
           "id": "fv-p01",
           "phishing": true,
-          "score": 0.883151113986969,
+          "score": 0.8831561207771301,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows login.microsoftonline.com but goes to m365-passwordreset.example.",
@@ -565,7 +565,7 @@
         {
           "id": "fv-p02",
           "phishing": true,
-          "score": 0.9606291055679321,
+          "score": 0.9606269001960754,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as PayPal, but paypal-resolution.example doesn't belong to PayPal."
@@ -574,7 +574,7 @@
         {
           "id": "fv-p03",
           "phishing": true,
-          "score": 0.9814679026603699,
+          "score": 0.9814669489860535,
           "severity": "Some(Danger)",
           "signs": [
             "netfl1x-support.example looks like netflix.com but isn't.",
@@ -584,7 +584,7 @@
         {
           "id": "fv-p04",
           "phishing": true,
-          "score": 0.911528468132019,
+          "score": 0.9115244150161743,
           "severity": "Some(Caution)",
           "signs": [
             "The sender calls itself DocuSign, but the message is from dse@docs-sign-review.example.",
@@ -594,7 +594,7 @@
         {
           "id": "fv-p05",
           "phishing": true,
-          "score": 0.8837787508964539,
+          "score": 0.8837807178497314,
           "severity": "Some(Danger)",
           "signs": [
             "The sender uses the name of your contact Daniel Kim, but writes from daniel.kim.ceo@gmail.com, which isn't their address.",
@@ -604,7 +604,7 @@
         {
           "id": "fv-p06",
           "phishing": true,
-          "score": 0.684986412525177,
+          "score": 0.6849873065948486,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as USPS, but usps-redelivery.example doesn't belong to USPS."
@@ -613,7 +613,7 @@
         {
           "id": "fv-p07",
           "phishing": true,
-          "score": 0.8908047676086426,
+          "score": 0.8908021450042725,
           "severity": "Some(Danger)",
           "signs": [
             "INV-88231.pdf.exe hides its real file type behind a second extension."
@@ -622,7 +622,7 @@
         {
           "id": "fv-p08",
           "phishing": true,
-          "score": 0.9337626695632935,
+          "score": 0.9337596297264099,
           "severity": "Some(Caution)",
           "signs": [
             "contoso-it-support.example uses the name of contoso.example but isn't it."
@@ -631,7 +631,7 @@
         {
           "id": "fv-p09",
           "phishing": true,
-          "score": 0.8958738446235657,
+          "score": 0.8958745002746582,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows www.irs.gov but goes to irs-taxrefund.example.",
@@ -652,7 +652,7 @@
         {
           "id": "fv-p11",
           "phishing": true,
-          "score": 0.9036758542060852,
+          "score": 0.9036755561828613,
           "severity": "Some(Danger)",
           "signs": [
             "0nedrive-files.example looks like onedrive.com but isn't."
@@ -661,7 +661,7 @@
         {
           "id": "fv-p12",
           "phishing": true,
-          "score": 0.7438013553619385,
+          "score": 0.743796706199646,
           "severity": "Some(Danger)",
           "signs": [
             "The sender's name shows billing@apple.com, but the message is from noreply@appleid-billing.example.",
@@ -671,7 +671,7 @@
         {
           "id": "fv-p13",
           "phishing": true,
-          "score": 0.967678427696228,
+          "score": 0.9676773548126221,
           "severity": "Some(Danger)",
           "signs": [
             "we11sfargo.example looks like wellsfargo.com but isn't.",
@@ -681,7 +681,7 @@
         {
           "id": "fv-p14",
           "phishing": true,
-          "score": 0.8658128380775452,
+          "score": 0.8658110499382019,
           "severity": "Some(Danger)",
           "signs": [
             "Benefits_Form_2027.docm is a kind of file that can run programs.",
@@ -691,7 +691,7 @@
         {
           "id": "fv-p15",
           "phishing": true,
-          "score": 0.7602766752243042,
+          "score": 0.7602741718292236,
           "severity": "Some(Caution)",
           "signs": [
             "voicemail_0042.html is a web page; it opens in a browser and could ask for your password."
@@ -700,7 +700,7 @@
         {
           "id": "fv-p16",
           "phishing": true,
-          "score": 0.7955836057662964,
+          "score": 0.7955713868141174,
           "severity": "Some(Danger)",
           "signs": [
             "amaz0n-orders.example looks like amazon.com but isn't.",
@@ -710,7 +710,7 @@
         {
           "id": "fv-p17",
           "phishing": true,
-          "score": 0.9588192701339722,
+          "score": 0.958818256855011,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows hr.contoso.example but goes to contoso-hr-portal.example.",
@@ -721,7 +721,7 @@
         {
           "id": "fv-p18",
           "phishing": true,
-          "score": 0.8250698447227478,
+          "score": 0.8250674605369568,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as Google, but accounts-google-security.example doesn't belong to Google."
@@ -730,7 +730,7 @@
         {
           "id": "fv-p19",
           "phishing": true,
-          "score": 0.6202350854873657,
+          "score": 0.6202296018600464,
           "severity": "Some(Danger)",
           "signs": [
             "The sender poses as FedEx, but fedex-parcel-status.example doesn't belong to FedEx.",
@@ -740,7 +740,7 @@
         {
           "id": "fv-p20",
           "phishing": true,
-          "score": 0.7745564579963684,
+          "score": 0.7745470404624939,
           "severity": "Some(Danger)",
           "signs": [
             "A link shows www.northwindbank.example but goes to northwindbank-alerts.example.",
@@ -751,121 +751,121 @@
       ],
       "unwanted_with_no_banner": 2
     },
-    "nonzero_weights": 39774,
+    "nonzero_weights": 39775,
     "regression": {
       "false_flags": [
         {
           "id": "bench-b64a31d0cdcffc05",
-          "score": 0.9079433083534241,
+          "score": 0.9079522490501404,
           "signs": []
         },
         {
           "id": "bench-fresh-013",
-          "score": 0.9217339158058167,
+          "score": 0.9217362999916077,
           "signs": []
         },
         {
           "id": "bench-fresh-031",
-          "score": 0.6732970476150513,
+          "score": 0.673289954662323,
           "signs": [
             "It asks for your recovery phrase. Real companies don't ask for this by email."
           ]
         },
         {
           "id": "bench-99ac3a0520184ee6",
-          "score": 0.943353533744812,
+          "score": 0.9433590173721313,
           "signs": [
             "The sender's name shows authortracker@harpercollins.com, but the message is from ticket_23aj49j1029828689414@sneakemail.com."
           ]
         },
         {
           "id": "bench-42820dc088aa216f",
-          "score": 0.9043859243392944,
+          "score": 0.9043931365013123,
           "signs": []
         },
         {
           "id": "bench-fc1600f884c2ff80",
-          "score": 0.20857101678848267,
+          "score": 0.20857135951519012,
           "signs": [
             "The sender's name shows connectionnewsletter@theserverside.com, but the message is from ticket_jcehaoa1031163663480@sneakemail.com."
           ]
         },
         {
           "id": "bench-05e51b7122b6f9bb",
-          "score": 0.882621705532074,
+          "score": 0.8826277256011963,
           "signs": []
         },
         {
           "id": "bench-fresh-001",
-          "score": 0.8906748294830322,
+          "score": 0.8906731009483337,
           "signs": []
         },
         {
           "id": "bench-fe9f9a67b998cad2",
-          "score": 0.06665127724409103,
+          "score": 0.06665399670600891,
           "signs": [
             "It asks for your password. Real companies don't ask for this by email."
           ]
         },
         {
           "id": "bench-fresh-009",
-          "score": 0.929924726486206,
+          "score": 0.9299215078353882,
           "signs": []
         },
         {
           "id": "bench-fresh-035",
-          "score": 0.7358611226081848,
+          "score": 0.7358671426773071,
           "signs": [
             "It asks for your gift-card codes. Real companies don't ask for this by email."
           ]
         },
         {
           "id": "bench-2d08e7e30632283b",
-          "score": 0.9276553392410278,
+          "score": 0.9276589155197144,
           "signs": []
         },
         {
           "id": "bench-fresh-045",
-          "score": 0.8628444075584412,
+          "score": 0.862842321395874,
           "signs": []
         },
         {
           "id": "bench-6610e36d33778212",
-          "score": 0.9623335599899292,
+          "score": 0.9623385667800903,
           "signs": []
         },
         {
           "id": "bench-fresh-029",
-          "score": 0.9594183564186096,
+          "score": 0.9594178795814514,
           "signs": []
         },
         {
           "id": "bench-f0e47a4b9417fe0b",
-          "score": 0.08355947583913803,
+          "score": 0.08356525003910065,
           "signs": [
             "The sender calls itself Apple, but the message is from subscriptions@lockergnome.com."
           ]
         },
         {
           "id": "bench-a2362095f3f4c675",
-          "score": 0.8490096926689148,
+          "score": 0.8490185141563416,
           "signs": []
         },
         {
           "id": "bench-fresh-019",
-          "score": 0.8505185842514038,
+          "score": 0.8505150675773621,
           "signs": []
         },
         {
           "id": "bench-8ba8a9d7e71fd7a7",
-          "score": 0.1954067498445511,
+          "score": 0.1954127848148346,
           "signs": [
             "A link goes to a bare internet address (64.78.49.204) instead of a named site."
           ]
         }
       ],
-      "latency_ms_median": 0.18701800000000002,
-      "latency_ms_p95": 1.160115,
+      "latency_ms_median": 0.200923,
+      "latency_ms_p95": 1.210842,
       "legitimate": 223,
       "legitimate_flagged_by_model": 13,
       "legitimate_with_any_banner": 19,
@@ -883,28 +883,28 @@
         {
           "id": "bench-9ca412bf81a3156d",
           "phishing": false,
-          "score": 0.9916341304779053,
+          "score": 0.9916348457336426,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-3c0cb5bd2688c827",
           "phishing": false,
-          "score": 0.9672679305076599,
+          "score": 0.9672648310661316,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-7331dccf25b99249",
           "phishing": false,
-          "score": 0.9182183742523193,
+          "score": 0.9182211756706238,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-012",
           "phishing": true,
-          "score": 0.8802007436752319,
+          "score": 0.8802066445350647,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -920,14 +920,14 @@
         {
           "id": "bench-b6abd5fe83b23a7d",
           "phishing": false,
-          "score": 0.7295493483543396,
+          "score": 0.7295522689819336,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-034",
           "phishing": true,
-          "score": 0.9216116666793823,
+          "score": 0.9216135740280151,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -936,14 +936,14 @@
         {
           "id": "bench-fresh-051",
           "phishing": false,
-          "score": 0.9294527173042297,
+          "score": 0.929451584815979,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-2d5e1360f7d10656",
           "phishing": false,
-          "score": 0.896980881690979,
+          "score": 0.8969846963882446,
           "severity": "None",
           "signs": []
         },
@@ -957,7 +957,7 @@
         {
           "id": "bench-5e33549fa045f2a2",
           "phishing": false,
-          "score": 0.9947361350059509,
+          "score": 0.9947362542152405,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (211.78.96.242) instead of a named site."
@@ -966,28 +966,28 @@
         {
           "id": "bench-67e4e8c86b384ccd",
           "phishing": false,
-          "score": 0.9819520115852356,
+          "score": 0.9819528460502625,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ba940be8049b9e91",
           "phishing": false,
-          "score": 0.6163548231124878,
+          "score": 0.6163457036018372,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-022",
           "phishing": true,
-          "score": 0.19234780967235565,
+          "score": 0.1923396736383438,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-036",
           "phishing": true,
-          "score": 0.7393804788589478,
+          "score": 0.739385724067688,
           "severity": "Some(Caution)",
           "signs": [
             "It asks for your recovery codes. Real companies don't ask for this by email."
@@ -996,14 +996,14 @@
         {
           "id": "bench-fresh-038",
           "phishing": true,
-          "score": 0.9577557444572449,
+          "score": 0.9577553868293762,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-4644b0a5cf1c1fec",
           "phishing": false,
-          "score": 0.9954307079315186,
+          "score": 0.9954310655593872,
           "severity": "None",
           "signs": []
         },
@@ -1017,35 +1017,35 @@
         {
           "id": "bench-29e2eef6815fe035",
           "phishing": false,
-          "score": 0.8614184856414795,
+          "score": 0.861414909362793,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-a81d887ae7ed4052",
           "phishing": false,
-          "score": 0.7724331021308899,
+          "score": 0.7724475860595703,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ffb2b29053f0fb65",
           "phishing": false,
-          "score": 0.5989944934844971,
+          "score": 0.5990051031112671,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-5676d5d848603fa0",
           "phishing": false,
-          "score": 0.9065932631492615,
+          "score": 0.9065982103347778,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-044",
           "phishing": true,
-          "score": 0.6103164553642273,
+          "score": 0.6103155016899109,
           "severity": "None",
           "signs": []
         },
@@ -1059,7 +1059,7 @@
         {
           "id": "bench-0262c16488a2dd1f",
           "phishing": false,
-          "score": 0.9810178279876709,
+          "score": 0.9810177087783813,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (211.99.37.206) instead of a named site."
@@ -1068,28 +1068,28 @@
         {
           "id": "bench-7a757e3fca913922",
           "phishing": false,
-          "score": 0.7240238189697266,
+          "score": 0.7240365147590637,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ea3f3e23387a9f74",
           "phishing": false,
-          "score": 0.8912933468818665,
+          "score": 0.8913015127182007,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-628fbdb7d81911dd",
           "phishing": false,
-          "score": 0.7345078587532043,
+          "score": 0.7344989776611328,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c271e1338f4003a0",
           "phishing": false,
-          "score": 0.5859193205833435,
+          "score": 0.5859363079071045,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -1098,21 +1098,21 @@
         {
           "id": "bench-9b1bd4f84898c0ea",
           "phishing": false,
-          "score": 0.8358415961265564,
+          "score": 0.8358487486839294,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-556e9a9e9d42c3b2",
           "phishing": false,
-          "score": 0.9201258420944214,
+          "score": 0.9201290607452393,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-49f711851cb99108",
           "phishing": false,
-          "score": 0.9959906935691833,
+          "score": 0.9959909319877625,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (213.139.76.162) instead of a named site."
@@ -1128,7 +1128,7 @@
         {
           "id": "bench-fresh-030",
           "phishing": true,
-          "score": 0.8898664116859436,
+          "score": 0.8898686766624451,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your PIN and pressures you to act fast. Real companies don't ask for this by email."
@@ -1137,35 +1137,35 @@
         {
           "id": "bench-783ab07f4ea65984",
           "phishing": false,
-          "score": 0.8968685269355774,
+          "score": 0.8968707323074341,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-008",
           "phishing": true,
-          "score": 0.8605282306671143,
+          "score": 0.8605260252952576,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-2c52ec93108ef4a7",
           "phishing": false,
-          "score": 0.9967584013938904,
+          "score": 0.9967586398124695,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-43c6878b258d36ee",
           "phishing": false,
-          "score": 0.940858006477356,
+          "score": 0.9408639073371887,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-014",
           "phishing": true,
-          "score": 0.8009023666381836,
+          "score": 0.800906777381897,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your Social Security number and pressures you to act fast. Real companies don't ask for this by email."
@@ -1174,14 +1174,14 @@
         {
           "id": "bench-8d1d8765c0d2c959",
           "phishing": false,
-          "score": 0.9943291544914246,
+          "score": 0.9943292737007141,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c5bb39c18ae6c4ef",
           "phishing": false,
-          "score": 0.9970852732658386,
+          "score": 0.9970856308937073,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (61.129.68.19) instead of a named site."
@@ -1190,7 +1190,7 @@
         {
           "id": "bench-bb7897dde204ab5b",
           "phishing": false,
-          "score": 0.9905201196670532,
+          "score": 0.9905198812484741,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (211.99.37.206) instead of a named site."
@@ -1199,21 +1199,21 @@
         {
           "id": "bench-fresh-050",
           "phishing": false,
-          "score": 0.979681134223938,
+          "score": 0.9796812534332275,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-054",
           "phishing": false,
-          "score": 0.974665105342865,
+          "score": 0.9746648669242859,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c2498d0b50229ca7",
           "phishing": false,
-          "score": 0.9989976286888123,
+          "score": 0.9989977478981018,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (66.231.133.63) instead of a named site."
@@ -1222,28 +1222,28 @@
         {
           "id": "bench-772f2b63db5b4f13",
           "phishing": false,
-          "score": 0.41371771693229675,
+          "score": 0.4137111008167267,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-bca90aa55189208e",
           "phishing": false,
-          "score": 0.9637163281440735,
+          "score": 0.9637155532836914,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-028",
           "phishing": true,
-          "score": 0.8241211175918579,
+          "score": 0.8241128325462341,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-f4195d4867382f7d",
           "phishing": false,
-          "score": 0.9887899160385132,
+          "score": 0.9887896776199341,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (64.123.160.91) instead of a named site."
@@ -1252,7 +1252,7 @@
         {
           "id": "bench-0c9bbeb5eb6b45f5",
           "phishing": false,
-          "score": 0.9487009048461914,
+          "score": 0.9487043619155884,
           "severity": "Some(Danger)",
           "signs": [
             "email.com looks like gmail.com but isn't."
@@ -1261,35 +1261,35 @@
         {
           "id": "bench-5f0fbd40b0d6c5b8",
           "phishing": false,
-          "score": 0.9386864304542542,
+          "score": 0.9386884570121765,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c6c2eccbe9ca8956",
           "phishing": false,
-          "score": 0.9932805895805359,
+          "score": 0.993280827999115,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-81b02cce47168405",
           "phishing": false,
-          "score": 0.9917579293251038,
+          "score": 0.9917588829994202,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-9c3f2ad5eb281572",
           "phishing": false,
-          "score": 0.6768081188201904,
+          "score": 0.676794707775116,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-535aa8695b54599d",
           "phishing": false,
-          "score": 0.99078768491745,
+          "score": 0.9907874464988708,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (211.99.37.206) instead of a named site."
@@ -1307,49 +1307,49 @@
         {
           "id": "bench-337f7afe9f47ee3e",
           "phishing": false,
-          "score": 0.8864632844924927,
+          "score": 0.8864656090736389,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-85707c21a909f27f",
           "phishing": false,
-          "score": 0.9936177730560303,
+          "score": 0.9936182498931885,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-dfef5adf39f82ae0",
           "phishing": false,
-          "score": 0.8705708384513855,
+          "score": 0.8705810904502869,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-9339e94b6674389b",
           "phishing": false,
-          "score": 0.891659140586853,
+          "score": 0.8916597962379456,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-43027744946278ee",
           "phishing": false,
-          "score": 0.9958943128585815,
+          "score": 0.9958945512771606,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-056",
           "phishing": false,
-          "score": 0.9728058576583862,
+          "score": 0.9728063941001892,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-020",
           "phishing": true,
-          "score": 0.9824634790420532,
+          "score": 0.9824635982513428,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -1358,7 +1358,7 @@
         {
           "id": "bench-fresh-052",
           "phishing": false,
-          "score": 0.937626838684082,
+          "score": 0.9376296997070312,
           "severity": "None",
           "signs": []
         },
@@ -1374,42 +1374,42 @@
         {
           "id": "bench-155191d5c77183f2",
           "phishing": false,
-          "score": 0.9945019483566284,
+          "score": 0.9945026636123657,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-076d7fefdf37954c",
           "phishing": false,
-          "score": 0.6350675821304321,
+          "score": 0.6350866556167603,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-16a8500de84792a6",
           "phishing": false,
-          "score": 0.7250057458877563,
+          "score": 0.7250109910964966,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-e6d222dacb8e2c53",
           "phishing": false,
-          "score": 0.9942063093185425,
+          "score": 0.994206428527832,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-cb71c2ec2000c970",
           "phishing": false,
-          "score": 0.4451318681240082,
+          "score": 0.44510966539382935,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-006",
           "phishing": true,
-          "score": 0.34982648491859436,
+          "score": 0.3498358130455017,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your gift-card codes and pressures you to act fast. Real companies don't ask for this by email."
@@ -1418,42 +1418,42 @@
         {
           "id": "bench-fresh-058",
           "phishing": false,
-          "score": 0.8356671333312988,
+          "score": 0.8356684446334839,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ff43a6fa0c0d5e7a",
           "phishing": false,
-          "score": 0.6923508644104004,
+          "score": 0.6923528909683228,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-e1e735ef7142c675",
           "phishing": false,
-          "score": 0.9877815246582031,
+          "score": 0.9877830147743225,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-70d9870317cd0e54",
           "phishing": false,
-          "score": 0.9906732439994812,
+          "score": 0.9906736016273499,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-8de9272d70447066",
           "phishing": false,
-          "score": 0.9924323558807373,
+          "score": 0.9924329519271851,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-0b8c23c309d2c589",
           "phishing": false,
-          "score": 0.9881696701049805,
+          "score": 0.9881695508956909,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (211.99.37.206) instead of a named site."
@@ -1462,14 +1462,16 @@
         {
           "id": "bench-c146164e92ff988a",
           "phishing": false,
-          "score": 0.9120650291442871,
-          "severity": "None",
-          "signs": []
+          "score": 0.9114874601364136,
+          "severity": "Some(Danger)",
+          "signs": [
+            "It says PayPal is charging you and asks you to call a phone number, but it doesn't come from PayPal. This is a common scam: don't call the number. If you're unsure, contact PayPal the way you usually do."
+          ]
         },
         {
           "id": "bench-fresh-002",
           "phishing": true,
-          "score": 0.9516648650169373,
+          "score": 0.9516649842262268,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -1478,7 +1480,7 @@
         {
           "id": "bench-311c7df4008c6dcf",
           "phishing": false,
-          "score": 0.9899980425834656,
+          "score": 0.9899984002113342,
           "severity": "None",
           "signs": []
         },
@@ -1492,7 +1494,7 @@
         {
           "id": "bench-ed19977a3a122700",
           "phishing": false,
-          "score": 0.9028028845787048,
+          "score": 0.9028021097183228,
           "severity": "None",
           "signs": []
         },
@@ -1506,21 +1508,21 @@
         {
           "id": "bench-3ea8bf1b06800202",
           "phishing": false,
-          "score": 0.8728726506233215,
+          "score": 0.8728808760643005,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c8b0c64c6ad153af",
           "phishing": false,
-          "score": 0.9947574138641357,
+          "score": 0.9947576522827148,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-d732fd5c0b2ae5d9",
           "phishing": false,
-          "score": 0.9782246351242065,
+          "score": 0.9782253503799438,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (64.123.160.91) instead of a named site.",
@@ -1530,14 +1532,14 @@
         {
           "id": "bench-fresh-053",
           "phishing": false,
-          "score": 0.9878717660903931,
+          "score": 0.9878714084625244,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-dbce9a80d607086a",
           "phishing": false,
-          "score": 0.9806733131408691,
+          "score": 0.9806756377220154,
           "severity": "Some(Danger)",
           "signs": [
             "www.remove-my-email.com looks like gmail.com but isn't.",
@@ -1547,14 +1549,14 @@
         {
           "id": "bench-f61425b8367a9db9",
           "phishing": false,
-          "score": 0.9711308479309082,
+          "score": 0.9711313247680664,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-004",
           "phishing": true,
-          "score": 0.6996181607246399,
+          "score": 0.6996282935142517,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your password and pressures you to act fast. Real companies don't ask for this by email."
@@ -1563,21 +1565,21 @@
         {
           "id": "bench-15e1f25f66fc8332",
           "phishing": false,
-          "score": 0.9775761365890503,
+          "score": 0.9775763154029846,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-a67c81323f5ccd1d",
           "phishing": false,
-          "score": 0.6934379935264587,
+          "score": 0.693425714969635,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-51b50eb0b18ad4cb",
           "phishing": false,
-          "score": 0.995381236076355,
+          "score": 0.9953811168670654,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (210.51.251.244) instead of a named site.",
@@ -1587,63 +1589,63 @@
         {
           "id": "bench-738f58fe984004a9",
           "phishing": false,
-          "score": 0.9457664489746094,
+          "score": 0.9457668662071228,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ea4c3cad5e8f23f7",
           "phishing": false,
-          "score": 0.9928373694419861,
+          "score": 0.9928374886512756,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-a61a082ba124f7a5",
           "phishing": false,
-          "score": 0.8956303000450134,
+          "score": 0.895632266998291,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-602d4a7b2ab164b4",
           "phishing": false,
-          "score": 0.9659563899040222,
+          "score": 0.9659571051597595,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-046",
           "phishing": true,
-          "score": 0.8735920190811157,
+          "score": 0.8735918402671814,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-c6da393445dca44d",
           "phishing": false,
-          "score": 0.9739065766334534,
+          "score": 0.9739062190055847,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-049",
           "phishing": false,
-          "score": 0.8628077507019043,
+          "score": 0.8627970218658447,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-d52c3f8fb151c59b",
           "phishing": false,
-          "score": 0.7923756241798401,
+          "score": 0.7923867106437683,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-042",
           "phishing": true,
-          "score": 0.975753664970398,
+          "score": 0.9757547974586487,
           "severity": "Some(Danger)",
           "signs": [
             "global-mail-optout.example looks like gmail.com but isn't.",
@@ -1660,14 +1662,14 @@
         {
           "id": "bench-9754e89780bb3ee8",
           "phishing": false,
-          "score": 0.9788349866867065,
+          "score": 0.978836715221405,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-026",
           "phishing": true,
-          "score": 0.9899024963378906,
+          "score": 0.9899026155471802,
           "severity": "Some(Danger)",
           "signs": [
             "It asks for your Social Security number and pressures you to act fast. Real companies don't ask for this by email."
@@ -1676,21 +1678,21 @@
         {
           "id": "bench-5b88810994ba0fc0",
           "phishing": false,
-          "score": 0.941890299320221,
+          "score": 0.9418948888778687,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ec2e03dc82455231",
           "phishing": false,
-          "score": 0.8409346342086792,
+          "score": 0.8409395217895508,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-473e7e64caeaae6c",
           "phishing": false,
-          "score": 0.8221375346183777,
+          "score": 0.8221367597579956,
           "severity": "Some(Danger)",
           "signs": [
             "mail.ru looks like gmail.com but isn't."
@@ -1699,28 +1701,28 @@
         {
           "id": "bench-7f266841e4e2d40a",
           "phishing": false,
-          "score": 0.989069402217865,
+          "score": 0.9890697598457336,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-048",
           "phishing": false,
-          "score": 0.9967170357704163,
+          "score": 0.9967169165611267,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-4c7cea649aa18030",
           "phishing": false,
-          "score": 0.9963401556015015,
+          "score": 0.996340274810791,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ded984c8ba836712",
           "phishing": false,
-          "score": 0.903501570224762,
+          "score": 0.9035066962242126,
           "severity": "Some(Danger)",
           "signs": [
             "A link hides its real destination (www.dvdcopyxp.com) behind a user name.",
@@ -1730,14 +1732,14 @@
         {
           "id": "bench-fresh-010",
           "phishing": true,
-          "score": 0.9797602295875549,
+          "score": 0.9797612428665161,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-870f5522a78c7bd8",
           "phishing": false,
-          "score": 0.9822754859924316,
+          "score": 0.9822768568992615,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (65.123.227.175) instead of a named site."
@@ -1746,56 +1748,56 @@
         {
           "id": "bench-fe710843810ebb5d",
           "phishing": false,
-          "score": 0.9958785772323608,
+          "score": 0.9958786964416504,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-50329a02cdf70708",
           "phishing": false,
-          "score": 0.6881012320518494,
+          "score": 0.6880872845649719,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-2c72feff6e370daf",
           "phishing": false,
-          "score": 0.9953224062919617,
+          "score": 0.9953227639198303,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-dfdd314a2de92244",
           "phishing": false,
-          "score": 0.9247506260871887,
+          "score": 0.9247500896453857,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-585bfdd1a598ae0c",
           "phishing": false,
-          "score": 0.9651084542274475,
+          "score": 0.9651122689247131,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-a0d478c4ccce7552",
           "phishing": false,
-          "score": 0.7898240685462952,
+          "score": 0.7898416519165039,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-8780a6d739f788be",
           "phishing": false,
-          "score": 0.9686704874038696,
+          "score": 0.9686723947525024,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-018",
           "phishing": true,
-          "score": 0.7822117805480957,
+          "score": 0.7822218537330627,
           "severity": "Some(Caution)",
           "signs": [
             "It asks for your password. Real companies don't ask for this by email."
@@ -1804,21 +1806,21 @@
         {
           "id": "bench-72d00a8233d00290",
           "phishing": false,
-          "score": 0.8406752943992615,
+          "score": 0.840678334236145,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-040",
           "phishing": true,
-          "score": 0.7271040081977844,
+          "score": 0.7270916104316711,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-016",
           "phishing": true,
-          "score": 0.7805534601211548,
+          "score": 0.7805492281913757,
           "severity": "Some(Caution)",
           "signs": [
             "It asks for your password. Real companies don't ask for this by email."
@@ -1827,49 +1829,49 @@
         {
           "id": "bench-fresh-057",
           "phishing": false,
-          "score": 0.7367978692054749,
+          "score": 0.7367862462997437,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-68334369f6f130a3",
           "phishing": false,
-          "score": 0.826370120048523,
+          "score": 0.8263752460479736,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-1ebe64ed232155da",
           "phishing": false,
-          "score": 0.986226499080658,
+          "score": 0.9862269759178162,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-7391eda01cb56286",
           "phishing": false,
-          "score": 0.346379816532135,
+          "score": 0.3463927209377289,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-37b8f4724e3b4dc6",
           "phishing": false,
-          "score": 0.9000705480575562,
+          "score": 0.9000794291496277,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-ee03ddd214a33011",
           "phishing": false,
-          "score": 0.9962034821510315,
+          "score": 0.996203601360321,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-032",
           "phishing": true,
-          "score": 0.5610502362251282,
+          "score": 0.5610445737838745,
           "severity": "Some(Caution)",
           "signs": [
             "It asks for your recovery phrase. Real companies don't ask for this by email."
@@ -1878,29 +1880,29 @@
         {
           "id": "bench-f9b4ee1bda3e8aff",
           "phishing": false,
-          "score": 0.9685418605804443,
+          "score": 0.968542754650116,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-fresh-024",
           "phishing": true,
-          "score": 0.4568440020084381,
+          "score": 0.4568468928337097,
           "severity": "None",
           "signs": []
         },
         {
           "id": "bench-0f4b0781672c1a48",
           "phishing": false,
-          "score": 0.9408408999443054,
+          "score": 0.9408421516418457,
           "severity": "None",
           "signs": []
         }
       ],
       "unwanted_with_no_banner": 24
     },
-    "threshold": 0.8329927921295166,
-    "train_seconds": 0.361036104
+    "threshold": 0.8329817652702332,
+    "train_seconds": 0.358641696
   },
   "data": {
     "fresh_validation": {
@@ -1946,8 +1948,8 @@
           ]
         }
       ],
-      "latency_ms_median": 0.072187,
-      "latency_ms_p95": 0.163664,
+      "latency_ms_median": 0.07121000000000001,
+      "latency_ms_p95": 0.152224,
       "legitimate": 25,
       "legitimate_flagged_by_model": 0,
       "legitimate_with_any_banner": 1,
@@ -2266,8 +2268,8 @@
           ]
         }
       ],
-      "latency_ms_median": 0.07540100000000001,
-      "latency_ms_p95": 0.151753,
+      "latency_ms_median": 0.07477299999999999,
+      "latency_ms_p95": 0.14935099999999998,
       "legitimate": 25,
       "legitimate_flagged_by_model": 0,
       "legitimate_with_any_banner": 1,
@@ -2638,8 +2640,8 @@
           ]
         }
       ],
-      "latency_ms_median": 0.18511999999999998,
-      "latency_ms_p95": 1.1766240000000001,
+      "latency_ms_median": 0.196937,
+      "latency_ms_p95": 1.191491,
       "legitimate": 223,
       "legitimate_flagged_by_model": 0,
       "legitimate_with_any_banner": 7,
@@ -2651,7 +2653,7 @@
       "phishing_only_junk_suggestion": 0,
       "phishing_with_phishing_warning": 10,
       "unwanted": 135,
-      "unwanted_flagged": 15,
+      "unwanted_flagged": 16,
       "unwanted_flagged_by_model": 0,
       "unwanted_items": [
         {
@@ -3237,8 +3239,10 @@
           "id": "bench-c146164e92ff988a",
           "phishing": false,
           "score": 1.9287498933537385e-22,
-          "severity": "None",
-          "signs": []
+          "severity": "Some(Danger)",
+          "signs": [
+            "It says PayPal is charging you and asks you to call a phone number, but it doesn't come from PayPal. This is a common scam: don't call the number. If you're unsure, contact PayPal the way you usually do."
+          ]
         },
         {
           "id": "bench-fresh-002",
@@ -3671,7 +3675,7 @@
           "signs": []
         }
       ],
-      "unwanted_with_no_banner": 102
+      "unwanted_with_no_banner": 101
     }
   },
   "simulated_first_personal_model": {
@@ -3685,8 +3689,8 @@
           ]
         }
       ],
-      "latency_ms_median": 0.071424,
-      "latency_ms_p95": 0.150351,
+      "latency_ms_median": 0.073187,
+      "latency_ms_p95": 0.153638,
       "legitimate": 25,
       "legitimate_flagged_by_model": 0,
       "legitimate_with_any_banner": 1,
@@ -4047,8 +4051,8 @@
           ]
         }
       ],
-      "latency_ms_median": 0.18446200000000001,
-      "latency_ms_p95": 1.1072600000000001,
+      "latency_ms_median": 0.19681700000000002,
+      "latency_ms_p95": 1.191781,
       "legitimate": 223,
       "legitimate_flagged_by_model": 0,
       "legitimate_with_any_banner": 7,
@@ -4060,7 +4064,7 @@
       "phishing_only_junk_suggestion": 0,
       "phishing_with_phishing_warning": 10,
       "unwanted": 135,
-      "unwanted_flagged": 15,
+      "unwanted_flagged": 16,
       "unwanted_flagged_by_model": 0,
       "unwanted_items": [
         {
@@ -4645,9 +4649,11 @@
         {
           "id": "bench-c146164e92ff988a",
           "phishing": false,
-          "score": 0.49656978249549866,
-          "severity": "None",
-          "signs": []
+          "score": 0.496578186750412,
+          "severity": "Some(Danger)",
+          "signs": [
+            "It says PayPal is charging you and asks you to call a phone number, but it doesn't come from PayPal. This is a common scam: don't call the number. If you're unsure, contact PayPal the way you usually do."
+          ]
         },
         {
           "id": "bench-fresh-002",
@@ -4760,7 +4766,7 @@
         {
           "id": "bench-51b50eb0b18ad4cb",
           "phishing": false,
-          "score": 0.5041924715042114,
+          "score": 0.5004609823226929,
           "severity": "Some(Caution)",
           "signs": [
             "A link goes to a bare internet address (210.51.251.244) instead of a named site.",
@@ -4994,7 +5000,7 @@
         {
           "id": "bench-fresh-040",
           "phishing": true,
-          "score": 0.5028656125068665,
+          "score": 0.49742600321769714,
           "severity": "None",
           "signs": []
         },
@@ -5080,7 +5086,7 @@
           "signs": []
         }
       ],
-      "unwanted_with_no_banner": 102
+      "unwanted_with_no_banner": 101
     },
     "threshold": 0.7334383726119995,
     "trained_on": "modern-dev.json (60 labelled messages standing in for a user's first reports)"

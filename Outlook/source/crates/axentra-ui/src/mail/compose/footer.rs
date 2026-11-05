@@ -1,4 +1,4 @@
-//! The action bar (`[Send ▾] [Discard] … "Draft saved at 3:42 PM"`) and the
+//! The action bar (`[Send ▾] [Discard] [Save draft] … "Draft saved at 3:42 PM"`) and the
 //! banners above the body.
 
 use std::rc::Rc;
@@ -29,6 +29,23 @@ pub fn ActionBar(#[props(default)] top: bool) -> Element {
                 variant: Variant::Subtle,
                 title: "Discard",
                 onclick: move |_| { form.spawn(actions::discard(app, form)); },
+            }
+            Button {
+                label: "Save draft",
+                icon: "save",
+                variant: Variant::Subtle,
+                title: "Save draft (Ctrl+S)",
+                onclick: move |_| { form.spawn(commands::save(app, form)); },
+            }
+            // The pop-out window has its own X at the top.
+            if !top {
+                Button {
+                    label: "Close",
+                    icon: "dismiss",
+                    variant: Variant::Subtle,
+                    title: "Close (draft is saved)",
+                    onclick: move |_| { form.spawn(actions::close(app, form)); },
+                }
             }
             div { class: "ax-grow" }
             div { class: "ax-compose-status", "aria-live": "off",

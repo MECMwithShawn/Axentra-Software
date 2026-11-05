@@ -289,6 +289,9 @@ pub fn CsdRoot() -> Element {
     let desktop = use_window();
     let prefs = try_use_context::<TitlebarPrefs>().unwrap_or_default();
     use_window_pin(&desktop);
+    crate::links::use_external_links(&desktop);
+    #[cfg(target_os = "linux")]
+    crate::pictures::use_picture_menu(&desktop);
     let mut maximized = use_signal(|| desktop.is_maximized());
     let tiled = use_signal(TiledEdges::default);
     #[cfg(target_os = "linux")]
@@ -352,7 +355,11 @@ pub fn CsdRoot() -> Element {
 /// manager close noted for later launches ([`crate::instance::closing`]).
 #[allow(non_snake_case)]
 pub fn SystemRoot() -> Element {
-    use_window_pin(&use_window());
+    let desktop = use_window();
+    use_window_pin(&desktop);
+    crate::links::use_external_links(&desktop);
+    #[cfg(target_os = "linux")]
+    crate::pictures::use_picture_menu(&desktop);
     use_wry_event_handler(|event, _| {
         if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
             crate::instance::closing();

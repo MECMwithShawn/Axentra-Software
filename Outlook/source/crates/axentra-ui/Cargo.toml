@@ -8,6 +8,7 @@ build = "build.rs"
 [dependencies]
 axentra-core.workspace = true
 axentra-sync.workspace = true
+axentra-embed.workspace = true
 dioxus = { workspace = true, features = ["macro", "html", "signals", "hooks", "document", "mounted"] }
 chrono.workspace = true
 serde.workspace = true

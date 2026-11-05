@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 
 use super::controls::{LinkButton, Note, Row, Section, Unavailable, use_settings};
 use super::pages::PageId;
-use crate::kit::{Button, Checkbox, Icon, IconButton, RadioGroup, RadioOption, Select, Slider, Switch, TextField, dom};
+use crate::kit::{Button, Checkbox, ConfirmDialog, Icon, IconButton, RadioGroup, RadioOption, Select, Slider, Switch, TextField, dom};
 use crate::state::{UndoAction, store, use_app};
 
 /// Undo-send stops: Off, 5 … 30 seconds (January 2026 maximum).
@@ -373,6 +373,17 @@ pub fn JunkPage() -> Element {
         }
     };
     rsx! {
+        Section {
+            title: "Filter junk",
+            description: "Moves new mail that's clearly junk to Junk Email, also on the server. Only mail from senders you've never dealt with: not your contacts, people you've written to, or senders you marked Not junk. It looks for phishing signs, and for the attachment lure: a subject of only codes and numbers, marked urgent, with a document and next to no text.",
+            Checkbox {
+                label: "Move clearly junk mail to Junk Email",
+                checked: app.settings.read().junk_filter,
+                onchange: move |v| crate::mail::actions::set_junk_filter(app, v),
+            }
+            Note { text: "Moved by mistake? Open it in Junk Email and choose \u{201c}It's not junk\u{201d}. Mail from that sender then stays in your Inbox." }
+        }
+        ShadowReviewSection {}
         Section { title: "Where new rules apply", description: "Rules you add on this page apply to the account you choose here. Rules made from a message apply to that message's account.",
             Select {
                 value: scope(),
@@ -440,7 +451,6 @@ pub fn JunkPage() -> Element {
 #[component]
 fn JunkReports() -> Element {
     let app = use_app();
-    let ctx = use_settings();
     let _ = app.mail_rev();
     let s = store();
     let history = s.label_history(25).unwrap_or_default();
@@ -461,11 +471,8 @@ fn JunkReports() -> Element {
             description: "Report junk, Report phishing and Not junk are the only things Axentra learns from. Learning happens on this device; your reports aren't sent anywhere and aren't included in backups. Suggestions never move mail.",
             Checkbox {
                 label: "Suggest when a message looks like junk",
-                checked: ctx.get().junk_suggestions,
-                onchange: move |v| {
-                    ctx.edit(|s| s.junk_suggestions = v);
-                    app.bump_mail();
-                },
+                checked: app.settings.read().junk_suggestions,
+                onchange: move |v| crate::mail::actions::set_junk_suggestions(app, v),
             }
             Note { text: "Phishing and other warning signs are always shown." }
             p { class: "ax-set-desc", "{model_text}" }
@@ -671,6 +678,489 @@ pub fn SweepPage() -> Element {
     }
 }
 
+/// "Archived 12 messages older than 30 days" (the auto-archive toast).
+pub fn auto_archive_text(moved: usize, days: u32, by_topic: bool) -> String {
+    let what = if moved == 1 { "1 message".to_string() } else { format!("{moved} messages") };
+    let sorted = if by_topic { ", sorted by topic" } else { "" };
+    format!("Archived {what} older than {}{sorted}", age_text(days))
+}
+
+/// Run auto-archive now, with Undo: daily, when turned on, or "Archive
+/// now". Off the UI thread (sorting by topic may first work out the topics
+/// of thousands of messages), and one run at a time. `manual` says when
+/// there was nothing to archive.
+pub async fn run_auto_archive(app: crate::state::AppState, manual: bool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static RUNNING: AtomicBool = AtomicBool::new(false);
+    if RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let s = app.settings.peek().clone();
+    let (days, unread, by_topic) = (s.auto_archive_age(), s.auto_archive_unread, s.auto_archive_by_topic);
+    let now = chrono::Utc::now();
+    // Once a day even when it fails: not again every 30 seconds.
+    app.update_settings(|s| s.auto_archive_last_run = Some(now));
+    let result = tokio::task::spawn_blocking(move || store().auto_archive(days, unread, by_topic, now))
+        .await
+        .unwrap_or_else(|_| Err(Error::Invalid("auto-archive stopped unexpectedly".into())));
+    RUNNING.store(false, Ordering::SeqCst);
+    match result {
+        Ok(records) if records.is_empty() => {
+            if manual {
+                app.toast("Nothing to archive");
+            }
+        }
+        Ok(records) => {
+            app.bump_mail();
+            app.toast_with_undo(auto_archive_text(records.len(), days, by_topic), UndoAction::Moves(records));
+        }
+        Err(e) if manual => {
+            app.error(e.to_string());
+        }
+        Err(e) => tracing::warn!("auto-archive: {e}"),
+    }
+}
+
+/// "30 days", "1 year"…
+fn age_text(days: u32) -> String {
+    match days {
+        365 => "1 year".into(),
+        1 => "1 day".into(),
+        d => format!("{d} days"),
+    }
+}
+
+/// Auto-archive: Inbox mail older than the chosen age moves to Archive
+/// once a day. Acts at once (no Save): turning it on archives what is
+/// already old, with Undo.
+#[component]
+pub fn AutoArchivePage() -> Element {
+    let app = use_app();
+    let _ = app.mail_rev();
+    let s = app.settings.read().clone();
+    let days = s.auto_archive_age();
+    let now = chrono::Utc::now();
+    let waiting = store().auto_archive_candidates(days, s.auto_archive_unread, now).map(|v| v.len()).unwrap_or(0);
+    let has_archive = store()
+        .accounts()
+        .unwrap_or_default()
+        .iter()
+        .any(|a| store().folder_by_role(a.id, FolderRole::Archive).ok().flatten().is_some());
+    let mut busy = use_signal(|| false);
+    let mut run = move || {
+        busy.set(true);
+        spawn(async move {
+            run_auto_archive(app, true).await;
+            busy.set(false);
+        });
+    };
+    let mut options: Vec<(String, String)> = AUTO_ARCHIVE_DAYS.iter().map(|d| (d.to_string(), age_text(*d))).collect();
+    if !AUTO_ARCHIVE_DAYS.contains(&days) {
+        options.push((days.to_string(), age_text(days)));
+    }
+    let preview = match waiting {
+        0 => format!("No messages in your Inbox are older than {} right now.", age_text(days)),
+        1 => format!("1 message in your Inbox is older than {}.", age_text(days)),
+        n => format!("{n} messages in your Inbox are older than {}.", age_text(days)),
+    };
+    let last = s.auto_archive_last_run.map(|t| t.with_timezone(&chrono::Local).format("%b %-d at %-I:%M %p").to_string());
+    rsx! {
+        Section {
+            title: "Archive older mail",
+            description: "Keep your Inbox to recent mail. Once a day, older messages move to each account's Archive folder, here and on the server. Pinned, flagged and snoozed messages stay, and so does any conversation with a message newer than that.",
+            if !has_archive {
+                Note { text: "None of your accounts has an Archive folder, so there's nowhere to archive to." }
+            }
+            Switch {
+                label: "Archive older Inbox mail automatically",
+                checked: s.auto_archive,
+                disabled: !has_archive,
+                onchange: move |on: bool| {
+                    app.update_settings(|s| s.auto_archive = on);
+                    if on {
+                        run();
+                    }
+                },
+            }
+            Row { label: "Archive messages older than",
+                Select {
+                    value: days.to_string(),
+                    options,
+                    aria_label: "Archive messages older than",
+                    onchange: move |v: String| {
+                        if let Ok(d) = v.parse::<u32>() {
+                            app.update_settings(|s| s.auto_archive_days = d);
+                        }
+                    },
+                }
+            }
+            Checkbox {
+                label: "Include unread messages",
+                checked: s.auto_archive_unread,
+                onchange: move |v: bool| app.update_settings(|s| s.auto_archive_unread = v),
+            }
+            Checkbox {
+                label: "Sort into topic folders",
+                description: "Archived mail goes into a folder for its topic inside Archive: People, Orders & shipping, Receipts & bills, Finance, Travel and so on. A folder is made the first time it's needed. Mail that fits no topic stays in Archive itself.",
+                checked: s.auto_archive_by_topic,
+                onchange: move |v: bool| app.update_settings(|s| s.auto_archive_by_topic = v),
+            }
+            Row { label: "Archive now", description: "{preview}",
+                Button {
+                    label: if busy() { "Archiving…" } else { "Archive now" },
+                    icon: "archive",
+                    disabled: waiting == 0 || busy(),
+                    onclick: move |_| run(),
+                }
+            }
+            if s.auto_archive {
+                if let Some(last) = last {
+                    Note { text: "Last run {last}. It runs again a day later while Axentra Outlook is open." }
+                }
+            }
+        }
+    }
+}
+
+/// "1 week", "30 days", "1 year" (how long delivered packages stay).
+fn keep_text(days: u32) -> String {
+    match days {
+        7 => "1 week".into(),
+        d => age_text(d),
+    }
+}
+
+/// Settings > Mail > Packages: order tracking on this device. Acts at once
+/// (no Save); switching it off forgets what was found.
+#[component]
+pub fn PackagesPage() -> Element {
+    let app = use_app();
+    let _ = app.mail_rev();
+    let st = app.settings.read().clone();
+    let s = store();
+    let ignores = s.order_sender_ignores().unwrap_or_default();
+    let hidden = s.hidden_order_count().unwrap_or(0);
+    let mut confirm_off = use_signal(|| false);
+    let items: Vec<(String, String, String)> = ignores
+        .iter()
+        .map(|i| (i.pattern.clone(), i.pattern.clone(), if i.is_domain { format!("{} (whole domain)", i.pattern) } else { i.pattern.clone() }))
+        .collect();
+    let taken: Vec<String> = ignores.iter().map(|i| i.pattern.clone()).collect();
+    let keep_options: Vec<(String, String)> = orders::KEEP_DAYS.iter().map(|d| (d.to_string(), keep_text(*d))).collect();
+    let hidden_text = format!("Hidden orders: {hidden}");
+    rsx! {
+        Section {
+            title: "Package tracking",
+            description: "Order confirmations and shipping emails are listed in Mail > Packages, with where each order is.",
+            Switch {
+                label: "Find orders and deliveries in my mail",
+                checked: st.order_tracking,
+                onchange: move |on: bool| {
+                    if on {
+                        app.update_settings(|s| s.order_tracking = true);
+                        app.bump_mail();
+                    } else {
+                        confirm_off.set(true);
+                    }
+                },
+            }
+            Switch {
+                label: "Show package info at the top of messages",
+                checked: st.order_banner,
+                disabled: !st.order_tracking,
+                onchange: move |on: bool| app.update_settings(|s| s.order_banner = on),
+            }
+            Note {
+                icon: "shield",
+                text: "Orders are found on this device. Nothing is sent to stores or carriers. Track opens the carrier's website only when you click it.",
+            }
+        }
+        Section { title: "Delivered packages", description: "Delivered, cancelled and returned orders stay in Packages for a while, then leave the list.",
+            Row { label: "Keep delivered packages for",
+                Select {
+                    value: st.orders_keep_days().to_string(),
+                    options: keep_options,
+                    aria_label: "Keep delivered packages for",
+                    onchange: move |v: String| {
+                        if let Ok(d) = v.parse::<u32>() {
+                            app.update_settings(|s| s.orders_keep_delivered_days = d);
+                        }
+                    },
+                }
+            }
+        }
+        SenderList {
+            title: "Senders not tracked",
+            description: "Orders from these senders and domains aren't added to Packages. A domain covers its subdomains.",
+            empty: "No one yet. Choose \u{201c}Don't track orders from\u{2026}\u{201d} on an order to add one.",
+            add_label: "Don't track orders from",
+            items,
+            taken,
+            on_add: move |pattern: String| {
+                if app.check(store().ignore_order_sender(&pattern)).is_some() {
+                    app.bump_mail();
+                    app.toast_with_undo(format!("Orders from {pattern} won't be tracked"), UndoAction::OrderIgnore(pattern));
+                }
+            },
+            on_remove: move |pattern: String| {
+                if app.check(store().remove_order_sender_ignore(&pattern)).is_some() {
+                    app.bump_mail();
+                    app.toast(format!("Orders from {pattern} will be tracked again"));
+                }
+            },
+        }
+        Section { title: "Hidden orders", description: "Orders you removed from Packages stay hidden, also when new mail about them comes in.",
+            Row { label: hidden_text,
+                Button {
+                    label: "Show hidden orders again",
+                    disabled: hidden == 0,
+                    title: if hidden == 0 { "No orders are hidden" } else { "Put every hidden order back in Packages" },
+                    onclick: move |_| {
+                        if let Some(n) = app.check(store().unhide_all_orders()) {
+                            app.bump_mail();
+                            app.toast(if n == 1 { "1 order is back in Packages".to_string() } else { format!("{n} orders are back in Packages") });
+                        }
+                    },
+                }
+            }
+            LinkButton {
+                label: "Look through my mail again",
+                disabled: !st.order_tracking,
+                title: if st.order_tracking { "Find orders again from the mail on this device. Your changes and senders not tracked stay." } else { "Turn on package tracking first" },
+                onclick: move |_| {
+                    if app.check(store().clear_orders()).is_some() {
+                        app.bump_mail();
+                        app.toast("Looking through your mail again");
+                    }
+                },
+            }
+        }
+        if confirm_off() {
+            ConfirmDialog {
+                title: "Turn off package tracking?",
+                message: "Packages found so far are removed from this device. Your mail isn't changed.",
+                confirm_label: "Turn off",
+                on_cancel: move |_| confirm_off.set(false),
+                on_confirm: move |_| {
+                    confirm_off.set(false);
+                    app.update_settings(|s| s.order_tracking = false);
+                    app.check(store().clear_orders());
+                    app.bump_mail();
+                },
+            }
+        }
+    }
+}
+
+/// A topic correction as listed: its address or domain, and the account
+/// it is for (none: all accounts), so an account's correction and an
+/// all-accounts one for the same sender can be told apart.
+fn correction_text(pattern: &str, is_domain: bool, account: Option<&str>) -> String {
+    let target = if is_domain { format!("{pattern} (whole domain)") } else { pattern.to_string() };
+    match account {
+        Some(email) => format!("{target} \u{b7} {email}"),
+        None => target,
+    }
+}
+
+/// A topic correction's target: a domain, or an address.
+fn topic_target(pattern: &str, is_domain: bool) -> axentra_core::store::TopicTarget {
+    if is_domain {
+        axentra_core::store::TopicTarget::Domain(pattern.to_string())
+    } else {
+        axentra_core::store::TopicTarget::Sender(pattern.to_string())
+    }
+}
+
+/// Settings > Mail > Topics: sorting on this device, which topics the
+/// folder pane shows, and the user's corrections. Acts at once (no Save).
+#[component]
+pub fn TopicsPage() -> Element {
+    let app = use_app();
+    let _ = app.mail_rev();
+    let st = app.settings.read().clone();
+    let s = store();
+    let rules = s.topic_rules().unwrap_or_default();
+    let accounts = s.accounts().unwrap_or_default();
+    let pending = if st.topics_view { s.topics_pending_count(10_000).unwrap_or(0) } else { 0 };
+    let mut confirm_off = use_signal(|| false);
+    let mut confirm_forget = use_signal(|| false);
+    let mut draft = use_signal(String::new);
+    let mut draft_topic = use_signal(|| topics::Topic::Newsletters.id().to_string());
+    let topic_options: Vec<(String, String)> = topics::Topic::ALL.into_iter().map(|t| (t.id().to_string(), t.label().to_string())).collect();
+    let text = draft().trim().trim_start_matches('@').to_lowercase();
+    let is_domain = !text.contains('@');
+    let freemail_domain = is_domain && topics::is_freemail(&text);
+    let ok = valid_sender(&text) && !freemail_domain;
+    let hint = if freemail_domain {
+        format!("{text} is a free mail provider. Add an address there instead.")
+    } else {
+        "An address, like name@example.com, or a domain, like example.com.".to_string()
+    };
+    let add = move |_| {
+        let text = draft.peek().trim().trim_start_matches('@').to_lowercase();
+        let is_domain = !text.contains('@');
+        if !valid_sender(&text) || (is_domain && topics::is_freemail(&text)) {
+            return;
+        }
+        let Some(topic) = topics::Topic::parse(&draft_topic.peek()) else { return };
+        if let Some(change) = app.check(store().set_topic(None, topic_target(&text, is_domain), Some(topic))) {
+            draft.set(String::new());
+            app.bump_mail();
+            app.toast_with_undo(format!("Mail from {text} will show in {}", topic.label()), UndoAction::Topic(change));
+        }
+    };
+    rsx! {
+        Section {
+            title: "Topic sorting",
+            description: "Mail > Topics lists your mail by what it's about: orders, travel, bills, newsletters and more, across your folders.",
+            Switch {
+                label: "Sort mail by topic",
+                checked: st.topics_view,
+                onchange: move |on: bool| {
+                    if on {
+                        app.update_settings(|s| s.topics_view = true);
+                        app.bump_mail();
+                    } else {
+                        confirm_off.set(true);
+                    }
+                },
+            }
+            Note { text: "Topics are worked out on this device and never move your mail or change anything on the server." }
+            if pending > 0 {
+                Note { text: "About {pending} messages still to sort." }
+            }
+            LinkButton {
+                label: "Sort my mail again",
+                disabled: !st.topics_view,
+                title: if st.topics_view { "Work out every message's topic again. Your corrections stay." } else { "Turn on topic sorting first" },
+                onclick: move |_| {
+                    if app.check(store().resort_topics()).is_some() {
+                        app.bump_mail();
+                        app.toast("Sorting your mail again");
+                    }
+                },
+            }
+        }
+        Section { title: "Shown topics", description: "Show in the folder pane: the topics listed under Views. Hidden topics are still sorted.",
+            for t in topics::Topic::ALL {
+                Checkbox {
+                    key: "{t.id()}",
+                    label: t.label(),
+                    checked: !st.topics_hidden.iter().any(|h| h == t.id()),
+                    disabled: !st.topics_view,
+                    onchange: move |show: bool| {
+                        app.update_settings(|s| {
+                            s.topics_hidden.retain(|h| h != t.id());
+                            if !show {
+                                s.topics_hidden.push(t.id().to_string());
+                            }
+                        });
+                    },
+                }
+            }
+        }
+        Section {
+            title: "Your corrections",
+            description: "Change topic on a message to teach Axentra where mail from that sender belongs. Corrections are kept in your backups.",
+            div { class: "ax-sender-add-wrap",
+                div { class: "ax-row ax-sender-add", style: "gap:8px;align-items:flex-end;flex-wrap:wrap",
+                    TextField {
+                        label: "Address or domain",
+                        placeholder: "name@example.com or example.com",
+                        value: draft(),
+                        invalid: !text.is_empty() && !ok,
+                        oninput: move |v| draft.set(v),
+                    }
+                    Select {
+                        value: draft_topic(),
+                        options: topic_options.clone(),
+                        aria_label: "Topic for this sender",
+                        onchange: move |v: String| draft_topic.set(v),
+                    }
+                    Button { label: "Add", icon: "add", disabled: !ok, title: if ok { "Add the correction" } else { "Type an address or domain first" }, onclick: add }
+                }
+                span { class: "ax-field-hint ax-sender-hint", class: if freemail_domain { "ax-danger" }, "aria-live": "polite", "{hint}" }
+            }
+            if rules.is_empty() {
+                Note { text: "No corrections yet. Use Change topic on a message to add one." }
+            } else {
+                div { class: "ax-cat-list", role: "list", "aria-label": "Your corrections",
+                    for r in rules.into_iter() {
+                        {
+                            let rule = r.rule.clone();
+                            let account_email = accounts.iter().find(|a| a.id == rule.account_key).map(|a| a.email.as_str());
+                            let shown = correction_text(&rule.pattern, rule.is_domain, account_email);
+                            let account = (rule.account_key != 0).then_some(rule.account_key);
+                            let pattern = rule.pattern.clone();
+                            let id = r.id;
+                            rsx! {
+                                div { key: "{id}", class: "ax-cat-row ax-topic-rule", role: "listitem",
+                                    span { class: "ax-grow ax-ellipsis ax-selectable", title: "{shown}", "{shown}" }
+                                    Select {
+                                        value: rule.topic.id(),
+                                        options: topic_options.clone(),
+                                        aria_label: "Topic for {pattern}",
+                                        onchange: move |v: String| {
+                                            if let Some(t) = topics::Topic::parse(&v)
+                                                && let Some(change) = app.check(store().set_topic(account, topic_target(&rule.pattern, rule.is_domain), Some(t)))
+                                            {
+                                                app.bump_mail();
+                                                app.toast_with_undo(format!("Mail from {} will show in {}", rule.pattern, t.label()), UndoAction::Topic(change));
+                                            }
+                                        },
+                                    }
+                                    IconButton {
+                                        icon: "delete",
+                                        title: "Remove {pattern}",
+                                        small: true,
+                                        onclick: move |_| {
+                                            if app.check(store().remove_topic_rule(id)).is_some() {
+                                                app.bump_mail();
+                                            }
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Button { label: "Forget all corrections\u{2026}", icon: "delete", onclick: move |_| confirm_forget.set(true) }
+            }
+        }
+        if confirm_off() {
+            ConfirmDialog {
+                title: "Turn off topics?",
+                message: "Topics worked out so far are removed from this device. Your corrections stay, and your mail isn't changed.",
+                confirm_label: "Turn off",
+                on_cancel: move |_| confirm_off.set(false),
+                on_confirm: move |_| {
+                    confirm_off.set(false);
+                    app.update_settings(|s| s.topics_view = false);
+                    app.check(store().clear_topics());
+                    app.bump_mail();
+                },
+            }
+        }
+        if confirm_forget() {
+            ConfirmDialog {
+                title: "Forget all corrections?",
+                message: "Mail goes back to the topics Axentra works out. This can't be undone.",
+                confirm_label: "Forget",
+                danger: true,
+                on_cancel: move |_| confirm_forget.set(false),
+                on_confirm: move |_| {
+                    confirm_forget.set(false);
+                    if app.check(store().clear_topic_rules()).is_some() {
+                        app.bump_mail();
+                        app.toast("Forgot your topic corrections");
+                    }
+                },
+            }
+        }
+    }
+}
+
 /// Pages whose features live in the mail module.
 #[component]
 pub fn ModulePage(page: PageId) -> Element {
@@ -728,9 +1218,59 @@ mod tests {
     }
 
     #[test]
+    fn corrections_say_which_account_they_are_for() {
+        assert_eq!(correction_text("shop.example", true, None), "shop.example (whole domain)");
+        assert_eq!(correction_text("shop.example", true, Some("me@x.example")), "shop.example (whole domain) \u{b7} me@x.example");
+        assert_eq!(correction_text("a@shop.example", false, Some("me@x.example")), "a@shop.example \u{b7} me@x.example");
+    }
+
+    #[test]
+    fn auto_archive_toast_text() {
+        assert_eq!(auto_archive_text(1, 30, false), "Archived 1 message older than 30 days");
+        assert_eq!(auto_archive_text(312, 365, true), "Archived 312 messages older than 1 year, sorted by topic");
+    }
+
+    #[test]
     fn undo_send_stops_cover_off_to_thirty() {
         assert_eq!(UNDO_SEND_STOPS.first(), Some(&0));
         assert_eq!(UNDO_SEND_STOPS.last(), Some(&30));
         assert!(UNDO_SEND_STOPS.windows(2).all(|w| w[0] < w[1]));
+    }
+}
+
+/// Local AI review, a pilot: see `junk::shadow`.
+#[component]
+fn ShadowReviewSection() -> Element {
+    let app = use_app();
+    let on = app.settings.read().junk_shadow;
+    let mut cleared = use_signal(|| 0);
+    let _ = cleared();
+    let tally = if on { store().shadow_tally().unwrap_or_default() } else { Default::default() };
+    let problem = if on { crate::mail::shadow_pass::problem() } else { None };
+    rsx! {
+        Section {
+            title: "Local AI review (pilot)",
+            description: "Two AI models on this computer read new mail from senders you've never dealt with and suggest \u{201c}Looks like phishing\u{201d} or \u{201c}Probably bulk mail\u{201d} in the reading pane. Nothing moves because of a suggestion, and no mail leaves this computer. It needs Ollama with qwen3:4b and deepseek-r1:14b, which use your graphics card for about 10 seconds on each flagged message.",
+            Checkbox {
+                label: "Review new mail with local AI",
+                checked: on,
+                onchange: move |v| crate::mail::actions::set_junk_shadow(app, v),
+            }
+            if let Some(problem) = problem {
+                Note { text: problem.text() }
+            }
+            if on {
+                p { class: "ax-set-desc",
+                    "{tally.reviewed} reviewed: {tally.phishing} looked like phishing, {tally.bulk} probably bulk. Your reports so far: {tally.confirmed} agreed, {tally.rejected} marked not junk, {tally.missed} junk the review missed."
+                }
+                Button {
+                    label: "Clear results",
+                    onclick: move |_| {
+                        let _ = app.check(store().forget_shadow());
+                        cleared += 1;
+                    },
+                }
+            }
+        }
     }
 }

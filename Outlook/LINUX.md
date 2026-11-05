@@ -1,11 +1,11 @@
 # Axentra Outlook on Linux
 
-Built and tested 2026-10-28 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.5**; **pre-release**, not a stable release.
+Built and tested 2026-11-05 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.7**; **pre-release**, not a stable release.
 
 ## Install and run
 
 ```bash
-sudo apt install ./axentra-outlook_0.1.5-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.7-1_amd64.deb
 ```
 
 Open **Axentra Outlook** from the application menu, or run `axentra-outlook`. The package installs to
@@ -23,7 +23,7 @@ folder, and the full mail, calendar, people and to-do interface described in the
 
 ## Verification
 
-- 645 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
+- 910 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
   (MIME, Graph JSON), OAuth PKCE, loopback callback, backup format/encryption/restore/retention, dialog sizing,
   account photo checks and limits, UI logic.
 - The account photo was checked by the user on this Zorin machine with a debug build of the same code and their
@@ -37,6 +37,10 @@ folder, and the full mail, calendar, people and to-do interface described in the
 - An earlier test build of the same code ran as a desktop window on this Zorin machine (Wayland). A real
   Outlook.com account signed in through Microsoft Graph in the browser and synced mail folders, messages,
   calendars and a To Do list.
+
+- Save picture as, Copy picture, Close on a saved draft, returning to the list from a folder click and the Spam &
+  AI menu were clicked through in the release build under X11 with a demo mailbox. They were not repeated on Wayland
+  or with real mail; the picture test used a picture embedded in the message, not one loaded from the web.
 
 ## Remaining work and requirements
 
@@ -55,7 +59,13 @@ folder, and the full mail, calendar, people and to-do interface described in the
   and the window has a 1px border instead of a drop shadow.
 - Dialogs resize with the mouse only; there is no keyboard resizing (GNOME keeps Alt+F7 and Alt+F8 for moving
   and resizing windows). Small confirmations and short forms keep a fixed size.
-- Not yet built: app zoom, Groups and Files modules, rules / junk / quick-steps
+- **Packages** reads order and delivery mail with rules, so a shop or carrier's wording it doesn't know can be
+  missed or misread. The newest UPS scheduled-delivery handling is covered by automated tests and has not yet been
+  confirmed against real mail.
+- **Local AI review** is a pilot and off by default. It needs Ollama with qwen3:4b and deepseek-r1:14b installed; it
+  only suggests, and never moves mail.
+- **Search by meaning** uses an English model.
+- Not yet built: app zoom, Groups and Files modules, rules / quick-steps
   editors, Scheduling Assistant, rich-text task notes, task attachments.
 - The `.deb` install itself was not exercised by the build process (it needs `sudo`); report anything that
   looks wrong after installing.

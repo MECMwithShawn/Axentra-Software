@@ -40,7 +40,7 @@ pub fn middle_ellipsis(name: &str, max: usize) -> String {
     format!("{start}…{end}")
 }
 
-fn base64(data: &[u8]) -> String {
+pub(crate) fn base64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
@@ -122,7 +122,8 @@ fn download_all(app: AppState, list: &[Attachment], subject: &str) {
 }
 
 fn previewable(a: &Attachment) -> bool {
-    a.content_type.starts_with("image/") || a.content_type.starts_with("text/")
+    let shows = |t: &str| t.starts_with("image/") || t.starts_with("text/");
+    shows(&a.content_type.to_ascii_lowercase()) || shows(&axentra_core::text::guess_content_type(&a.name))
 }
 
 #[component]
@@ -253,9 +254,17 @@ fn AttachmentCard(attachment: Attachment, has_data: bool, on_preview: EventHandl
 fn AttachmentPreview(attachment: Attachment, on_close: EventHandler<()>) -> Element {
     let app = use_app();
     let data = store().attachment_data(attachment.id).ok().flatten().unwrap_or_default();
-    let is_image = attachment.content_type.starts_with("image/");
-    let text = if is_image { String::new() } else { String::from_utf8_lossy(&data).into_owned() };
-    let src = if is_image { format!("data:{};base64,{}", attachment.content_type, base64(&data)) } else { String::new() };
+    // What the bytes are, not just what the sender labelled them.
+    let kind = axentra_core::text::attachment_content_type(&attachment.name, &attachment.content_type, &data);
+    let is_image = kind.starts_with("image/");
+    let text = if is_image {
+        String::new()
+    } else if axentra_core::text::looks_like_text(&data) {
+        String::from_utf8_lossy(&data).into_owned()
+    } else {
+        "This file can't be previewed.".to_string()
+    };
+    let src = if is_image { format!("data:{kind};base64,{}", base64(&data)) } else { String::new() };
     let a = attachment.clone();
     rsx! {
         Dialog {

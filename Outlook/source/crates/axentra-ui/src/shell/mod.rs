@@ -219,6 +219,14 @@ pub fn Shell() -> Element {
         }
     });
 
+    // New messages asked for from outside (`--compose`, mailto: links).
+    use_future(move || async move {
+        loop {
+            crate::mail::compose::open_outside_requests(app);
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    });
+
     // Online / offline (§9.3): the webview's network state, live.
     use_future(move || async move {
         let mut ev = document::eval(ONLINE_JS);

@@ -68,9 +68,9 @@
   display: inline; padding: 0; border: none; background: transparent; color: var(--ax-fg-link);
   font-size: inherit; text-align: left; border-radius: var(--ax-radius-s);
 }
-.ax-link-btn:hover { color: var(--ax-fg-link-hover); text-decoration: underline; }
-.ax-link-btn:active { color: var(--ax-fg-link-pressed); }
-.ax-link-btn[aria-disabled="true"] { color: var(--ax-fg-disabled); text-decoration: none; }
+.ax-link-btn:hover:not(:disabled) { color: var(--ax-fg-link-hover); text-decoration: underline; }
+.ax-link-btn:active:not(:disabled) { color: var(--ax-fg-link-pressed); }
+.ax-link-btn[aria-disabled="true"], .ax-link-btn:disabled { color: var(--ax-fg-disabled); text-decoration: none; }
 
 /* ---------------------------------------------------------------- Menus */
 .ax-menu-backdrop { position: fixed; inset: 0; z-index: var(--ax-z-menu); }

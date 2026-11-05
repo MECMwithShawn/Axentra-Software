@@ -10,6 +10,7 @@
 //! maximised state; the other actions are only logged.
 //! `AXENTRA_FAKE_WINDOW_TILED` (`top bottom left`, `right`, `all`, ...)
 //! starts the fake window tiled on those edges.
+//! `AXENTRA_FAKE_AI_REVIEW=1` shows Local AI review's labels on demo mail.
 //! `AXENTRA_FAKE_ACCOUNT_PHOTO=1` gives the demo account a drawn, clearly
 //! synthetic profile photo, stored as if the sync engine had fetched it from
 //! Microsoft, to check the account avatars (header, Account Manager,
@@ -66,6 +67,26 @@ fn svg_data_url(svg: &str) -> String {
     url
 }
 
+/// `AXENTRA_FAKE_AI_REVIEW=1`: switch Local AI review on and give the two
+/// newest Inbox messages a recommendation each, without running a model.
+fn fake_ai_review(store: &Store) {
+    use axentra_core::junk::shadow::{Review, Verdict};
+    if std::env::var_os("AXENTRA_FAKE_AI_REVIEW").is_none() {
+        return;
+    }
+    let mut settings = store.settings();
+    settings.junk_shadow = true;
+    store.save_settings(&settings).expect("save settings");
+    store.start_shadow_review().expect("start the review");
+    let Some(inbox) = store.folders(None).expect("folders").into_iter().find(|f| f.role == axentra_core::FolderRole::Inbox) else { return };
+    let query = axentra_core::MessageQuery { folder_id: Some(inbox.id), limit: Some(2), ..Default::default() };
+    let verdicts = [(Verdict::Phishing, Verdict::Phishing), (Verdict::Spam, Verdict::Spam)];
+    for (m, (first, second)) in store.messages(&query).expect("messages").into_iter().zip(verdicts) {
+        let review = Review { first: Some(first), second: Some(second), first_ms: 200, second_ms: 9000 };
+        store.save_shadow_review(m.id, &review).expect("save the review");
+    }
+}
+
 /// `AXENTRA_FAKE_ACCOUNT_PHOTO=1`: store [`DEMO_PHOTO_SVG`] for the demo account.
 fn fake_account_photo(store: &Store) {
     if !std::env::var("AXENTRA_FAKE_ACCOUNT_PHOTO").is_ok_and(|v| !matches!(v.trim(), "" | "0")) {
@@ -111,6 +132,7 @@ async fn main() {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let store = Arc::new(Store::open_in_memory().expect("in-memory store"));
     axentra_core::seed::seed_demo(&store, chrono::Local::now()).expect("seed demo data");
+    fake_ai_review(&store);
     fake_account_photo(&store);
     axentra_ui::init(store, None);
     // Backups: the password stays in memory, and AXENTRA_BACKUP_DIR (else a

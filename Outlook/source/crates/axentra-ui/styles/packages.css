@@ -1,0 +1,113 @@
+/* Mail > Packages: order cards in sections, the four-step tracker, and the
+   reading pane's topic pill. --ax-* tokens only, so the dark, high-contrast
+   and glass themes follow. */
+
+.ax-pkg-pane { flex: 1; min-width: 0; }
+/* Beside the reading pane it gives up width as the message list does
+   (mail.css), before the reading pane is pushed under a side pane. */
+.ax-mail-panes > .ax-pkg-pane:not(.ax-columns) { flex: 0 1 auto; min-width: 300px; }
+.ax-pkg-header { padding-bottom: 4px; border-bottom: 1px solid var(--ax-stroke-2); }
+.ax-pkg-subtitle { margin-top: -6px; color: var(--ax-fg-3); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+.ax-pkg-why { margin: 6px 8px 0 0; }
+.ax-pkg-pending { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 4px 0; color: var(--ax-fg-2); font-size: var(--ax-text-200); }
+.ax-pkg-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 16px 24px; outline: none; }
+.ax-pkg-scroll > .ax-empty { margin-top: 48px; }
+
+/* sections */
+.ax-pkg-section + .ax-pkg-section { margin-top: 12px; }
+.ax-pkg-section-title { margin: 0 0 8px; font-size: inherit; }
+.ax-pkg-section-toggle {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-1); font-size: var(--ax-text-300); font-weight: var(--ax-weight-semibold);
+}
+.ax-pkg-section-toggle:hover { background: var(--ax-bg-subtle-hover); }
+.ax-pkg-section-toggle .ax-icon { color: var(--ax-fg-2); }
+.ax-pkg-section-count { color: var(--ax-fg-3); font-weight: var(--ax-weight-regular); }
+
+/* cards */
+/* 320px columns; a pane under 520px (two need 652px) gets one, never wider than the pane */
+.ax-pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.ax-pkg-card {
+  display: flex; flex-direction: column; min-width: 0; padding: 16px; border: 1px solid var(--ax-stroke-3);
+  border-radius: var(--ax-radius-xl); background: var(--ax-bg-1); color: var(--ax-fg-1); outline: none;
+}
+.ax-pkg-card:focus-visible, :where(html[data-ax-kbd]) .ax-pkg-card:focus { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: 1px; }
+.ax-pkg-card-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ax-pkg-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ax-pkg-merchant { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ax-pkg-merchant-name { font-weight: var(--ax-weight-semibold); }
+.ax-pkg-domain { color: var(--ax-fg-2); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
+.ax-badge.ax-pkg-badge { flex: none; height: 22px; padding: 0 8px; border: 1px solid transparent; font-weight: var(--ax-weight-semibold); }
+.ax-badge.ax-pkg-badge-success { background: var(--ax-success-bg); color: var(--ax-success-fg); border-color: var(--ax-success-border); }
+.ax-badge.ax-pkg-badge-warning { background: var(--ax-warning-bg); color: var(--ax-warning-fg); border-color: var(--ax-warning-border); }
+.ax-badge.ax-pkg-badge-neutral { background: var(--ax-bg-3); color: var(--ax-fg-2); border-color: var(--ax-stroke-2); }
+.ax-pkg-orderno { display: flex; align-items: center; gap: 4px; color: var(--ax-fg-2); font-size: var(--ax-text-200); }
+.ax-pkg-headline { font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); }
+
+/* the tracker: Ordered → Shipped → Out for delivery → Delivered */
+.ax-pkg-steps { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; }
+.ax-pkg-step { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; text-align: center; }
+.ax-pkg-step::before {
+  content: ""; position: absolute; top: 7px; right: 50%; width: 100%; height: 2px; background: var(--ax-stroke-2);
+}
+.ax-pkg-step:first-child::before { display: none; }
+.ax-pkg-step.ax-done::before { background: var(--ax-stroke-brand); }
+.ax-pkg-step-dot {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+  border: 2px solid var(--ax-stroke-1); border-radius: var(--ax-radius-circle); background: var(--ax-bg-1); box-sizing: border-box;
+}
+.ax-pkg-step.ax-done .ax-pkg-step-dot { border-color: var(--ax-stroke-brand); background: var(--ax-bg-brand); }
+.ax-pkg-step.ax-current .ax-pkg-step-dot { box-shadow: 0 0 0 3px var(--ax-bg-1), 0 0 0 4px var(--ax-stroke-brand); }
+.ax-pkg-step.ax-warn .ax-pkg-step-dot { border-color: var(--ax-warning-fg); background: var(--ax-warning-bg); color: var(--ax-warning-fg); }
+.ax-pkg-step.ax-warn.ax-current .ax-pkg-step-dot { box-shadow: 0 0 0 3px var(--ax-bg-1), 0 0 0 4px var(--ax-warning-fg); }
+.ax-pkg-step-label { max-width: 100%; color: var(--ax-fg-3); font-size: var(--ax-text-100); line-height: var(--ax-lh-100); }
+.ax-pkg-step.ax-done .ax-pkg-step-label, .ax-pkg-step.ax-current .ax-pkg-step-label { color: var(--ax-fg-1); }
+.ax-pkg-step.ax-warn .ax-pkg-step-label { color: var(--ax-warning-fg); font-weight: var(--ax-weight-semibold); }
+/* Forced colours drop backgrounds and shadows: the steps done keep a
+   filled dot and line, the current one an outline, a problem a dashed dot. */
+@media (forced-colors: active) {
+  .ax-pkg-step.ax-done::before, .ax-pkg-step.ax-done .ax-pkg-step-dot { forced-color-adjust: none; background: Highlight; border-color: Highlight; }
+  .ax-pkg-step.ax-current .ax-pkg-step-dot { box-shadow: none; outline: 2px solid CanvasText; outline-offset: 2px; }
+  .ax-pkg-step.ax-warn .ax-pkg-step-dot { border-style: dashed; border-color: Mark; }
+  .ax-pkg-step.ax-done .ax-pkg-step-label, .ax-pkg-step.ax-current .ax-pkg-step-label { font-weight: var(--ax-weight-semibold); }
+}
+
+/* shipments and items */
+.ax-pkg-shipments, .ax-pkg-items, .ax-pkg-emails { margin: 0; padding: 0; list-style: none; }
+.ax-pkg-shipment { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.ax-pkg-carrier { color: var(--ax-fg-2); font-size: var(--ax-text-200); }
+.ax-pkg-number { font-family: var(--ax-font-mono); font-size: var(--ax-text-200); overflow-wrap: anywhere; }
+.ax-pkg-items { display: flex; flex-direction: column; gap: 2px; color: var(--ax-fg-2); font-size: var(--ax-text-200); }
+.ax-pkg-more { color: var(--ax-fg-3); }
+
+/* "Why is this here?" */
+.ax-pkg-why, .ax-topic-why {
+  padding: 8px 12px; border: 1px solid var(--ax-stroke-2); border-radius: var(--ax-radius-m); background: var(--ax-bg-2);
+  color: var(--ax-fg-1); font-size: var(--ax-text-200); line-height: var(--ax-lh-200);
+}
+.ax-pkg-why ul, .ax-topic-why ul { margin: 4px 0 0; padding-left: 18px; }
+.ax-pkg-why-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ax-topic-why { margin-top: 8px; }
+
+/* the emails an order was found in */
+.ax-pkg-footer { border-top: 1px solid var(--ax-stroke-3); padding-top: 6px; }
+.ax-pkg-emails-toggle {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 2px; border: none; border-radius: var(--ax-radius-m);
+  background: transparent; color: var(--ax-fg-2); font-size: var(--ax-text-200);
+}
+.ax-pkg-emails-toggle:hover { background: var(--ax-bg-subtle-hover); color: var(--ax-fg-1); }
+.ax-pkg-email { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ax-pkg-email-open {
+  flex: 1; min-width: 0; height: 28px; padding: 0 6px; border: none; border-radius: var(--ax-radius-m); background: transparent;
+  color: var(--ax-fg-1); font-size: var(--ax-text-200); text-align: left;
+}
+.ax-pkg-email-open:hover { background: var(--ax-bg-subtle-hover); }
+
+/* the topic pill: an outline, unlike the filled category pills */
+.ax-app .ax-btn.ax-topic-pill {
+  height: 22px; min-width: 0; margin-left: 4px; padding: 0 8px; gap: 4px; border: 1px solid var(--ax-stroke-1); border-radius: 11px;
+  background: transparent; color: var(--ax-fg-2); font-size: var(--ax-text-200); font-weight: var(--ax-weight-regular);
+}
+.ax-app .ax-btn.ax-topic-pill .ax-icon { width: 14px; height: 14px; color: var(--ax-fg-2); }
+.ax-app .ax-btn.ax-topic-pill:hover { background: var(--ax-bg-subtle-hover); border-color: var(--ax-stroke-1-hover); color: var(--ax-fg-1); }
+.ax-mail-reading-cats { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }

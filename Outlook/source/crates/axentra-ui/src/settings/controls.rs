@@ -77,9 +77,9 @@ pub fn Note(#[props(into)] text: String, #[props(into, default = "info".to_strin
 
 /// Text button styled as a link.
 #[component]
-pub fn LinkButton(#[props(into)] label: String, onclick: EventHandler<MouseEvent>, #[props(into)] title: Option<String>) -> Element {
+pub fn LinkButton(#[props(into)] label: String, onclick: EventHandler<MouseEvent>, #[props(default)] disabled: bool, #[props(into)] title: Option<String>) -> Element {
     rsx! {
-        button { r#type: "button", class: "ax-link-btn", title, onclick: move |e| onclick.call(e), "{label}" }
+        button { r#type: "button", class: "ax-link-btn", disabled, title, onclick: move |e| onclick.call(e), "{label}" }
     }
 }
 

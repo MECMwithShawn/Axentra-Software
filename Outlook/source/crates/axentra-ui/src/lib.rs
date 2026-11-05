@@ -27,6 +27,7 @@ pub const CSS: &str = concat!(
     include_str!("../styles/kit.css"),
     include_str!("../styles/shell.css"),
     include_str!("../styles/mail.css"),
+    include_str!("../styles/packages.css"),
     include_str!("../styles/compose.css"),
     include_str!("../styles/calendar.css"),
     include_str!("../styles/people.css"),

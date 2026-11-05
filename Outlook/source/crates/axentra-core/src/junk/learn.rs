@@ -49,6 +49,11 @@ fn words(s: &str, prefix: &str, out: &mut Vec<String>) {
     }
 }
 
+/// The text of a body as the learner and the junk filter read it.
+pub fn visible_text(body: &MessageBody) -> String {
+    body_text(Some(body))
+}
+
 /// Text the learner reads from a message: the plain-text body when there is
 /// one, else the HTML with tags stripped (scanned as text, never rendered).
 fn body_text(body: Option<&MessageBody>) -> String {

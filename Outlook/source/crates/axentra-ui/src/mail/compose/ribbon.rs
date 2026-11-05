@@ -162,7 +162,10 @@ fn message_tab(st: &RibbonState) -> Vec<Vec<Command>> {
         vec![bullets_cmd(st), numbering_cmd(st)],
         vec![attach_cmd(st), link_cmd(st), signature_cmd(st)],
         importance_cmds(st),
-        vec![Command::new("compose.discard", "Discard", "delete").tooltip("Discard")],
+        vec![
+            Command::new("compose.save", "Save draft", "save").tooltip("Save draft (Ctrl+S)"),
+            Command::new("compose.discard", "Discard", "delete").tooltip("Discard"),
+        ],
     ]
 }
 

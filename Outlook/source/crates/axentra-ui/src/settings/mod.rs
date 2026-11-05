@@ -15,6 +15,7 @@ mod people;
 use dioxus::prelude::*;
 
 pub use controls::{SettingsCtx, use_settings};
+pub use mail::run_auto_archive;
 pub use pages::{Category, PageId};
 
 use crate::kit::{Button, ConfirmDialog, Dialog, Icon, IconButton, MessageBar, SearchField, Variant, dom};
@@ -329,6 +330,9 @@ fn PageBody(page: PageId) -> Element {
         MessageHandling => rsx! { mail::MessageHandlingPage {} },
         Junk => rsx! { mail::JunkPage {} },
         Sweep => rsx! { mail::SweepPage {} },
+        AutoArchive => rsx! { mail::AutoArchivePage {} },
+        Packages => rsx! { mail::PackagesPage {} },
+        Topics => rsx! { mail::TopicsPage {} },
         Rules | QuickSteps | CustomizeActions | Forwarding | ConditionalFormatting | SearchFolders | Smime | RetentionPolicies | Groups => {
             rsx! { mail::ModulePage { page } }
         }
@@ -362,5 +366,9 @@ mod tests {
         assert!(s.show_key_tips && s.notify_mail && s.offline_enabled);
         assert_eq!(s.high_contrast, None);
         assert!(s.unpinned_apps.is_empty());
+        // Packages and topics are on, with no topics hidden.
+        assert!(s.order_tracking && s.order_banner && s.topics_view);
+        assert_eq!(s.orders_keep_days(), 30);
+        assert!(s.topics_hidden.is_empty());
     }
 }

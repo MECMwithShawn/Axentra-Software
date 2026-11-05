@@ -2,6 +2,83 @@
 
 Earlier versions: see `Outlook/CHANGELOG.md` in the Axentra-Software repository.
 
+## 0.1.7 (pre-release, 2026-11-05)
+
+- **Save draft is easy to find.** A new message now has Save draft next to Discard (and in the Message tab), and "Discard this draft?" offers Save draft too.
+- **Minimize a message.** The — button shrinks a message you're writing to a small bar at the bottom right, so you can read other mail; click the bar to carry on.
+- **Attached pictures preview as pictures.** Some screenshots were labelled as text by the file picker, so Preview showed their raw bytes. The app now checks what a file really is, both for the preview and when it is sent.
+- **Arrange your folders.** Drag a folder to the top or bottom edge of another to put it there (Inbox and Drafts too), or use Move up / Move down in its menu. Drag any folder onto Favorites, and drag favourites to reorder them. The order stays on this computer; Reset folder order in the account's menu puts it back. A folder dragged over another's subfolders lands just after that folder, and the blue line shows where.
+- **Hide folders you don't use.** Hide from folder list in a folder's menu takes it (and its subfolders) out of the list. A hidden folder comes back while it has unread mail and hides again once it's read; Keep in folder list (in its menu then) or Show hidden folders (in the account's menu) un-hides it.
+- **Smarter search.** A word finds its other forms ("deliveries" finds "delivered", "invoices" finds "invoice"); a word that's in none of your mail is read as the likely typo ("invioce"); and plain phrases work as filters: "from priya", "sent to sam", "with attachments", "unread", "today", "last week", "in march", "since monday". If the phrase reading finds nothing, the words are searched as typed. Put a word in quotes to search it exactly. It all runs on this computer.
+- **Search by meaning.** Search also finds mail about what you typed when it uses other words: "bill I need to pay" finds your invoices, "parcel delivery" finds shipping notices. A small search model (bge-small, about 65 MB) comes with the app and reads each message once in the background, newest first, on low-priority threads; nothing is sent anywhere. Filters such as from: and dates still apply, and quoted words stay exact. Turn it off in Settings › Search.
+- **Junk filter.** New mail that's clearly junk now goes to Junk Email by itself: mail from senders you've never dealt with that has phishing signs, or is an attachment lure: a subject of only codes and numbers, marked urgent, with a document and next to no text. Real mail with only some of that (a reply about "PO 4500123987", photos from family, a signed contract marked urgent) stays. Your contacts, people you've written to and senders you marked Not junk are never moved. The message says why it was moved, with "It's not junk" to bring it back. Turn it off in Settings › Mail › Junk email.
+- **Local AI review (pilot).** Off by default. Turn it on in Settings › Mail › Junk email, with Ollama and the models qwen3:4b and deepseek-r1:14b installed, and two AI models on this computer read new mail from senders you've never dealt with. If they agree, the message shows "looks like phishing" or "probably bulk mail". Nothing moves because of it, and nothing leaves this computer. Settings shows how the suggestions compare with what you report.
+- **Fewer false look-alike warnings.** Mail from mail.com, email.com and ymail.com, and from domains with an ordinary word in them ("cloud-kitchen", "apply-statecollege"), was flagged as posing as Gmail, iCloud or Apple.
+- **Auto-archive can sort by topic.** Turn on "Sort into topic folders" in Settings › Mail › Auto-archive. Mail older than your chosen age (30 days by default) then goes into a folder for its topic inside Archive: People, Orders & shipping, Receipts & bills, Finance, Travel and so on. Each folder is made the first time it's needed, here and on the server. Mail that fits no topic stays in Archive itself, and Undo puts it all back. Archiving now runs in the background, so a big first run doesn't freeze the window.
+- **Save and copy pictures in a message.** Right-click a picture for Save picture as… (it asks where) and Copy picture. The built-in Save Image As and Copy Image items did nothing you could see.
+- **Folders take you back to your mail.** With the reading pane hidden, clicking the folder you're in now closes an open message and shows the list. Clicking any folder or view also closes a message you're writing, saving it to Drafts, instead of leaving it filling the window.
+- **Close a message you're writing.** The inline form now has a Close button next to Save draft. It saves the draft and closes the form, as Esc does; before, you had to pop it out to find an X.
+- **Spam & AI on the ribbon.** Home now has a Spam & AI button: turn the junk filter, junk suggestions and Local AI review on or off from there, see how many messages the review has checked and what it found, or jump to Settings › Mail › Junk email.
+- **Junk email settings save right away.** The junk filter, junk suggestions and Local AI review checkboxes were waiting on a Save button that page doesn't have, so a change was lost and leaving the page asked to discard it. Like everything else on that page, they now apply as soon as you click them.
+- **Packages shows its progress.** While it reads your mail for orders, a bar shows how far it has got ("10,248 of 30,000"); when it finishes, the page says "Up to date".
+- **Packages keeps up with carrier emails.** UPS "Scheduled for Delivery" emails now count on Microsoft accounts, a package shows the shop that shipped it instead of "UPS", and a new delivery date clears "Delayed". A date change alone no longer counts as a delay.
+- **Dragging folders works again in a large mailbox.** Rearranging folders by drag did nothing: no label followed the pointer. Three things kept the window busy. Each refresh of the message list looked up which messages you've replied to by reading every message once for each one in the list (seconds per refresh). The folder pane counted all your mail again for every folder row while something was dragged. And the background junk checks and topic sorting refreshed the window after every 250 messages, so a new version re-checking the whole mailbox kept it busy for a long time. The reply lookup now uses its index, the folder rows share one count, and the background passes refresh the window at most every few seconds. On a 40,000-message test mailbox the window stays responsive and the re-check takes about 4 minutes instead of about an hour.
+- **Links in emails open.** Clicking a link in a message did nothing; it now opens in your default browser (the one set in Settings › Default Apps), brought to the front.
+- **Pictures inside emails show.** Pictures placed in the text of a message (as an iPhone or Outlook sends them) showed as a broken-image box; they now show in place.
+
+- **Packages:** Mail › Views › Packages shows your orders and deliveries,
+  found in order confirmations and shipping emails: where each one is
+  (ordered, on the way, out for delivery, delivered, delayed), when it should
+  arrive, its tracking numbers and the emails it came from. Track opens the
+  carrier's own tracking page, only when you click it. An order email shows
+  its order's status at the top. Delivery emails that look like scams (a fee
+  to redeliver a parcel, a fake carrier) are left out and get a warning.
+- **Topics:** Mail › Views › Topics lists your mail by what it's about
+  (people, orders, receipts and bills, finance, travel, events, social,
+  alerts, newsletters) across your folders, without moving anything. Change
+  topic on a message teaches it where mail from that sender belongs; your
+  corrections are kept in backups.
+- **Both stay on this computer:** they're worked out from mail you've already
+  downloaded, nothing is sent anywhere and your mail isn't changed. Each can
+  be turned off in Settings › Mail › Packages or Topics, which removes what
+  was found (your corrections stay). Details in `docs/ORDERS_AND_TOPICS.md`.
+
+## 0.1.6 (not released on its own; included in 0.1.7)
+
+- **Two more scam warnings:** mail that uses your own name from an address
+  that isn't yours, and fake invoices that say a well-known company (Geek
+  Squad, Norton, PayPal, Amazon and others) charged you and ask you to call a
+  number, now get the red phishing warning. Real mail from those companies
+  doesn't.
+- **Start a message from other programs:** `axentra-outlook --compose` with
+  `--to`, `--cc`, `--bcc`, `--subject`, `--body` or `--body-file` and `--attach`
+  (repeatable) opens a new message, filled in, for you to review and send
+  yourself. Nothing is ever sent automatically. If Outlook is already open, the
+  message opens in that window. Run `axentra-outlook --help` for details.
+- **Send from the command line:** `axentra-outlook --compose --send …` sends a
+  fully specified message without opening it (for scripts and assistants you
+  have approved the message with). It refuses incomplete messages (no
+  recipient, subject or body, or a missing attachment) and never works from a
+  `mailto:` link. It starts the app in the background if needed, waits for
+  the message to reach Sent Items, prints one line, and exits 0 if sent and
+  1 if not (the message stays in Drafts). Sends are logged in
+  `<profile>.sends.log`. Plain `--compose` still only opens a draft.
+- **Default mail app:** Axentra Outlook can now handle `mailto:` links (choose it
+  under Settings › Default Applications › Mail). Links fill in recipients,
+  subject and body. They never attach files.
+- **Large attachments on Microsoft accounts:** messages over about 3.5 MB used
+  to fail with "This message is too large to send". They now go through
+  Microsoft's upload session, up to the 25 MB limit.
+- **Auto-archive:** Settings › Mail › Auto-archive moves Inbox mail older than
+  30 days (or 7 days to 1 year) to each account's Archive folder, here and on
+  the server. Turned on, it archives what is already old (with Undo), then runs
+  once a day. It shows how many messages would move first. Pinned, flagged,
+  snoozed and unread messages stay (unread optional), and so does any
+  conversation with a message newer than the cutoff. Archive now runs it by
+  hand.
+- **Fixed:** opening a different draft while one was open in the reading pane
+  kept showing the first one.
+
 ## 0.1.5 (pre-release, 2026-10-28)
 
 - **Glass:** Settings › General › Window › Glass (0–60%) lets your desktop show

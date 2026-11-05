@@ -54,8 +54,12 @@ pub fn ComposePane(request: ComposeRequest) -> Element {
     }
     let serial = session.peek().0;
     use_effect(move || send_queue::ensure_background(app));
+    // A keyed list of one: a key on a lone child does not remount it, and
+    // a new session needs a new form (its draft loads once, on mount).
     rsx! {
-        ComposeForm { key: "{serial}", request, saved_id }
+        for serial in std::iter::once(serial) {
+            ComposeForm { key: "{serial}", request: request.clone(), saved_id }
+        }
     }
 }
 
@@ -324,10 +328,31 @@ fn PopoutWindow(focus_body: bool) -> Element {
     let surface = use_surface(&id, Some(SurfaceSpec::new("compose-popout", 900, Some(700)).min(Some(520), Some(400)).movable()));
     let subject = form.draft.read().subject.clone();
     let title = if subject.trim().is_empty() { "(No subject)".to_string() } else { subject };
+    let minimized = app.compose.read().as_ref().is_some_and(|c| c.minimized);
     rsx! {
+        if minimized {
+            div { class: "ax-compose-minibar", role: "group", "aria-label": "Minimized message",
+                button {
+                    r#type: "button",
+                    class: "ax-compose-minibar-open",
+                    title: "Open the message again",
+                    onclick: move |_| { form.spawn(actions::set_minimized(app, form, false)); },
+                    Icon { name: "mail", size: 16 }
+                    span { class: "ax-ellipsis", "{title}" }
+                }
+                IconButton {
+                    icon: "dismiss",
+                    title: "Close (draft is saved)",
+                    onclick: move |_| { form.spawn(actions::close(app, form)); },
+                }
+            }
+        }
+        // Hidden, not removed, while minimized: the editor keeps everything.
         div {
             id: "{id}",
             class: "ax-compose-window ax-surface ax-surface-float",
+            class: if minimized { "ax-compose-window-min" },
+            "aria-hidden": if minimized { "true" },
             role: "main",
             "aria-label": "New message",
             style: surface.style(),
@@ -335,6 +360,11 @@ fn PopoutWindow(focus_body: bool) -> Element {
             div { class: "ax-compose-titlebar", "data-ax-surface-move": "true",
                 Icon { name: "mail", size: 16 }
                 span { class: "ax-compose-titlebar-text ax-ellipsis", "{title}" }
+                IconButton {
+                    icon: "subtract",
+                    title: "Minimize",
+                    onclick: move |_| { form.spawn(actions::set_minimized(app, form, true)); },
+                }
                 IconButton {
                     icon: "arrow_minimize",
                     title: "Move to the reading pane",
@@ -373,6 +403,11 @@ fn FormBody(popout: bool, focus_body: bool) -> Element {
     let inline_reply = kind != ComposeKind::New && !popout;
     let popout_btn = (!popout).then(|| {
         rsx! {
+            IconButton {
+                icon: "subtract",
+                title: "Minimize",
+                onclick: move |_| { form.spawn(actions::set_minimized(app, form, true)); },
+            }
             IconButton {
                 icon: "open",
                 title: "Open in new window",

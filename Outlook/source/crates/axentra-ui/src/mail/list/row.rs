@@ -320,7 +320,7 @@ fn open_context_menu(ctx: super::super::ctx::MailCtx, model: &super::super::mode
     let settings = app.settings.peek().clone();
     let role = if model.searching { None } else { model.folder.as_ref().map(|f| f.role) };
     let folder = model.folder.as_ref().map(|f| f.id);
-    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox_shown(), settings.use_24h_time);
+    let t = Target::for_ids(&ids, role, folder, settings.focused_inbox_shown(), settings.use_24h_time).with_topic_scope(*ctx.topic_scope.peek());
     let items = menus::message_menu(&t, folder);
     ctx.menu.set(Some(ContextMenu { x, y, items, target: MenuTarget::Messages(ids) }));
 }

@@ -2,3 +2,35 @@
 //! `crates/axentra-ui/icons/*.svg`. Drop a new SVG there to add an icon.
 
 include!(concat!(env!("OUT_DIR"), "/icons.rs"));
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axentra_core::orders::OrderStatus;
+    use axentra_core::topics::Topic;
+
+    #[test]
+    fn packages_and_topics_icons_exist() {
+        let statuses = [
+            OrderStatus::Ordered,
+            OrderStatus::Shipped,
+            OrderStatus::InTransit,
+            OrderStatus::OutForDelivery,
+            OrderStatus::ReadyForPickup,
+            OrderStatus::Delivered,
+            OrderStatus::Delayed,
+            OrderStatus::Exception,
+            OrderStatus::Cancelled,
+            OrderStatus::Refunded,
+            OrderStatus::Returned,
+        ];
+        let names = Topic::ALL.iter().map(|t| t.icon()).chain(statuses.iter().map(|s| s.icon())).chain(["box", "open", "copy", "grid_dots"]);
+        for name in names {
+            assert!(ICON_NAMES.contains(&name), "missing icon {name}");
+        }
+        for name in ["box", "vehicle_truck", "receipt", "airplane", "wallet"] {
+            let svg = icon_svg(name).unwrap();
+            assert!(svg.contains("viewBox=\"0 0 20 20\"") && svg.contains("fill=\"currentColor\""), "{name}");
+        }
+    }
+}

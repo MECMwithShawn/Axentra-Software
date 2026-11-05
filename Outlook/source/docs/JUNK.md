@@ -9,10 +9,67 @@ built in this order (stages A, B, C):
 3. **A model learned from your reports**: it suggests "looks like junk", and is
    used only after it passes fixed checks.
 
-Only your own actions move mail. A block rule moves matching new mail to Junk
-Email; your Report and Not junk clicks move what you clicked. Warning signs and
-the model only **advise**: a banner in the reading pane and a marker in the
-message list.
+Your own actions move mail, and so does the **junk filter** (below), which you
+can turn off. A block rule moves matching new mail to Junk Email; your Report
+and Not junk clicks move what you clicked. Otherwise warning signs and the model
+only **advise**: a banner in the reading pane and a marker in the message list.
+
+## Local AI review, a pilot (`junk::shadow`, `axentra_sync::ollama`)
+
+Off by default (Settings › Mail › Junk email › Local AI review). It's in place
+to learn how two local language models do on real mail. Nothing moves because
+of it, and the junk filter stays in charge.
+
+- **Policy 1.0, frozen.** The filter goes first. Mail from anyone you've dealt
+  with gets no review. `qwen3:4b` reads the rest, and `deepseek-r1:14b` reads only
+  what it flags. Both say phishing: "looks like phishing". Both say unwanted:
+  "probably bulk mail". Otherwise, or on an unreadable reply, nothing.
+- **Scope.** New Inbox mail that arrived after you turned it on, once each, one
+  message at a time. Older mail is never read.
+- **Local.** Ollama on a loopback address only. The client refuses any other
+  host. Mail goes in as untrusted data, and only one of four fixed labels
+  comes back. Prompts aren't stored, and no reasoning text is kept.
+- **The log.** `junk_shadow` keeps each message's verdicts, recommendation and
+  timings. Rows go with their message, with Clear results, and with Forget all
+  reports. It isn't in backups.
+- **Your corrections.** A model's verdict is never a label. When you use Report
+  or Not junk, that's the usual confirmed label, and Settings compares it with the
+  review: agreed, marked not junk, or junk the review missed.
+- **What it was tested on.** Policy 1.0 was fixed before its test on two
+  assistant-written sets of 60 messages these models hadn't seen: 0 of 50 wanted
+  messages got a recommendation. With the filter, on `fresh-validation`, mail
+  surfaced rose from 14 to 17 of 35 with "looks like phishing", and to 25 of 35
+  with both labels. On the 358-email benchmark, 1 of 223 wanted messages got
+  "looks like phishing" and 7 got "probably bulk mail". That mail is old and the
+  set is reused, so treat real mail as the open question.
+- **Limits.** Attachment lures with next to no text mostly pass both models: that
+  needs its own check. The second model takes about 10 seconds a message. Don't
+  tune the policy on these sets: a changed policy needs a test on new mail.
+
+## The junk filter (`junk::filter`, `Store::filter_junk`)
+
+On by default (Settings › Mail › Junk email › Filter junk). After the background
+pass checks a message, the filter weighs new Inbox mail once and moves what is
+clearly junk to Junk Email (a local move, pushed to the server like any other).
+
+- **Only strangers.** Mail from a contact, an address you wrote to (the recent
+  recipients, or a To address in Sent Items), a never-block rule, or a sender
+  you marked Not junk is never moved.
+- **Only new mail.** Mail that arrived since the filter started, with a day of
+  slack; the very first start reaches back two days. Turning it back on
+  restarts it from then.
+- **Once.** Each message is weighed once (`junk_filtered`), so mail you move
+  back stays. Not junk also labels it, which makes the sender known.
+- **Signs.** Any Danger warning sign moves on its own, and so does a learned
+  model's junk score. The look of a message counts only with a Caution sign,
+  or all together as the attachment lure ("SCW07598 26833.26833.865"): a
+  subject of only codes and numbers, marked urgent, and a document (not a
+  photo, recording or invitation) with under 80 letters of text. Real mail
+  from someone new often has some of that look: a reply about "PO
+  4500123987", photos from family, a signed contract marked urgent.
+- The reading pane says why it moved a message, with "It's not junk".
+- How it compares with other candidates (sentence model, a local LLM):
+  [`docs/junk/BENCH.md`](junk/BENCH.md).
 
 Two other choices you made earlier also act on synced mail as it arrives, and
 are pushed to the server like any local change: an ignored conversation sends
@@ -152,17 +209,23 @@ Signs, with their severity:
 | Link text shows one site, link goes to another | Danger |
 | `javascript:` / `data:` / `vbscript:` / `file:` link | Danger |
 | User name before `@` in a link (`https://bank@evil/`) | Danger |
-| Look-alike domain (of a familiar domain or a common brand; also hyphen parts like `netfl1x-support`) | Danger |
+| Look-alike domain (of a familiar domain or a common brand; also hyphen parts like `netfl1x-support`, where an ordinary word one letter off, like `cloud-…` for iCloud, doesn't count; mail.com, email.com and ymail.com are real) | Danger |
 | Brand impersonation (brand in the display name, and the brand or a look-alike in a domain that isn't theirs) | Danger |
 | Display name is a different address (on another domain) | Danger |
 | Display name is one of your contacts, the address isn't theirs | Danger |
+| Display name is your own name (an account's name), the address isn't one of your accounts | Danger |
+| Says a commonly faked company (Geek Squad, Best Buy, Norton, McAfee, PayPal, Amazon, …) charged or renews something, asks you to call, and gives a phone number, but doesn't come from that company's domain | Danger |
 | Runnable attachment (`.exe`, `.js`, `.docm`, `.iso`, …) or double extension (`.pdf.exe`) | Danger |
 | Asks for a password, code, recovery phrase, card / bank details or gift-card codes **and** presses for time | Danger |
 | Receiving server reports DMARC fail | Danger |
 | Bare IP link, punycode / non-ASCII domain, brand in a domain, a familiar name in someone else's domain, Reply-To elsewhere, HTML attachment, mistyped attachment, SPF / DKIM fail, asks for secrets (no time pressure) | Caution |
 | Archive attachment (contents not checked) | Info: no banner on its own |
 
-"Asks for secrets" is English only. Sentences that reassure ("we'll never ask
+"Asks for secrets" and the "call about a charge" check are English only. A phone
+number counts when it starts with `+` or is written in three or more groups
+(`1-888-555-0182`, `(808) 555-0182`), so invoice and order numbers don't. Mail
+you send from an address that isn't one of your accounts, under your own name,
+gets the own-name warning. Sentences that reassure ("we'll never ask
 for your password") don't count.
 
 **Sender checks.** Only the physically top `Authentication-Results` header is
@@ -271,7 +334,14 @@ fixes with analysis version 3: every count, threshold and model digest is the
 same as the first run's (version 1), and the regenerated `gate_fixtures.bin` is
 byte-identical to the shipped one. (Version 2 reworded the contact-name sign;
 version 3 adds the input caps and the stricter sender-check trust, which the
-evaluation doesn't exercise: it believes no authentication header.) To reproduce:
+evaluation doesn't exercise: it believes no authentication header.)
+
+Rerun on 28 October with analysis version 4 (the own-name and "call about a
+charge" signs): no wanted message in any set gets a new banner, the phishing
+counts are unchanged, and one more benchmark unwanted message is flagged (15 →
+16 of 135). The SpamAssassin bootstrap still fails. The new sign changes the
+features of a few check examples, so `gate_fixtures.bin` and the report were
+regenerated with it. To reproduce:
 
 ```
 python3 -I tools/junk/prepare.py <dir with the three SpamAssassin archives> <benchmark evaluation.jsonl> pool.jsonl
@@ -311,11 +381,11 @@ cargo run --release -p axentra-sync --example junk_train -- pool.jsonl <benchmar
 | Pipeline, set | Wanted mail with any banner | of which by the model | Unwanted flagged (red banner or suggestion) | Phishing with a phishing warning | Phishing with nothing at all |
 | --- | --- | --- | --- | --- | --- |
 | Rules + warning signs only, fresh validation | 1 / 25 (one yellow) | – | 14 / 35 | 14 / 20 | 2 / 20 |
-| Rules + warning signs only, benchmark | 7 / 223 (2 red, 5 yellow) | – | 15 / 135 | 10 / 23 | 9 / 23 |
+| Rules + warning signs only, benchmark | 7 / 223 (2 red, 5 yellow) | – | 16 / 135 | 10 / 23 | 9 / 23 |
 | SpamAssassin model, fresh validation | 10 / 25 | 9 | 31 / 35 | 14 / 20 | 0 / 20 |
 | SpamAssassin model, benchmark | 19 / 223 | 13 | 107 / 135 | 10 / 23 | 5 / 23 |
 | First personal model (simulated), fresh validation | 1 / 25 | 0 | 14 / 35 | 14 / 20 | 2 / 20 |
-| First personal model (simulated), benchmark | 7 / 223 | 0 | 15 / 135 | 10 / 23 | 9 / 23 |
+| First personal model (simulated), benchmark | 7 / 223 | 0 | 16 / 135 | 10 / 23 | 9 / 23 |
 
 The phishing columns don't sum to the total: the rest got a yellow "be careful"
 banner or only a junk suggestion. Neither counts as a phishing warning.
@@ -371,11 +441,13 @@ largely because those scores sat right at the edge.
 
 ## Not done / limits
 
-- **No Qwen or other language-model adviser**: deferred. No LLM fine-tuning and
-  no model packaging beyond the fixtures.
+- **Language models are a pilot only** (Local AI review, above). No LLM
+  fine-tuning, and the models aren't packaged: Ollama and both models are your own install.
 - **No sender checks for Outlook.com (Graph) mail**: it delivers no headers.
 - **Warning signs**:
-  - "Asks for secrets" is English only.
+  - "Asks for secrets" and "call about a charge" are English only, and the
+    second misses numbers written as one block of digits or text hidden in an
+    image or PDF.
   - Archives are never opened.
   - Brand lists are short and fixed.
   - Domain comparison uses an approximate registrable-domain rule, not the

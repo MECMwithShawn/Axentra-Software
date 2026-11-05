@@ -612,6 +612,32 @@ pub fn forward_as_attachment(app: AppState, source: axentra_core::MessageId) {
 /// mounted afresh there and opens the request's draft, so unsaved work is
 /// saved first (the request then points at it), not only when the old form
 /// goes away.
+/// Minimize: the form moves to its own window, shrunk to a bar at the
+/// bottom, so other mail can be read; the bar brings it back. The work is
+/// saved first.
+pub async fn set_minimized(app: AppState, form: Form, minimized: bool) {
+    let mut compose = app.compose;
+    if minimized {
+        refresh_body(form).await;
+        super::recipients::commit_typed(form);
+        if form.is_dirty() && (form.draft.peek().id.is_some() || has_content(form)) {
+            save_now(app, form);
+        }
+        let popped = compose.peek().as_ref().is_some_and(|c| c.popout);
+        if let Some(r) = compose.write().as_mut() {
+            r.minimized = true;
+        }
+        if !popped {
+            set_popout(app, form, true).await;
+        }
+        if let Some(ctx) = try_consume_context::<crate::mail::ctx::MailCtx>() {
+            ctx.request_list_focus();
+        }
+    } else if let Some(r) = compose.write().as_mut() {
+        r.minimized = false;
+    }
+}
+
 pub async fn set_popout(app: AppState, form: Form, popout: bool) {
     refresh_body(form).await;
     // Keys still arriving after this are held and typed into the same field
@@ -642,6 +668,9 @@ pub async fn set_popout(app: AppState, form: Form, popout: bool) {
     let mut compose = app.compose;
     if let Some(r) = compose.write().as_mut() {
         r.popout = popout;
+        if !popout {
+            r.minimized = false;
+        }
     }
 }
 

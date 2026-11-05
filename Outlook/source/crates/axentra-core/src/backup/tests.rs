@@ -945,3 +945,68 @@ fn junk_reports_and_learned_models_stay_out_of_backups() {
     assert!(!json.contains(&fp), "a report's fingerprint is in the backup");
     assert!(!json.contains("junk.label_revision") && !json.contains("junk.active_model"));
 }
+
+#[test]
+fn topic_corrections_and_order_changes_round_trip_without_derived_data() {
+    use crate::store::{OrderStateChange, TopicTarget};
+    use crate::topics::Topic;
+    let src = demo();
+    let acct = primary(&src);
+    let msg = src.account_messages(acct).unwrap()[0].id;
+    src.set_topic(Some(acct), TopicTarget::Sender("a@shop.example".into()), Some(Topic::Receipts)).unwrap();
+    src.set_topic(None, TopicTarget::Domain("travel.example".into()), Some(Topic::Travel)).unwrap();
+    src.set_topic(None, TopicTarget::Message(msg), Some(Topic::Finance)).unwrap();
+    src.set_order_state(&format!("{acct}:o:shop.example:A-1001"), OrderStateChange::Hide(true)).unwrap();
+    src.ignore_order_sender("deals.example").unwrap();
+    crate::store::test_util::settle(&src);
+    let payload = collect::collect(&src, now()).unwrap();
+    assert_eq!(payload.topic_sender_rules.len(), 2, "per-message corrections stay behind (ids change)");
+    assert_eq!(payload.order_user_state.len(), 1);
+    assert_eq!(payload.order_sender_ignores.len(), 1);
+    let json = serde_json::to_string(&payload).unwrap();
+    for derived in ["topic_assignments", "order_extractions", "topics.context_rev", "orders.schema", "\"version\":\"t", "\"version\":\"o"] {
+        assert!(!json.contains(derived), "{derived} is in the backup");
+    }
+    let payload: Payload = serde_json::from_str(&json).unwrap();
+
+    // Into a store where the account gets another id.
+    let dst = Store::open_in_memory().unwrap();
+    let mut other = Account { kind: AccountKind::Local, email: "someone@else.example".into(), ..Default::default() };
+    dst.add_account(&mut other).unwrap();
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    let mapped = dst.accounts().unwrap().into_iter().find(|a| a.email == src.account(acct).unwrap().unwrap().email).unwrap().id;
+    assert_ne!(mapped, acct);
+    let rules: Vec<(i64, String, Topic)> = dst.topic_rules().unwrap().into_iter().map(|r| (r.rule.account_key, r.rule.pattern, r.rule.topic)).collect();
+    assert_eq!(rules, [(0, "travel.example".to_string(), Topic::Travel), (mapped, "a@shop.example".to_string(), Topic::Receipts)]);
+    let state: (String, bool) = dst.conn().query_row("SELECT key, hidden FROM order_user_state", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+    assert_eq!(state, (format!("{mapped}:o:shop.example:A-1001"), true));
+    assert_eq!(dst.order_sender_ignores().unwrap().iter().map(|i| i.pattern.as_str()).collect::<Vec<_>>(), ["deals.example"]);
+    let overrides: i64 = dst.conn().query_row("SELECT COUNT(*) FROM topic_message_overrides", [], |r| r.get(0)).unwrap();
+    assert_eq!(overrides, 0);
+    // Restoring again adds nothing.
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    assert_eq!(dst.topic_rules().unwrap().len(), 2);
+}
+
+#[test]
+fn settings_restored_with_a_feature_off_clear_its_derived_data() {
+    let src = demo();
+    let mut st = src.settings();
+    st.order_tracking = false;
+    st.topics_view = false;
+    src.save_settings(&st).unwrap();
+    let payload = collect::collect(&src, now()).unwrap();
+
+    let dst = demo();
+    crate::store::test_util::settle(&dst);
+    let rows = |sql: &str| dst.conn().query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap();
+    assert!(rows("SELECT COUNT(*) FROM orders") > 0 && rows("SELECT COUNT(*) FROM topic_assignments") > 0);
+    // Without the settings, nothing changes.
+    restore(&dst, &payload, RestoreOptions::default(), now()).unwrap();
+    assert!(rows("SELECT COUNT(*) FROM orders") > 0 && rows("SELECT COUNT(*) FROM topic_assignments") > 0);
+    restore(&dst, &payload, RestoreOptions { settings: true }, now()).unwrap();
+    assert!(!dst.settings().order_tracking && !dst.settings().topics_view);
+    for table in ["order_extractions", "order_keys", "orders", "order_messages", "order_group_keys", "orders_dirty", "topic_assignments", "topic_dirty_senders"] {
+        assert_eq!(rows(&format!("SELECT COUNT(*) FROM {table}")), 0, "{table}");
+    }
+}

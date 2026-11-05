@@ -4,7 +4,7 @@ members = ["crates/*"]
 default-members = ["crates/axentra-desktop"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.7"
 edition = "2024"
 rust-version = "1.90"
 publish = false
@@ -13,6 +13,7 @@ publish = false
 axentra-core = { path = "crates/axentra-core" }
 axentra-sync = { path = "crates/axentra-sync" }
 axentra-ui = { path = "crates/axentra-ui" }
+axentra-embed = { path = "crates/axentra-embed" }
 
 dioxus = { version = "=0.7.10", default-features = false }
 dioxus-liveview = { version = "=0.7.10", features = ["axum"] }

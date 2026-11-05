@@ -238,9 +238,102 @@ p{{margin:0 0 12px}}pre{{white-space:pre-wrap}}\
     BodyDoc { srcdoc, height, blocked, has_history: history_html.is_some() && !show_history }
 }
 
+/// Largest picture inside a message that is shown in place.
+const MAX_INLINE_PICTURE: usize = 15 * 1024 * 1024;
+
+/// A picture inside a message, as `(content id, data: URL)`.
+pub type InlinePicture = (String, String);
+
+/// The data: URL for an inline attachment, when it really is a picture
+/// (by its bytes, not only its label).
+pub fn picture_url(name: &str, content_type: &str, data: &[u8]) -> Option<String> {
+    if data.len() > MAX_INLINE_PICTURE {
+        return None;
+    }
+    let kind = axentra_core::text::attachment_content_type(name, content_type, data);
+    kind.starts_with("image/").then(|| format!("data:{kind};base64,{}", super::attachments::base64(data)))
+}
+
+/// Put the message's own pictures (`cid:` links, as phones and Outlook
+/// send them inside the text) into the frame document as data: URLs: the
+/// sandboxed frame can't load cid: links, so they showed as broken images.
+pub fn with_pictures(mut doc: BodyDoc, pictures: &[InlinePicture]) -> BodyDoc {
+    for (cid, url) in pictures {
+        for scheme in ["cid:", "CID:", "Cid:"] {
+            let needle = format!("{scheme}{cid}");
+            if doc.srcdoc.contains(&needle) {
+                doc.srcdoc = doc.srcdoc.replace(&needle, url);
+            }
+        }
+    }
+    doc
+}
+
+thread_local! {
+    /// The last few messages' pictures: the reading pane renders often,
+    /// and reading and encoding a photo each time would be slow.
+    static PICTURES: std::cell::RefCell<Vec<(axentra_core::MessageId, std::rc::Rc<Vec<InlinePicture>>)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The pictures inside `body` (its inline attachments with a content id
+/// and stored bytes), read once per message.
+pub fn inline_pictures(body: &MessageBody) -> std::rc::Rc<Vec<InlinePicture>> {
+    let id = body.message_id;
+    if let Some(hit) = PICTURES.with(|c| c.borrow().iter().find(|(m, _)| *m == id).map(|(_, p)| p.clone())) {
+        return hit;
+    }
+    let wanted: Vec<&axentra_core::Attachment> = body.attachments.iter().filter(|a| a.content_id.as_deref().is_some_and(|c| !c.is_empty())).collect();
+    if wanted.is_empty() {
+        return std::rc::Rc::new(Vec::new());
+    }
+    let s = crate::state::store();
+    let mut pics = Vec::new();
+    let mut missing = false;
+    for a in wanted {
+        let cid = a.content_id.as_deref().unwrap_or_default().trim_matches(['<', '>']).to_string();
+        match s.attachment_data(a.id).ok().flatten() {
+            Some(data) => {
+                if let Some(url) = picture_url(&a.name, &a.content_type, &data) {
+                    pics.push((cid, url));
+                }
+            }
+            None => missing = true,
+        }
+    }
+    let pics = std::rc::Rc::new(pics);
+    // Bytes still on their way are looked for again next time.
+    if !missing {
+        PICTURES.with(|c| {
+            let mut c = c.borrow_mut();
+            c.retain(|(m, _)| *m != id);
+            c.push((id, pics.clone()));
+            if c.len() > 4 {
+                c.remove(0);
+            }
+        });
+    }
+    pics
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pictures_inside_the_message_are_shown() {
+        let body = MessageBody {
+            html: Some(r#"<p>Look</p><img src="cid:IMG_1@phone" alt=""><img src="cid:gone">"#.into()),
+            ..Default::default()
+        };
+        let png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+        let url = picture_url("image0.png", "application/octet-stream", png).unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+        assert_eq!(picture_url("notes.txt", "text/plain", b"hi"), None);
+        let doc = with_pictures(build(&body, false, BodyTheme::Light, 100, false, 600.0), &[("IMG_1@phone".into(), url.clone())]);
+        assert!(doc.srcdoc.contains(&format!("src=\"{url}\"")), "{}", doc.srcdoc);
+        // A picture the message doesn't have stays a cid: link.
+        assert!(doc.srcdoc.contains("cid:gone"));
+    }
 
     /// Writes each corpus file's frame document, dark and light, for the
     /// WebKitGTK contrast check (`<name>.dark.html`, `<name>.light.html`):

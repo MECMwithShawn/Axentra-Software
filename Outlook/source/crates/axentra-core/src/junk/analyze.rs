@@ -11,20 +11,20 @@ use serde::{Deserialize, Serialize};
 
 use super::domain_of;
 use crate::model::{Attachment, Message};
+use crate::scan::{MAX_LINKS, extract_links, floor_char, strip_tags};
+#[cfg(test)]
+use crate::scan::MAX_LINK_TEXT;
 
 /// Bump when what is checked (or how) changes; cached results with another
 /// version are recomputed.
-pub const ANALYSIS_VERSION: u32 = 3;
+pub const ANALYSIS_VERSION: u32 = 4;
 
 const MAX_HTML: usize = 512 * 1024;
 const MAX_TEXT: usize = 64 * 1024;
-const MAX_LINKS: usize = 200;
 const MAX_AUTH_HEADER: usize = 4096;
 const MAX_SUBJECT: usize = 2048;
 const MAX_NAME: usize = 512;
 const MAX_ATTACHMENTS: usize = 100;
-/// Text after an unclosed `<a …>` read as its link text.
-const MAX_LINK_TEXT: usize = 2000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Severity {
@@ -64,6 +64,12 @@ pub enum Finding {
     FamiliarNameInDomain { domain: String, familiar: String },
     /// The display name is one of your contacts, the address isn't theirs.
     ContactNameElsewhere { name: String, actual: String },
+    /// The display name is your own name, the address isn't one of yours.
+    YourNameElsewhere { name: String, actual: String },
+    /// Says a well-known company charged or will charge you and gives a
+    /// phone number to call, but doesn't come from that company (the
+    /// "fake invoice, call to cancel" scam).
+    CallAboutCharge { brand: String },
     /// An HTML file attachment: opens in a browser and can ask for passwords.
     HtmlAttachment { name: String },
     /// The text asks you to send or enter a secret (password, code, recovery
@@ -94,6 +100,8 @@ impl Finding {
             | Finding::DisplayNameAddress { .. }
             | Finding::BrandImpersonation { .. }
             | Finding::ContactNameElsewhere { .. }
+            | Finding::YourNameElsewhere { .. }
+            | Finding::CallAboutCharge { .. }
             | Finding::ExecutableAttachment { .. }
             | Finding::DoubleExtension { .. } => Severity::Danger,
             Finding::AuthFailed { check } if check == "dmarc" => Severity::Danger,
@@ -101,6 +109,25 @@ impl Finding {
             Finding::ArchiveNotChecked { .. } => Severity::Info,
             _ => Severity::Caution,
         }
+    }
+
+    /// The sender poses as someone it isn't: a brand, a look-alike or
+    /// familiar domain, one of your contacts or you, or replies that go
+    /// elsewhere. Order detection and topics never trust such mail as an
+    /// order, a bill or a receipt, even when the check only says Caution.
+    pub fn impersonates(&self) -> bool {
+        matches!(
+            self,
+            Finding::LookalikeDomain { .. }
+                | Finding::BrandInDomain { .. }
+                | Finding::DisplayNameAddress { .. }
+                | Finding::DisplayNameBrand { .. }
+                | Finding::BrandImpersonation { .. }
+                | Finding::FamiliarNameInDomain { .. }
+                | Finding::ContactNameElsewhere { .. }
+                | Finding::YourNameElsewhere { .. }
+                | Finding::ReplyToElsewhere { .. }
+        )
     }
 
     /// One sentence for the reading pane.
@@ -118,6 +145,10 @@ impl Finding {
             Finding::BrandImpersonation { brand, domain } => format!("The sender poses as {brand}, but {domain} doesn't belong to {brand}."),
             Finding::FamiliarNameInDomain { domain, familiar } => format!("{domain} uses the name of {familiar} but isn't it."),
             Finding::ContactNameElsewhere { name, actual } => format!("The sender uses the name of your contact {name}, but writes from {actual}, which isn't their address."),
+            Finding::YourNameElsewhere { name, actual } => format!("The sender uses your own name, {name}, but writes from {actual}, which isn't one of your accounts."),
+            Finding::CallAboutCharge { brand } => format!(
+                "It says {brand} is charging you and asks you to call a phone number, but it doesn't come from {brand}. This is a common scam: don't call the number. If you're unsure, contact {brand} the way you usually do."
+            ),
             Finding::HtmlAttachment { name } => format!("{name} is a web page; it opens in a browser and could ask for your password."),
             Finding::AsksForSecrets { what, urgent } => {
                 if *urgent {
@@ -161,6 +192,21 @@ pub struct Auth {
     pub reporter: Option<String>,
     /// Why there is nothing to report ("not provided", "untrusted reporter").
     pub note: String,
+    /// The signing domains of the DKIM signatures that passed (`header.d`,
+    /// or the domain of `header.i`).
+    #[serde(default)]
+    pub dkim_domains: Vec<String>,
+}
+
+impl Auth {
+    /// The trusted reporter vouches that the mail really is from `domain`
+    /// (the From address's): DMARC passed, or (DMARC not failed) a DKIM
+    /// signature of that domain or one under the same registrable domain did.
+    pub fn vouches_for(&self, domain: &str) -> bool {
+        let domain = registrable(domain);
+        let signed = self.dkim == Check::Pass && self.dkim_domains.iter().any(|d| registrable(d) == domain);
+        !domain.is_empty() && (self.dmarc == Check::Pass || (self.dmarc != Check::Fail && signed))
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,6 +225,11 @@ impl Analysis {
     pub fn severity(&self) -> Option<Severity> {
         self.findings.iter().map(Finding::severity).max()
     }
+
+    /// See [`Finding::impersonates`].
+    pub fn impersonation(&self) -> bool {
+        self.findings.iter().any(Finding::impersonates)
+    }
 }
 
 /// What [`analyze`] looks at.
@@ -196,6 +247,9 @@ pub struct Input<'a> {
     pub trusted_reporters: &'a [String],
     /// Your contacts: (display name, their addresses), names lower-cased.
     pub known_people: &'a [(String, Vec<String>)],
+    /// Your own names (from your accounts) with all your account addresses,
+    /// names lower-cased.
+    pub own_names: &'a [(String, Vec<String>)],
 }
 
 /// Well-known domains phishers imitate (registrable domain, brand name).
@@ -234,6 +288,10 @@ const BRANDS: &[(&str, &str)] = &[
     ("sharepoint.com", "SharePoint"),
     ("zoom.us", "Zoom"),
 ];
+
+/// Real mail providers one letter away from a brand ("mail.com",
+/// "ymail.com" and "gmail.com"): never look-alikes.
+const NEAR_BRANDS: &[&str] = &["mail.com", "email.com", "ymail.com"];
 
 /// Brand names that are also ordinary words ("Dr. Patel's office"): not
 /// treated as a brand in a display name.
@@ -292,6 +350,11 @@ pub fn analyze(input: &Input<'_>) -> Analysis {
         let shown = raw_name.split(['(', '<', '[']).next().unwrap_or("").trim().to_string();
         let bare = shown.to_lowercase();
         if bare.contains(' ')
+            && let Some((_, addrs)) = input.own_names.iter().find(|(n, _)| *n == bare)
+            && !addrs.iter().any(|a| a.eq_ignore_ascii_case(&from))
+        {
+            out.findings.push(Finding::YourNameElsewhere { name: shown, actual: from.clone() });
+        } else if bare.contains(' ')
             && let Some((_, addrs)) = input.known_people.iter().find(|(n, _)| *n == bare)
             && !addrs.iter().any(|a| a.eq_ignore_ascii_case(&from))
         {
@@ -344,6 +407,9 @@ pub fn analyze(input: &Input<'_>) -> Analysis {
     if let Some(f) = asks_for_secrets(&format!("{subject}. {text}")) {
         out.findings.push(f);
     }
+    if let Some(f) = call_about_charge(&format!("{subject}. {text}"), &from_domain) {
+        out.findings.push(f);
+    }
 
     out.auth = auth(m.auth_results.as_deref(), input.trusted_reporters);
     for (check, result) in [("dmarc", out.auth.dmarc), ("spf", out.auth.spf), ("dkim", out.auth.dkim)] {
@@ -371,17 +437,6 @@ pub fn analyze(input: &Input<'_>) -> Analysis {
     out.findings.retain(|f| seen.insert(f.clone()));
     out.findings.sort_by_key(|f| std::cmp::Reverse(f.severity()));
     out
-}
-
-fn floor_char(s: &str, max: usize) -> usize {
-    if s.len() <= max {
-        return s.len();
-    }
-    let mut i = max;
-    while !s.is_char_boundary(i) {
-        i -= 1;
-    }
-    i
 }
 
 fn address_in(name: &str) -> Option<String> {
@@ -450,7 +505,7 @@ fn check_domain(host: &str, familiar: &[String], findings: &mut Vec<Finding>) {
         findings.push(Finding::InternationalDomain { domain: host.clone() });
     }
     let reg = registrable(&host);
-    if familiar.contains(&reg) || BRANDS.iter().any(|(d, _)| *d == reg) {
+    if familiar.contains(&reg) || BRANDS.iter().any(|(d, _)| *d == reg) || NEAR_BRANDS.contains(&reg.as_str()) {
         return;
     }
     let label = brand_label(&reg);
@@ -464,7 +519,13 @@ fn check_domain(host: &str, familiar: &[String], findings: &mut Vec<Finding>) {
             // familiar domains: plenty of companies own several; skip.
             continue;
         }
-        if parts.iter().any(|p| skeleton(p) == skeleton(tl) && *p != tl || tl.len() >= 5 && close(p, tl)) {
+        // A hyphenated part is often an ordinary word one letter from a
+        // brand ("cloud" and iCloud, "apply" and Apple, "phase" and Chase):
+        // there only look-alike letters count, or a longer brand with a
+        // letter added or changed ("paypall-secure").
+        let ordinary = BRANDS.iter().any(|(d, name)| *d == target && ORDINARY_WORDS.contains(name));
+        let near = |p: &str| tl.len() >= 5 && close(p, tl) && (p == label || tl.len() >= 6 && p.len() >= tl.len() && !ordinary);
+        if parts.iter().any(|p| skeleton(p) == skeleton(tl) && *p != tl || near(p)) {
             findings.push(Finding::LookalikeDomain { domain: host.clone(), resembles: target.clone() });
             return;
         }
@@ -546,77 +607,84 @@ fn asks_for_secrets(text: &str) -> Option<Finding> {
     None
 }
 
-/// `(href, text)` pairs of `<a>` tags, scanned as text. Returns true when
-/// the link limit was hit.
-fn extract_links(html: &str, out: &mut Vec<(String, String)>) -> bool {
-    let lower = html.to_ascii_lowercase();
-    let mut pos = 0;
-    // The next "</a" at or after `pos`, searched once and reused, so many
-    // unclosed anchors stay linear instead of rescanning to the end each time.
-    let mut next_close: Option<Option<usize>> = None;
-    while let Some(start) = lower[pos..].find("<a").map(|i| pos + i) {
-        pos = start + 2;
-        if !lower[pos..].starts_with(|c: char| c.is_whitespace()) {
-            continue;
-        }
-        let Some(tag_end) = lower[pos..].find('>').map(|i| pos + i) else { break };
-        let tag = &html[pos..tag_end];
-        let href = attr(tag, "href");
-        if next_close.is_some_and(|c| c.is_some_and(|c| c < tag_end)) {
-            next_close = None;
-        }
-        let found = *next_close.get_or_insert_with(|| lower[tag_end..].find("</a").map(|i| tag_end + i));
-        // Unclosed: the text up to a cap, ending on a character boundary.
-        let close = found.unwrap_or_else(|| tag_end + 1 + floor_char(&html[tag_end + 1..], MAX_LINK_TEXT));
-        let inner = strip_tags(&html[tag_end + 1..close.max(tag_end + 1)]);
-        pos = close.max(tag_end + 1);
-        if let Some(href) = href {
-            if out.len() >= MAX_LINKS {
+/// Companies whose name is put on fake invoices and renewal notices that ask
+/// you to phone a "cancellation" or "refund" line (searched word for word),
+/// and the domain their real mail comes from.
+const CALLBACK_BRANDS: &[(&str, &str, &str)] = &[
+    ("geek squad", "bestbuy.com", "Geek Squad"),
+    ("best buy", "bestbuy.com", "Best Buy"),
+    ("norton", "norton.com", "Norton"),
+    ("mcafee", "mcafee.com", "McAfee"),
+    ("avast", "avast.com", "Avast"),
+    ("kaspersky", "kaspersky.com", "Kaspersky"),
+    ("paypal", "paypal.com", "PayPal"),
+    ("amazon", "amazon.com", "Amazon"),
+    ("ebay", "ebay.com", "eBay"),
+    ("walmart", "walmart.com", "Walmart"),
+    ("coinbase", "coinbase.com", "Coinbase"),
+    ("microsoft", "microsoft.com", "Microsoft"),
+    ("windows defender", "microsoft.com", "Microsoft"),
+    ("apple", "apple.com", "Apple"),
+    ("netflix", "netflix.com", "Netflix"),
+];
+/// Words of a charge, renewal or refund.
+const CHARGE_WORDS: &[&str] = &[
+    "invoice", "renewal", "renewed", "auto-renew", "subscription", "charged", "charge of", "debited", "deducted", "billed", "refund",
+    "payment of", "order confirmation", "purchase", "membership",
+];
+/// Words asking you to phone.
+const CALL_WORDS: &[&str] = &["call", "calling", "dial", "contact us", "helpline", "help line", "toll free", "toll-free", "customer support", "customer care", "support team", "phone"];
+
+/// A phone number written as one: 10 to 15 digits, either starting with `+`
+/// or split into at least three groups (`1-888-555-0182`, `(808) 555-0182`).
+/// Invoice and order numbers, which are written in one piece, don't count.
+fn has_phone_number(text: &str) -> bool {
+    let b = text.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c.is_ascii_digit() || c == b'+' || c == b'(' {
+            let start = i;
+            let (mut digits, mut groups, mut in_group) = (0, 0, false);
+            while i < b.len() && (b[i].is_ascii_digit() || matches!(b[i], b' ' | b'-' | b'.' | b'(' | b')' | b'+')) {
+                if b[i].is_ascii_digit() {
+                    digits += 1;
+                    if !in_group {
+                        groups += 1;
+                        in_group = true;
+                    }
+                } else {
+                    in_group = false;
+                }
+                i += 1;
+            }
+            // A letter or digit right before: part of a longer code.
+            let glued = start > 0 && b[start - 1].is_ascii_alphanumeric();
+            if !glued && (10..=15).contains(&digits) && (b[start] == b'+' || groups >= 3) {
                 return true;
             }
-            out.push((href, inner));
+        } else {
+            i += 1;
         }
     }
     false
 }
 
-fn attr(tag: &str, name: &str) -> Option<String> {
-    let lower = tag.to_ascii_lowercase();
-    let mut from = 0;
-    while let Some(i) = lower[from..].find(name).map(|i| from + i) {
-        from = i + name.len();
-        let before_ok = i == 0 || lower.as_bytes()[i - 1].is_ascii_whitespace();
-        let rest = lower[from..].trim_start();
-        if !before_ok || !rest.starts_with('=') {
-            continue;
-        }
-        let vstart = tag.len() - rest.len() + 1;
-        let v = tag[vstart..].trim_start();
-        let value = match v.chars().next() {
-            Some(q @ ('"' | '\'')) => v[1..].split(q).next().unwrap_or(""),
-            _ => v.split(|c: char| c.is_whitespace() || c == '>').next().unwrap_or(""),
-        };
-        return Some(decode_entities(value.trim()));
+/// The "you've been charged, call us to cancel" scam: a well-known company
+/// named in the text, words of a charge or renewal, a request to phone, and
+/// a phone number, in mail that doesn't come from the company's own domain.
+fn call_about_charge(text: &str, from_domain: &str) -> Option<Finding> {
+    let lower = text.to_lowercase();
+    let words: String = lower.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { ' ' }).collect();
+    let words = format!(" {} ", words.split_whitespace().collect::<Vec<_>>().join(" "));
+    let (_, domain, brand) = CALLBACK_BRANDS.iter().find(|(name, _, _)| words.contains(&format!(" {name} ")))?;
+    let sender = brand_label(&registrable(from_domain)).to_string();
+    if !from_domain.is_empty() && sender == brand_label(domain) {
+        return None;
     }
-    None
-}
-
-fn strip_tags(s: &str) -> String {
-    let mut out = String::new();
-    let mut in_tag = false;
-    for c in s.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            c if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    decode_entities(out.split_whitespace().collect::<Vec<_>>().join(" ").trim())
-}
-
-fn decode_entities(s: &str) -> String {
-    s.replace("&amp;", "&").replace("&#46;", ".").replace("&#x2e;", ".").replace("&#64;", "@").replace("&nbsp;", " ").replace("&quot;", "\"")
+    let charged = CHARGE_WORDS.iter().any(|w| lower.contains(w));
+    let call = CALL_WORDS.iter().any(|w| words.contains(&format!(" {w} ")));
+    (charged && call && has_phone_number(text)).then(|| Finding::CallAboutCharge { brand: brand.to_string() })
 }
 
 struct Url {
@@ -756,6 +824,12 @@ pub fn auth(header: Option<&str>, trusted: &[String]) -> Auth {
             "fail" => Check::Fail,
             _ => Check::Other,
         };
+        if method.trim() == "dkim" && check == Check::Pass {
+            let signer = ["header.d=", "header.i="].iter().find_map(|k| rest.split_whitespace().find_map(|w| w.strip_prefix(k)));
+            if let Some(d) = signer.map(|d| d.rsplit('@').next().unwrap_or(d).trim_matches(|c: char| c == ';' || c == '.')).filter(|d| !d.is_empty()) {
+                a.dkim_domains.push(d.to_string());
+            }
+        }
         match method.trim() {
             "spf" if a.spf == Check::Unknown => a.spf = check,
             "dkim" if a.dkim != Check::Pass => a.dkim = check,
@@ -793,7 +867,7 @@ mod tests {
 
     fn run(m: &Message, html: Option<&str>, attachments: &[Attachment], familiar: &[&str]) -> Analysis {
         let familiar: Vec<String> = familiar.iter().map(|s| s.to_string()).collect();
-        analyze(&Input { message: m, html, text: "", attachments, familiar_domains: &familiar, trusted_reporters: &[], known_people: &[] })
+        analyze(&Input { message: m, html, text: "", attachments, familiar_domains: &familiar, trusted_reporters: &[], known_people: &[], own_names: &[] })
     }
 
     fn kinds(a: &Analysis) -> Vec<String> {
@@ -849,6 +923,9 @@ mod tests {
             ("it@cntoso.example", "LookalikeDomain"),
             ("help@paypal-security.net", "BrandInDomain"),
             ("help@xn--pypal-4ve.com", "InternationalDomain"),
+            ("help@paypall-secure.example", "LookalikeDomain"),
+            ("help@netfl1x-support.example", "LookalikeDomain"),
+            ("x@gogle.com", "LookalikeDomain"),
         ] {
             let a = run(&msg("", from), None, &[], &["contoso.example"]);
             let k = kinds(&a);
@@ -858,7 +935,20 @@ mod tests {
                 assert!(k.contains(&kind.to_string()), "{from}: {k:?}");
             }
         }
-        for from in ["service@paypal.com", "x@mail.paypal.co.uk", "megan@contoso.example", "a@sub.microsoft.com", "news@github.com"] {
+        for from in [
+            "service@paypal.com",
+            "x@mail.paypal.co.uk",
+            "megan@contoso.example",
+            "a@sub.microsoft.com",
+            "news@github.com",
+            "tom@mail.com",
+            "lisa@email.com",
+            "jen@ymail.com",
+            "vm@cloud-voice-notify.example",
+            "admissions@apply-statecollege.example",
+            "x@phase-two.example",
+            "rent@offices-for-rent.example",
+        ] {
             let a = run(&msg("", from), None, &[], &["contoso.example"]);
             let k = kinds(&a);
             assert!(!k.iter().any(|k| k == "LookalikeDomain" || k == "BrandInDomain"), "{from}: {k:?}");
@@ -912,6 +1002,15 @@ mod tests {
         assert_eq!((a.spf, a.dkim, a.dmarc), (Check::Fail, Check::Pass, Check::Fail));
         assert_eq!(a.reporter.as_deref(), Some("mx.google.com"));
         // The same claim from anyone else proves nothing either way.
+        assert_eq!(a.dkim_domains, ["x.example"]);
+        assert!(!a.vouches_for("x.example"), "DMARC failed");
+        let signed = auth(Some("mx.google.com; dkim=pass header.d=x.example header.s=s1"), &trusted);
+        assert!(signed.vouches_for("mail.x.example") && !signed.vouches_for("y.example"), "an aligned DKIM pass");
+        let dmarc = auth(Some("mx.google.com; dmarc=pass header.from=ups.com"), &trusted);
+        assert!(dmarc.vouches_for("ups.com"));
+        let other = auth(Some("mx.google.com; dkim=pass header.d=evil.example; dmarc=none"), &trusted);
+        assert!(!other.vouches_for("ups.com"), "someone else's signature");
+        assert!(!auth(Some("evil.example; dmarc=pass"), &trusted).vouches_for("ups.com"), "an untrusted reporter");
         let spoofed = auth(Some("mx.google.com.evil.example; dmarc=pass"), &trusted);
         assert_eq!((spoofed.dmarc, spoofed.note.as_str()), (Check::Unknown, "untrusted reporter"));
         let forged = auth(Some("evil.example; dmarc=pass"), &trusted);
@@ -934,9 +1033,67 @@ mod tests {
 
         let mut m = msg("", "x@x.example");
         m.auth_results = Some(h.into());
-        let an = analyze(&Input { message: &m, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &trusted, known_people: &[] });
+        let an = analyze(&Input { message: &m, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &trusted, known_people: &[], own_names: &[] });
         assert_eq!(an.findings.first(), Some(&Finding::AuthFailed { check: "dmarc".into() }));
         assert!(an.findings.contains(&Finding::AuthFailed { check: "spf".into() }));
+    }
+
+    fn text_check(name: &str, from: &str, subject: &str, text: &str, own: &[(String, Vec<String>)]) -> Analysis {
+        let mut m = msg(name, from);
+        m.subject = subject.into();
+        analyze(&Input { message: &m, html: None, text, attachments: &[], familiar_domains: &[], trusted_reporters: &[], known_people: &[], own_names: own })
+    }
+
+    const GEEK_SQUAD: &str = "Geek SQUAD Dear Alex, This is an automated confirmation regarding the upcoming status of your active Geek Squad \
+        subscription. Your plan has been renewed and $399.99 will be charged to your account today. If you did not authorize this \
+        renewal or wish to cancel and get a refund, please call our billing team at +1 (808) 555-0182 within 24 hours.";
+
+    #[test]
+    fn a_fake_invoice_asking_you_to_call_is_flagged() {
+        let a = text_check("Alex Morgan", "billing.dept4471@gmail.com", "Confirmation statement for Invoice (50K74OZQ)", GEEK_SQUAD, &[]);
+        assert!(a.findings.contains(&Finding::CallAboutCharge { brand: "Geek Squad".into() }), "{:?}", a.findings);
+        assert_eq!(a.severity(), Some(Severity::Danger));
+        // Other companies and number formats.
+        for (brand, text) in [
+            ("Norton", "Your Norton LifeLock membership auto-renewed. Amount charged: $299. To cancel call 1-888-555-0143."),
+            ("PayPal", "PayPal: a payment of $849.00 to Coinbase was approved. Not you? Contact us at 888.555.0199 for a refund."),
+            ("McAfee", "Invoice INV-20931: McAfee Total Protection renewal. For queries dial toll free (877) 555-0110."),
+        ] {
+            let a = text_check("", "noreply@random-mailer.example", "Order receipt", text, &[]);
+            assert!(a.findings.contains(&Finding::CallAboutCharge { brand: brand.into() }), "{brand}: {:?}", a.findings);
+        }
+    }
+
+    #[test]
+    fn real_receipts_and_ordinary_mail_are_not_flagged_as_call_scams() {
+        let quiet = |from: &str, text: &str| {
+            let a = text_check("", from, "Your order", text, &[]);
+            assert!(!a.findings.iter().any(|f| matches!(f, Finding::CallAboutCharge { .. })), "{from}: {:?}", a.findings);
+        };
+        // The company's own mail (any of its domains' subdomains).
+        quiet("receipts@emailinfo.bestbuy.com", "Geek Squad Protection renewed, $199.99 charged. Questions? Call 1-888-237-8289.");
+        quiet("auto-confirm@amazon.co.uk", "Your Amazon order confirmation. Call 0800-279-7234 for help.");
+        // A brand and a number, but no charge; a charge, but no number.
+        quiet("friend@normal.example", "I set up the new Norton on mum's laptop, call me on +44 7700 900123 if it acts up.");
+        quiet("friend@normal.example", "The Amazon invoice is attached, the subscription renews in May.");
+        // An order number written in one piece isn't a phone number.
+        quiet("shop@normal.example", "Order confirmation 123456789012 for your Apple charger was charged. Contact us by email.");
+        // A bill with a phone number from a company that isn't commonly faked.
+        quiet("billing@cityutilities.example", "Your invoice of $84.20 is due. Call 555-0100-2234 with questions.");
+    }
+
+    #[test]
+    fn your_own_name_from_another_address_is_flagged() {
+        let own = vec![("alex morgan".to_string(), vec!["alex.morgan@axentra.example".to_string(), "alex@home.example".to_string()])];
+        let a = text_check("Alex Morgan", "billing.dept4471@gmail.com", "Hello", "", &own);
+        assert_eq!(a.findings.first(), Some(&Finding::YourNameElsewhere { name: "Alex Morgan".into(), actual: "billing.dept4471@gmail.com".into() }));
+        // From any of your own accounts: nothing.
+        for from in ["alex.morgan@axentra.example", "ALEX@home.example"] {
+            assert!(text_check("Alex Morgan", from, "Note to self", "", &own).findings.is_empty(), "{from}");
+        }
+        // A one-word name isn't enough to go on.
+        let one = vec![("alex".to_string(), vec!["alex@home.example".to_string()])];
+        assert!(text_check("Alex", "a@other.example", "Hi", "", &one).findings.is_empty());
     }
 
     #[test]
@@ -977,7 +1134,7 @@ mod tests {
         let mut m = msg(&"Jane ".repeat(10_000), "a@x.example");
         m.subject = "é".repeat(MAX_SUBJECT);
         let many: Vec<Attachment> = (0..MAX_ATTACHMENTS + 5).map(|i| Attachment { name: format!("{i}.txt"), ..Default::default() }).collect();
-        let a = analyze(&Input { message: &m, html: None, text: "", attachments: &many, familiar_domains: &[], trusted_reporters: &[], known_people: &[] });
+        let a = analyze(&Input { message: &m, html: None, text: "", attachments: &many, familiar_domains: &[], trusted_reporters: &[], known_people: &[], own_names: &[] });
         assert!(a.truncated);
     }
 
@@ -1007,10 +1164,10 @@ mod tests {
         assert!(b.findings.contains(&Finding::FamiliarNameInDomain { domain: "contoso-it-support.example".into(), familiar: "contoso.example".into() }));
         let people = vec![("daniel kim".to_string(), vec!["daniel.kim@contoso.example".to_string()])];
         let m = msg("Daniel Kim (CEO)", "daniel.kim.ceo@gmail.com");
-        let c = analyze(&Input { message: &m, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &[], known_people: &people });
+        let c = analyze(&Input { message: &m, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &[], known_people: &people, own_names: &[] });
         assert_eq!(c.findings.first(), Some(&Finding::ContactNameElsewhere { name: "Daniel Kim".into(), actual: "daniel.kim.ceo@gmail.com".into() }));
         let real = msg("Daniel Kim", "daniel.kim@contoso.example");
-        let d = analyze(&Input { message: &real, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &[], known_people: &people });
+        let d = analyze(&Input { message: &real, html: None, text: "", attachments: &[], familiar_domains: &[], trusted_reporters: &[], known_people: &people, own_names: &[] });
         assert!(d.findings.is_empty());
         let at = Attachment { name: "voicemail.html".into(), content_type: "text/html".into(), ..Default::default() };
         assert_eq!(run(&msg("", "a@x.example"), None, &[at], &[]).findings, vec![Finding::HtmlAttachment { name: "voicemail.html".into() }]);

@@ -66,6 +66,7 @@ fn analysis_of(it: &Item, familiar: &[String]) -> Analysis {
         familiar_domains: familiar,
         trusted_reporters: &[],
         known_people: &known_people(familiar),
+        own_names: &[],
     })
 }
 

@@ -2,6 +2,7 @@
 //! searching, and the compose tabs while a compose form is open
 //! (docs/spec/shell.md §6.3–6.9).
 
+use axentra_core::store::ShadowTally;
 use axentra_core::*;
 use dioxus::prelude::*;
 
@@ -9,9 +10,10 @@ use super::actions;
 use super::ctx::{MailCtx, SearchScope};
 use super::menus::{self, Target};
 use super::model::ListModel;
+use super::shadow_pass::{self, Problem};
 use crate::kit::MenuItem;
 use crate::shell::ribbon::{Command, RibbonTab};
-use crate::state::{AppState, SearchState};
+use crate::state::{AppState, MailView, SearchState, store};
 
 /// Compose tab command ids are prefixed so they can't clash with mail ids.
 pub const COMPOSE_PREFIX: &str = "compose::";
@@ -55,11 +57,60 @@ fn has_keyword(query: &str, kw: &str) -> bool {
     query.split_whitespace().any(|w| w.eq_ignore_ascii_case(kw))
 }
 
+/// The role of the folder the list shows: `None` while searching and in a
+/// person's mail, Packages or a topic list (no folder commands there).
+fn list_role(model: &ListModel) -> Option<FolderRole> {
+    if model.searching || model.view.is_some() { None } else { model.folder.as_ref().map(|f| f.role) }
+}
+
+/// Delete's menu: the messages, then the folder's Empty / Delete all.
+fn delete_items(model: &ListModel, none: bool) -> Vec<MenuItem> {
+    let mut delete_menu = vec![
+        MenuItem::new("delete", "Delete").icon("delete").shortcut("Delete").disabled(none),
+        MenuItem::new("delete_permanent", "Permanently delete").icon("delete").shortcut("Shift+Delete").disabled(none),
+    ];
+    if let Some(f) = model.folder.as_ref().filter(|_| list_role(model).is_some()) {
+        delete_menu.push(MenuItem::divider());
+        match f.role {
+            FolderRole::Deleted => delete_menu.push(MenuItem::new("folder_empty", "Empty folder").icon("delete").disabled(f.total_count == 0)),
+            FolderRole::Drafts | FolderRole::Outbox => {
+                delete_menu.pop();
+            }
+            _ => delete_menu.push(MenuItem::new("folder_delete_all", "Delete all").icon("delete").disabled(f.total_count == 0)),
+        }
+    }
+    delete_menu
+}
+
+/// Home > Spam & AI: the switches from Settings > Mail > Junk email, and how
+/// Local AI review is getting on.
+fn spam_items(settings: &Settings, tally: Option<&ShadowTally>, problem: Option<Problem>) -> Vec<MenuItem> {
+    let mut items = vec![
+        MenuItem::header("Junk filter"),
+        MenuItem::new("spam_filter", "Move clearly junk mail to Junk Email").checked(settings.junk_filter),
+        MenuItem::new("spam_suggestions", "Suggest when a message looks like junk").checked(settings.junk_suggestions),
+        MenuItem::divider(),
+        MenuItem::header("Local AI review (pilot)"),
+        MenuItem::new("spam_ai", "Review new mail with local AI").checked(settings.junk_shadow),
+    ];
+    let info = |id: &str, text: String| MenuItem::new(id, text).disabled(true);
+    if let Some(problem) = problem {
+        items.push(info("spam_ai_problem", problem.short().to_string()).tooltip(problem.text()));
+    }
+    if let Some(t) = tally {
+        items.push(info("spam_ai_found", format!("{} reviewed: {} phishing, {} bulk", t.reviewed, t.phishing, t.bulk)));
+        items.push(info("spam_ai_reports", format!("Your reports: {} agreed, {} not junk, {} missed", t.confirmed, t.rejected, t.missed)));
+    }
+    items.push(MenuItem::divider());
+    items.push(MenuItem::new("spam_settings", "Junk email settings…").icon("settings"));
+    items
+}
+
 pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     let settings = app.settings.read().clone();
     let ids = actions::targets(ctx, model);
     let none = ids.is_empty();
-    let role = if model.searching { None } else { model.folder.as_ref().map(|f| f.role) };
+    let role = list_role(model);
     let folder = model.folder.as_ref().map(|f| f.id);
     let t = Target::for_ids(&ids, role, folder, settings.focused_inbox_shown(), settings.use_24h_time);
     let single = t.messages.len() == 1;
@@ -71,20 +122,10 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     let no_sel = "Select a message first";
 
     // ---------------------------------------------------------------- Home
-    let mut delete_menu = vec![
-        MenuItem::new("delete", "Delete").icon("delete").shortcut("Delete").disabled(none),
-        MenuItem::new("delete_permanent", "Permanently delete").icon("delete").shortcut("Shift+Delete").disabled(none),
-    ];
-    if let Some(f) = model.folder.as_ref().filter(|_| !model.searching) {
-        delete_menu.push(MenuItem::divider());
-        match f.role {
-            FolderRole::Deleted => delete_menu.push(MenuItem::new("folder_empty", "Empty folder").icon("delete").disabled(f.total_count == 0)),
-            FolderRole::Drafts | FolderRole::Outbox => {
-                delete_menu.pop();
-            }
-            _ => delete_menu.push(MenuItem::new("folder_delete_all", "Delete all").icon("delete").disabled(f.total_count == 0)),
-        }
-    }
+    let delete_menu = delete_items(model, none);
+    let tally = settings.junk_shadow.then(|| store().shadow_tally().unwrap_or_default());
+    let problem = if settings.junk_shadow { shadow_pass::problem() } else { None };
+    let spam_menu = spam_items(&settings, tally.as_ref(), problem);
     let report = if role == Some(FolderRole::Junk) {
         Command::new("not_junk", "Not junk", "mail_inbox")
             .split(vec![
@@ -165,6 +206,13 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
                     .priority(7),
             ],
             vec![
+                Command::new("spam_menu", "Spam & AI", "sparkle")
+                    .menu(spam_menu)
+                    .tooltip("Junk filter and Local AI review")
+                    .group("Spam")
+                    .priority(6),
+            ],
+            vec![
                 Command::new("reply_all", "Reply all", "arrow_reply_all")
                     .split(vec![
                         MenuItem::new("reply", "Reply").icon("arrow_reply").shortcut("Ctrl+R").disabled(!respond_ok),
@@ -229,11 +277,12 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     let density = settings.density;
     let prefs = ctx.prefs.read().clone();
     let zoom = *ctx.zoom.read();
-    let view = RibbonTab::new(
+    let mut view = RibbonTab::new(
         "view",
         "View",
         vec![
             vec![Command::new("view_settings", "View settings", "settings").tooltip("Open Mail settings").group("Settings").priority(1)],
+            views_group(&settings, model.view),
             vec![
                 Command::new("v_folder", "Folder pane", "panel_left").group("Layout").priority(3).menu(vec![
                     MenuItem::new("v_folder_show", "Show").checked(!settings.folder_pane_collapsed),
@@ -279,6 +328,8 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
             ])],
         ],
     );
+    // No empty Views group when both features are off.
+    view.groups.retain(|g| !g.is_empty());
 
     let file = RibbonTab::new(
         "file",
@@ -328,6 +379,30 @@ pub fn tabs(app: AppState, ctx: MailCtx, model: &ListModel) -> Vec<RibbonTab> {
     tabs
 }
 
+/// View > Views: Packages and Topics, for the features that are on.
+fn views_group(settings: &Settings, current: Option<MailView>) -> Vec<Command> {
+    let mut group = Vec::new();
+    if settings.order_tracking {
+        group.push(
+            Command::new("v_packages", "Packages", "box")
+                .toggled(current == Some(MailView::Packages))
+                .tooltip("Orders and deliveries found in your mail")
+                .group("Views")
+                .priority(9),
+        );
+    }
+    if settings.topics_view {
+        group.push(
+            Command::new("v_topics", "Topics", "tag")
+                .toggled(matches!(current, Some(MailView::Topics(_))))
+                .tooltip("Your mail sorted by topic")
+                .group("Views")
+                .priority(10),
+        );
+    }
+    group
+}
+
 /// Handle a ribbon pick.
 pub fn on_command(mut app: AppState, mut ctx: MailCtx, model: &ListModel, id: &str) {
     if let Some(cmd) = id.strip_prefix(COMPOSE_PREFIX) {
@@ -339,6 +414,22 @@ pub fn on_command(mut app: AppState, mut ctx: MailCtx, model: &ListModel, id: &s
         if up { STEPS.into_iter().find(|s| *s > z).unwrap_or(200) } else { STEPS.into_iter().rev().find(|s| *s < z).unwrap_or(50) }
     };
     match id {
+        // Each reads first: a read still held during the write would panic.
+        "spam_filter" => {
+            let on = !app.settings.peek().junk_filter;
+            actions::set_junk_filter(app, on);
+        }
+        "spam_suggestions" => {
+            let on = !app.settings.peek().junk_suggestions;
+            actions::set_junk_suggestions(app, on);
+        }
+        "spam_ai" => {
+            let on = !app.settings.peek().junk_shadow;
+            actions::set_junk_shadow(app, on);
+        }
+        "spam_settings" => actions::open_settings_page(app, crate::settings::PageId::Junk),
+        "v_packages" => actions::show_view(app, ctx, MailView::Packages),
+        "v_topics" => actions::show_view(app, ctx, MailView::Topics(None)),
         "v_folder_show" => app.update_settings(|s| s.folder_pane_collapsed = false),
         "v_folder_hide" => app.update_settings(|s| s.folder_pane_collapsed = true),
         "v_fav_show" => ctx.update_prefs(|p| p.favorites_hidden = !p.favorites_hidden),
@@ -438,5 +529,45 @@ mod tests {
         assert_eq!(items[0].id, "compose::bold");
         assert_eq!(items[0].children[0].id, "compose::x");
         assert!(items[1].id.is_empty());
+    }
+
+    #[test]
+    fn spam_menu_shows_the_switches_and_how_the_review_is_going() {
+        let ids = |items: &[MenuItem]| items.iter().filter(|i| !i.id.is_empty()).map(|i| i.id.clone()).collect::<Vec<_>>();
+        let checked = |items: &[MenuItem], id: &str| items.iter().find(|i| i.id == id).and_then(|i| i.checked);
+
+        let off = Settings { junk_filter: true, junk_suggestions: false, junk_shadow: false, ..Default::default() };
+        let items = spam_items(&off, None, None);
+        assert_eq!(ids(&items), ["spam_filter", "spam_suggestions", "spam_ai", "spam_settings"]);
+        assert_eq!(checked(&items, "spam_filter"), Some(true));
+        assert_eq!(checked(&items, "spam_suggestions"), Some(false));
+        assert_eq!(checked(&items, "spam_ai"), Some(false));
+
+        let on = Settings { junk_shadow: true, ..off };
+        let tally = ShadowTally { reviewed: 12, phishing: 2, bulk: 3, confirmed: 1, rejected: 4, missed: 5 };
+        let items = spam_items(&on, Some(&tally), Some(Problem::NotRunning));
+        assert_eq!(checked(&items, "spam_ai"), Some(true));
+        let line = |id: &str| items.iter().find(|i| i.id == id).expect("a line");
+        assert_eq!(line("spam_ai_found").label, "12 reviewed: 2 phishing, 3 bulk");
+        assert_eq!(line("spam_ai_reports").label, "Your reports: 1 agreed, 4 not junk, 5 missed");
+        assert!(line("spam_ai_found").disabled && line("spam_ai_problem").disabled);
+        assert_eq!(line("spam_ai_problem").tooltip.as_deref(), Some(Problem::NotRunning.text()));
+    }
+
+    #[test]
+    fn views_have_no_folder_commands() {
+        let deleted = Folder { id: 4, role: FolderRole::Deleted, total_count: 3, ..Default::default() };
+        let in_folder = ListModel { folder: Some(deleted.clone()), ..Default::default() };
+        assert_eq!(list_role(&in_folder), Some(FolderRole::Deleted));
+        assert!(delete_items(&in_folder, false).iter().any(|i| i.id == "folder_empty"));
+        // A topic list (the folder the user came from is kept, not shown).
+        for view in [MailView::Topics(None), MailView::Packages] {
+            let m = ListModel { folder: Some(deleted.clone()), view: Some(view), ..Default::default() };
+            assert_eq!(list_role(&m), None, "{view:?}");
+            assert_eq!(delete_items(&m, false).iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), ["delete", "delete_permanent"]);
+        }
+        let settings = Settings { order_tracking: false, ..Default::default() };
+        assert_eq!(views_group(&settings, None).iter().map(|c| c.id.clone()).collect::<Vec<_>>(), ["v_topics"]);
+        assert!(views_group(&Settings { topics_view: false, order_tracking: false, ..Default::default() }, None).is_empty());
     }
 }

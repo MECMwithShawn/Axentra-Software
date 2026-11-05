@@ -405,6 +405,27 @@ pub fn SearchPage() -> Element {
                 onchange: move |v| ctx.edit(|s| s.search_include_deleted = v),
             }
         }
+        Section {
+            title: "Search by meaning",
+            description: "Search also finds mail about what you typed, in other words: \u{201c}bill to pay\u{201d} finds invoices, \u{201c}flight\u{201d} finds your boarding pass. A small model on this computer reads each message once in the background. Nothing is sent anywhere.",
+            if crate::mail::meaning_pass::available() {
+                Checkbox {
+                    label: "Search by meaning as well as by words",
+                    checked: s.meaning_search,
+                    onchange: move |v| {
+                        crate::mail::meaning_pass::set_enabled(store(), v);
+                        ctx.edit(|s| s.meaning_search = v);
+                    },
+                }
+                if s.meaning_search && let Some((done, total)) = crate::mail::meaning_pass::progress(store()) {
+                    p { class: "ax-set-desc",
+                        if done >= total { "All {total} messages are ready." } else { "{done} of {total} messages read so far. Newer mail comes first." }
+                    }
+                }
+            } else {
+                Note { text: "Not available: the search model isn't installed with this copy of Axentra. Search by words works as usual." }
+            }
+        }
         Section { title: "Search history", description: "Recent searches appear as suggestions in the search box.",
             div { class: "ax-row", style: "gap:12px",
                 Button {
@@ -508,6 +529,9 @@ pub fn PrivacyPage() -> Element {
         }
         Section { title: "Your data", description: "Axentra Outlook keeps your mail, calendar and contacts on this device and talks only to your email providers.",
             Note { text: "No usage data is collected." }
+            Note {
+                text: "Packages and topics are worked out on this device from mail you've already downloaded. They aren't backed up and are rebuilt from your mail; your corrections are backed up.",
+            }
         }
     }
 }
