@@ -1,0 +1,31 @@
+[package]
+name = "vault-core"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+aes = "0.9.3"
+base64 = "0.23.1"
+cbc = { version = "0.2.1", features = ["block-padding"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+getrandom = "0.3"
+hex = "0.4.3"
+hkdf = "0.13.0"
+hmac = "0.13.0"
+keepass = { version = "0.15.2", features = ["save_kdbx4", "totp"] }
+quick-xml = "0.42.0"
+rpassword = "7.5.4"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+thiserror = "2.0.21"
+zeroize = "1.9.1"
+
+[target.'cfg(target_os="linux")'.dependencies]
+libc="0.2"
+
+[dev-dependencies]
+argon2 = { version = "3.0", package = "rust-argon2" }
+chrono = "0.4"

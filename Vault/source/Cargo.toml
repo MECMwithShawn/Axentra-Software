@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/vault-core", "crates/passkey-win", "app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["Axentra"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+# Unwind (the default), not abort: Drop still zeroizes secrets on a panic, and a panic in a
+# background job (icon fetch, breach check) ends that job instead of the whole app.

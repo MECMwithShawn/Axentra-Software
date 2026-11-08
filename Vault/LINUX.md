@@ -35,6 +35,11 @@ The Zorin `.deb` builds (`axentra-vault_0.1.0-N_amd64.deb`) carry these fixes. T
 | 0.1.0-7 | 2026-10-31 | File and message dialogs open as part of the Vault window. |
 | 0.1.0-8 | 2026-10-31 | The desktop file picker can identify Vault, so it no longer opens as a separate app. Message dialogs still open separately. |
 | 0.1.0-9 | 2026-11-07 | Pasting a copied secret is instant even while Vault is hidden or minimized. It is served from its own thread, which also clears the clipboard after 12 seconds, including while Vault is minimized. A later copy from another app is left alone. Confirmed on the desktop 2026-11-08. |
+| 0.1.0-10 | 2026-11-08 | Code review fixes: a warning before saving the backup key file into ~/OneDrive, smoother unlock animation, back-to-back file pickers stay attached to Vault, backups work on NFS and FUSE drives, and the window buttons stay clickable at the top edge. |
+
+## Source
+
+The source is in [`source/`](source/), exported from local commit `a6b3811` (branch `audit/fixes`). Build with `cargo build --release --locked` in `source/`; the Linux build needs `libgtk-3-dev`, `libayatana-appindicator3-dev`, `libxdo-dev` and `libfido2-dev`.
 
 ## Screenshot
 

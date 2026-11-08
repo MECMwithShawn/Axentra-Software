@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Windows Installer (MSI) package for managed or silent deployment, per machine (administrator rights required).
+     Built by scripts\package.ps1 with WiX Toolset v7. The Setup.exe (AxentraVault.iss) is for people
+     installing by hand. Vault files, %APPDATA%\Axentra Vault (preferences) and the backups in
+     %LOCALAPPDATA%\Axentra Vault\Backups are never touched: uninstalling keeps the backups. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Axentra Vault" Manufacturer="Axentra" Version="$(var.Version)"
+           UpgradeCode="FC1243E7-D1A2-40D8-9218-6647010E77B9" Scope="perMachine" Compressed="yes">
+    <SummaryInformation Description="Axentra Vault $(var.Version): KeePass-compatible password manager" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Axentra Vault is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="VaultIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="VaultIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/MECMwithShawn/Axentra-Software" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="AxentraFolder" Name="Axentra">
+        <Directory Id="INSTALLFOLDER" Name="Vault" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="Axentra Vault" Level="1">
+      <Component Id="AppExe" Directory="INSTALLFOLDER" Guid="7E96600E-C070-45F0-A284-862D2677F9EA">
+        <File Id="VaultExe" Source="$(var.SourceExe)" Name="axentra-vault.exe" />
+        <File Id="LicenseTxt" Source="$(var.LicenseFile)" Name="LICENSE.txt" />
+        <RegistryValue Root="HKLM" Key="Software\Axentra\Axentra Vault" Name="Installed" Type="integer"
+                       Value="1" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="AxentraFolder" On="uninstall" />
+      </Component>
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder">
+        <Shortcut Id="VaultShortcut" Name="Axentra Vault" Description="KeePass-compatible password manager"
+                  Target="[INSTALLFOLDER]axentra-vault.exe" WorkingDirectory="INSTALLFOLDER" Icon="VaultIcon" />
+        <RegistryValue Root="HKLM" Key="Software\Axentra\Axentra Vault" Name="StartMenuShortcut" Type="integer"
+                       Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

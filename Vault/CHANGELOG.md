@@ -1,10 +1,12 @@
 # Changelog
 
-## Linux packages 0.1.0-5 to 0.1.0-9 (2026-10-21 to 2026-11-07)
+## Linux packages 0.1.0-5 to 0.1.0-10 (2026-10-21 to 2026-11-08)
 
 - Floating layout stays open after unlock on Wayland; Copy works on Wayland through XWayland.
 - File dialogs belong to the Vault window; the desktop file picker can identify Vault.
 - Pastes are answered from a dedicated clipboard thread, so they are instant while Vault is hidden or minimized; the 12-second clear still applies and leaves later copies alone.
+- 0.1.0-10: code review fixes (OneDrive warning for backup key files on Linux, cached animation setting, overlapping file pickers, no-replace moves on NFS/FUSE, window buttons over the resize edge).
+- Source published in `Vault/source` (local commit `a6b3811`).
 
 See [Linux package updates](LINUX.md#linux-package-updates).
 
