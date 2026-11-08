@@ -1,0 +1,39 @@
+[package]
+name = "axentra-vault"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false }
+eframe = { version = "0.36.2", features = ["glow"] }
+egui_extras = { version = "0.36", features = ["svg", "image"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "ico", "jpeg", "gif", "webp"] }
+passkey-win = { version = "0.1.0", path = "../crates/passkey-win" }
+resvg = "0.45"
+rfd = "0.17.2"
+sha1 = "0.10.7"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+ureq = "3.4.2"
+uuid = "1"
+vault-core = { version = "0.1.0", path = "../crates/vault-core" }
+zeroize = "1.9.1"
+tray-icon = "0.19"
+raw-window-handle = "0.6.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_UI_WindowsAndMessaging", "Win32_UI_Accessibility", "Win32_UI_Shell"] }
+
+[target.'cfg(target_os="linux")'.dependencies]
+libc="0.2"
+gtk="0.18"
+x11rb="0.13.2"
+
+[dev-dependencies]
+flate2 = "1.1.10"
+egui_kittest = { version = "0.36", features = ["eframe", "wgpu"] }
+
+[build-dependencies]
+winresource = "0.1.34"

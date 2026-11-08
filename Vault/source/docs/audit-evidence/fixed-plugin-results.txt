@@ -1,0 +1,11 @@
+PASS  HKDF matches RFC 5869 test case 1
+PASS  Envelope seal/open round trip through serialization
+PASS  Envelope rejects a different PRF secret
+PASS  Envelope rejects tampering with any field
+PASS  Envelope parser rejects foreign files
+PASS  Multi-key file: every key opens the same database key
+PASS  Backup key file loads as the same key in KeePassLib
+PASS  Provider-keyed database opens with password + backup key file
+PASS  Database rejects password + wrong key file
+
+ALL PASSED

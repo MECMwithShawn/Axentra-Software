@@ -1,0 +1,14 @@
+[package]
+name = "passkey-win"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+getrandom = "0.3"
+thiserror = "2.0.21"
+zeroize = "1.9.1"
+
+[target.'cfg(target_os="linux")'.dependencies]
+sha2="0.10"

@@ -1,0 +1,24 @@
+# Build output
+/target/
+keepass-plugin/out/
+interop/out/
+*.exe
+*.pdb
+
+# Generated UI renders (cargo test render_previews -- --ignored)
+app/assets/preview/
+
+# Never commit vaults, keys or passkey files
+*.kdbx
+*.kdbx.bak
+*.keyx
+*.key
+*.axvault
+*.axvault.old
+*.axvault.tmp
+*.old
+*.tmp
+.env
+
+# Release output (scripts/package.ps1)
+/dist/

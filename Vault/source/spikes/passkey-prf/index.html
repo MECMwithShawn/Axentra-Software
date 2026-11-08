@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Passkey PRF Test</title>
+<style>
+  :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#6b6b66; --card:#fff; --line:#e2e2dc; --ok:#1f7a3a; --bad:#b3261e; --accent:#2f5bd3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151514; --fg:#ececea; --muted:#9a9a94; --card:#1f1f1d; --line:#33332f; --ok:#5cc37a; --bad:#ff8a80; --accent:#8aa8ff; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:12px; }
+  button { font:inherit; padding:8px 14px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; white-space:pre-wrap; word-break:break-all; font-size:13px; max-height:360px; overflow:auto; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  ol { padding-left:20px; margin:8px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Passkey PRF feasibility test</h1>
+  <p class="sub">Can an iPhone passkey produce a stable secret on this PC that could unlock a vault? Nothing leaves this machine, and no real vault is touched.</p>
+
+  <div class="card">
+    <strong>Steps</strong>
+    <ol>
+      <li><b>Register</b>: when Windows asks where to save the passkey, choose <i>iPhone, iPad, or Android device</i> and scan the QR code with your iPhone camera.</li>
+      <li><b>Unlock</b>: choose the iPhone again. The first run wraps a random test key. Later runs must unwrap the same key.</li>
+      <li>Run <b>Unlock</b> two or three times. A match each time means the approach works.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <button id="reg">1. Register passkey</button>
+    <button id="unlock">2. Unlock (evaluate PRF)</button>
+    <button id="params" class="secondary">Show test parameters</button>
+    <button id="reset" class="secondary">Reset test</button>
+  </div>
+
+  <pre id="log">Ready.</pre>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+const log = (msg, cls) => {
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  if (logEl.textContent === 'Ready.') logEl.textContent = '';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+};
+const rand = n => crypto.getRandomValues(new Uint8Array(n));
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+const fp = async buf => hex(await crypto.subtle.digest('SHA-256', buf)).slice(0, 16);
+
+const store = {
+  get(k) { try { return localStorage.getItem('prf-test:' + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('prf-test:' + k, v); } catch {} },
+  clear() { try { Object.keys(localStorage).filter(k => k.startsWith('prf-test:')).forEach(k => localStorage.removeItem(k)); } catch {} }
+};
+
+// PRF output -> AES-256-GCM wrapping key, domain-separated with HKDF.
+async function wrappingKey(prfOut) {
+  const ikm = await crypto.subtle.importKey('raw', prfOut, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode('axentra-vault/prf-wrap/v1') },
+    ikm, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+$('reg').onclick = async () => {
+  try {
+    if (!window.PublicKeyCredential) throw new Error('WebAuthn not available in this browser.');
+    log('Requesting passkey creation…');
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: 'Axentra Vault PRF test', id: location.hostname },
+      user: { id: rand(16), name: 'vault-prf-test', displayName: 'Axentra Vault PRF test' },
+      challenge: rand(32),
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+      hints: ['hybrid'],
+      extensions: { prf: {} }
+    }});
+    const ext = cred.getClientExtensionResults();
+    store.set('credId', b64(cred.rawId));
+    store.set('salt', b64(rand(32)));
+    log('Passkey created. Credential id: ' + (await fp(cred.rawId)));
+    log('Transports: ' + JSON.stringify(cred.response.getTransports?.() ?? 'n/a'));
+    if (ext.prf?.enabled) log('PRF enabled: YES', 'ok');
+    else if (ext.prf) log('PRF enabled: NO. This authenticator/browser path does not support PRF.', 'bad');
+    else log('PRF result not reported at creation. Some platforms only report it on use, so try Unlock.', 'bad');
+  } catch (e) { log('Register failed: ' + e.name + ': ' + e.message, 'bad'); }
+};
+
+$('unlock').onclick = async () => {
+  try {
+    const credId = store.get('credId'), salt = store.get('salt');
+    if (!credId) throw new Error('Register a passkey first.');
+    log('Requesting assertion with PRF…');
+    const asr = await navigator.credentials.get({ publicKey: {
+      challenge: rand(32),
+      allowCredentials: [{ type: 'public-key', id: unb64(credId) }],
+      userVerification: 'required',
+      hints: ['hybrid'],
+      extensions: { prf: { eval: { first: unb64(salt) } } }
+    }});
+    const out = asr.getClientExtensionResults().prf?.results?.first;
+    if (!out) { log('No PRF output returned. This path cannot unlock a vault.', 'bad'); return; }
+    log('PRF output received (' + out.byteLength + ' bytes), fingerprint ' + (await fp(out)), 'ok');
+
+    const key = await wrappingKey(out);
+    const wrapped = store.get('wrapped');
+    if (!wrapped) {
+      const testKey = rand(32), iv = rand(12);
+      const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, testKey);
+      store.set('wrapped', b64(iv) + '.' + b64(ct));
+      store.set('testKeyFp', await fp(testKey));
+      log('First unlock: wrapped a random test key, fingerprint ' + store.get('testKeyFp') + '. Run Unlock again to verify.');
+    } else {
+      const [iv, ct] = wrapped.split('.').map(unb64);
+      const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+      const got = await fp(pt);
+      if (got === store.get('testKeyFp')) log('Unwrapped test key ' + got + '. MATCH: the passkey reliably unlocks.', 'ok');
+      else log('Unwrapped key does not match the original.', 'bad');
+    }
+  } catch (e) {
+    if (e.name === 'OperationError') log('Unwrap failed: the PRF output changed, so the wrapping key is different.', 'bad');
+    else log('Unlock failed: ' + e.name + ': ' + e.message, 'bad');
+  }
+};
+
+// Credential id and PRF input are not secret; the native test reuses them to compare outputs.
+$('params').onclick = () => {
+  const credId = store.get('credId'), salt = store.get('salt');
+  if (!credId) { log('Register a passkey first.', 'bad'); return; }
+  log('credId=' + credId);
+  log('salt=' + salt);
+};
+
+$('reset').onclick =() => { store.clear(); logEl.textContent = 'Ready.'; };
+</script>
+</body>
+</html>

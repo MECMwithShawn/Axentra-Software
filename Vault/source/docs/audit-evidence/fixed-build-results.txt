@@ -1,0 +1,4 @@
+   Compiling axentra-vault v0.1.0 (C:\Users\shawn\code\axentra-vault\app)
+   Compiling passkey-win v0.1.0 (C:\Users\shawn\code\axentra-vault\crates\passkey-win)
+   Compiling vault-core v0.1.0 (C:\Users\shawn\code\axentra-vault\crates\vault-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.06s
