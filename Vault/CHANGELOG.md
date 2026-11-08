@@ -1,5 +1,13 @@
 # Changelog
 
+## Linux packages 0.1.0-5 to 0.1.0-9 (2026-10-21 to 2026-11-07)
+
+- Floating layout stays open after unlock on Wayland; Copy works on Wayland through XWayland.
+- File dialogs belong to the Vault window; the desktop file picker can identify Vault.
+- Pastes are answered from a dedicated clipboard thread, so they are instant while Vault is hidden or minimized; the 12-second clear still applies and leaves later copies alone.
+
+See [Linux package updates](LINUX.md#linux-package-updates).
+
 ## 0.1.0 (prepared 2026-10-14; unpublished)
 
 - Prepared first-release packaging from audit/fixes; the manifests still identify the app as 0.1.0. No version was invented or bumped.
