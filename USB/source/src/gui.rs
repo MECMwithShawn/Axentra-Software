@@ -1,7 +1,9 @@
 use axentra_usb::{
     device::{self, Device},
+    download,
     image::{self, Inspection},
     operation::{Action, Request},
+    raid,
 };
 use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke, Vec2};
 use serde_json::{Value, json};
@@ -45,6 +47,31 @@ fn primary(label: &str) -> egui::Button<'_> {
         .corner_radius(7)
         .fill(GREEN)
 }
+fn create_usb_button(ui: &mut egui::Ui) -> egui::Response {
+    let icon_id = ui.make_persistent_id("create_usb_arrow");
+    let button = egui::Button::new((
+        RichText::new("Create USB").color(BG).strong(),
+        egui::Atom::custom(icon_id, Vec2::splat(16.)),
+    ))
+    .min_size(Vec2::new(0., 38.))
+    .corner_radius(7)
+    .fill(GREEN)
+    .atom_ui(ui);
+    if let Some(rect) = button.rect(icon_id) {
+        // Draw the arrow independently of the platform's font coverage.
+        let center = rect.center();
+        let stroke = Stroke::new(1.8, BG);
+        let tip = center + Vec2::new(5., 0.);
+        for (from, to) in [
+            (center - Vec2::new(5., 0.), tip),
+            (center + Vec2::new(1., -4.), tip),
+            (center + Vec2::new(1., 4.), tip),
+        ] {
+            ui.painter().line_segment([from, to], stroke);
+        }
+    }
+    button.response
+}
 fn caption(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).color(GREEN).size(11.).strong());
 }
@@ -57,6 +84,8 @@ enum Event {
     Image(Box<Result<Inspection, String>>),
     Progress(String, u64, u64),
     Worker(Result<(), String>),
+    Downloaded(Result<download::Download, String>),
+    Prepared(Result<raid::Prepared, String>),
 }
 struct App {
     logo: egui::TextureHandle,
@@ -68,6 +97,15 @@ struct App {
     source_name: String,
     mode: Action,
     expected_hash: String,
+    download_url: String,
+    show_download: bool,
+    downloading: bool,
+    raid_requested: bool,
+    raid_report: Option<raid::Prepared>,
+    preparing: bool,
+    prepare_thread: Option<std::thread::JoinHandle<()>>,
+    download_thread: Option<std::thread::JoinHandle<()>>,
+    download_report: Option<download::Download>,
     busy: bool,
     scanning: bool,
     cancel: Arc<AtomicBool>,
@@ -85,9 +123,23 @@ struct App {
     details: bool,
     verify_prompt: bool,
 }
+impl Drop for App {
+    fn drop(&mut self) {
+        self.cancel.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.prepare_thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.download_thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
 impl App {
     fn new(cc: &eframe::CreationContext<'_>, initial: Option<PathBuf>) -> Self {
-        let mut style = (*cc.egui_ctx.global_style()).clone();
+        Self::with_context(&cc.egui_ctx, initial, true)
+    }
+    fn with_context(ctx: &egui::Context, initial: Option<PathBuf>, scan_devices: bool) -> Self {
+        let mut style = (*ctx.global_style()).clone();
         style.visuals = egui::Visuals::dark();
         style.visuals.panel_fill = BG;
         style.visuals.window_fill = PANEL;
@@ -107,12 +159,12 @@ impl App {
         style
             .text_styles
             .insert(egui::TextStyle::Button, egui::FontId::proportional(14.));
-        cc.egui_ctx.set_global_style(style);
+        ctx.set_global_style(style);
         let (tx, rx) = mpsc::channel();
         let icon =
             eframe::icon_data::from_png_bytes(include_bytes!("../assets/axentra-usb-128.png"))
                 .expect("bundled Axentra USB logo");
-        let logo = cc.egui_ctx.load_texture(
+        let logo = ctx.load_texture(
             "axentra-usb-logo",
             egui::ColorImage::from_rgba_unmultiplied(
                 [icon.width as usize, icon.height as usize],
@@ -130,6 +182,15 @@ impl App {
             source_name: "Select an ISO or disk image".into(),
             mode: Action::Compatible,
             expected_hash: String::new(),
+            download_url: String::new(),
+            show_download: false,
+            downloading: false,
+            raid_requested: false,
+            raid_report: None,
+            preparing: false,
+            prepare_thread: None,
+            download_thread: None,
+            download_report: None,
             busy: false,
             scanning: false,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -147,9 +208,11 @@ impl App {
             details: false,
             verify_prompt: false,
         };
-        a.refresh(cc.egui_ctx.clone());
+        if scan_devices {
+            a.refresh(ctx.clone());
+        }
         if let Some(p) = initial {
-            a.analyze(p, cc.egui_ctx.clone());
+            a.analyze(p, ctx.clone());
         }
         a
     }
@@ -199,6 +262,125 @@ impl App {
             ctx.request_repaint();
         });
     }
+    fn start_download(&mut self, path: PathBuf, ctx: egui::Context) {
+        if self.busy {
+            return;
+        }
+        self.busy = true;
+        self.downloading = true;
+        self.raid_report = None;
+        self.image = None;
+        self.report = None;
+        self.download_report = None;
+        self.write_verified = false;
+        self.job = None;
+        self.error = false;
+        self.progress = 0.;
+        self.source_name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        self.phase = "Connecting to download server…".into();
+        self.cancel = Arc::new(AtomicBool::new(false));
+        let cancel = self.cancel.clone();
+        let tx = self.tx.clone();
+        let url = self.download_url.trim().to_owned();
+        let hash = self.expected_hash.trim().to_owned();
+        self.download_thread = Some(std::thread::spawn(move || {
+            let mut last = std::time::Instant::now();
+            let result = download::download(
+                &url,
+                &hash,
+                &path,
+                &mut |phase, n, total| {
+                    if last.elapsed().as_millis() >= 100 || (total > 0 && n == total) {
+                        last = std::time::Instant::now();
+                        let detail = if total > 0 {
+                            format!("{phase} · {} / {}", gb(n), gb(total))
+                        } else {
+                            format!("{phase} · {} received", gb(n))
+                        };
+                        let _ = tx.send(Event::Progress(detail, n, total));
+                        ctx.request_repaint();
+                    }
+                },
+                &|| cancel.load(Ordering::Relaxed),
+            );
+            let _ = tx.send(Event::Downloaded(result.map_err(|e| format!("{e:#}"))));
+            ctx.request_repaint();
+        }));
+    }
+    fn start_prepare(&mut self, path: PathBuf, ctx: egui::Context) {
+        if self.busy || !self.hash_ok() || !download::valid_checksum(&self.expected_hash) {
+            return;
+        }
+        let Some(info) = &self.image else {
+            return;
+        };
+        let source = info.path.clone();
+        let checksum = self.expected_hash.clone();
+        self.busy = true;
+        self.preparing = true;
+        self.raid_report = None;
+        self.raid_requested = true;
+        self.selected = None;
+        self.mode = Action::Raw;
+        self.error = false;
+        self.job = None;
+        self.write_verified = false;
+        self.report = None;
+        self.progress = 0.;
+        self.cancel = Arc::new(AtomicBool::new(false));
+        let cancel = self.cancel.clone();
+        let tx = self.tx.clone();
+        self.prepare_thread = Some(std::thread::spawn(move || {
+            let mut last = std::time::Instant::now();
+            let result = raid::prepare(
+                &source,
+                &checksum,
+                &path,
+                &mut |s, n, t| {
+                    if t == 0 || n == t || last.elapsed().as_millis() > 150 {
+                        last = std::time::Instant::now();
+                        let _ = tx.send(Event::Progress(s.into(), n, t));
+                        ctx.request_repaint();
+                    }
+                },
+                &|| cancel.load(Ordering::Relaxed),
+            );
+            let _ = tx.send(Event::Prepared(result.map_err(|e| format!("{e:#}"))));
+            ctx.request_repaint();
+        }));
+    }
+    fn raid_card(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        card().show(ui, |ui| {
+            caption(ui, "INTEL RST / IMSM RAID 0");
+            ui.add_enabled_ui(!self.busy, |ui| {
+                if ui.checkbox(&mut self.raid_requested, "Prepare for Intel RAID (experimental)").changed() && self.raid_requested {
+                    self.mode = Action::Raw;
+                }
+            });
+            if !self.raid_requested { return; }
+            muted(ui, "Creates a separate ISO with live and installed RAID startup support. Requires Linux, internet access, administrator authentication and 80 GiB free in /var/tmp, plus space for the output ISO.");
+            muted(ui, "Missing image-build tools are installed automatically. Your source ISO and existing disks are kept. USB erasure is a separate step.");
+            if self.image.as_ref().is_some_and(raid::startup_prepared) {
+                ui.colored_label(GREEN, "RAID startup files inspected. Original image mode selected.");
+            } else {
+                let enabled = cfg!(target_os = "linux") && !self.busy && self.hash_ok()
+                    && download::valid_checksum(&self.expected_hash)
+                    && self.image.as_ref().is_some_and(|i| i.title.to_lowercase().contains("zorin"));
+                if ui.add_enabled(enabled, btn("Prepare RAID image…")).clicked()
+                    && let Some(path) = rfd::FileDialog::new().set_file_name("Zorin-IMSM.iso")
+                        .add_filter("ISO image", &["iso"]).save_file()
+                {
+                    self.start_prepare(path, ctx.clone());
+                }
+                muted(ui, "Select a trusted Zorin ISO and enter its publisher checksum first. USB creation stays blocked until RAID preparation passes.");
+            }
+            ui.colored_label(AMBER, "Installer: use manual partitioning; preserve Windows and the existing EFI partition. Run the included target finalizer before reboot. Hardware validation is still pending.");
+        });
+    }
     fn selected_device(&self) -> Option<&Device> {
         self.selected.and_then(|i| self.devices.get(i))
     }
@@ -213,6 +395,9 @@ impl App {
         !self.busy
             && self.hash_ok()
             && self.image.is_some()
+            && (!self.raid_requested
+                || (self.mode == Action::Raw
+                    && self.image.as_ref().is_some_and(raid::startup_prepared)))
             && self.selected_device().is_some_and(|d| {
                 d.blocked().is_none() && self.image.as_ref().unwrap().size <= d.size
             })
@@ -285,8 +470,14 @@ impl App {
         if let Some(job) = &self.job {
             let _ = std::fs::write(job.path().join("cancel"), b"stop");
         }
-        self.phase =
-            "Stopping at the next safe boundary. Interrupted media must be recreated.".into();
+        self.phase = if self.preparing {
+            "Cancelling RAID preparation; waiting for safe cleanup (package setup must finish)…"
+                .into()
+        } else if self.downloading {
+            "Cancelling download and removing the partial file…".into()
+        } else {
+            "Stopping at the next safe boundary. Interrupted media must be recreated.".into()
+        };
     }
     fn read_events(&mut self) {
         let Some(job) = &self.job else {
@@ -337,7 +528,7 @@ impl App {
         }
         self.event_offset = offset;
     }
-    fn receive(&mut self) {
+    fn receive(&mut self, ctx: &egui::Context) {
         self.read_events();
         while let Ok(event) = self.rx.try_recv() {
             match event {
@@ -357,12 +548,54 @@ impl App {
                         }
                     }
                 }
+                Event::Prepared(result) => {
+                    if let Some(thread) = self.prepare_thread.take() {
+                        let _ = thread.join();
+                    }
+                    self.preparing = false;
+                    self.busy = false;
+                    match result {
+                        Ok(prepared) => {
+                            self.expected_hash = prepared.sha256.clone();
+                            let path = prepared.path.clone();
+                            self.raid_report = Some(prepared);
+                            self.mode = Action::Raw;
+                            self.download_report = None;
+                            self.analyze(path, ctx.clone());
+                        }
+                        Err(error) => self.fail(error),
+                    }
+                }
+                Event::Downloaded(result) => {
+                    if let Some(thread) = self.download_thread.take() {
+                        let _ = thread.join();
+                    }
+                    self.downloading = false;
+                    self.busy = false;
+                    match result {
+                        Ok(receipt) => {
+                            let path = receipt.path.clone();
+                            self.download_report = Some(receipt);
+                            self.analyze(path, ctx.clone());
+                        }
+                        Err(error) => self.fail(error),
+                    }
+                }
                 Event::Image(result) => {
                     self.busy = false;
                     match *result {
                         Ok(i) => {
+                            if raid::startup_prepared(&i) {
+                                self.raid_requested = true;
+                                self.mode = Action::Raw;
+                            }
                             self.image = Some(i);
-                            self.phase = "Image inspected. Select the USB you want to use.".into();
+                            self.phase = if self.download_report.is_some() {
+                                "Download verified and image inspected. Select a USB when ready."
+                                    .into()
+                            } else {
+                                "Image inspected. Select the USB you want to use.".into()
+                            };
                             self.progress = 0.;
                         }
                         Err(e) => self.fail(e),
@@ -390,7 +623,7 @@ impl App {
             .add_filter("JSON report", &["json"])
             .save_file()
         {
-            let data=self.report.clone().unwrap_or_else(||json!({"implementation":"Rust","image":self.image,"device":self.selected_device(),"write":"Not performed","firmware_boot":"Not performed"}));
+            let data=self.report.clone().unwrap_or_else(||json!({"implementation":"Rust","download":self.download_report,"raid_preparation":self.raid_report,"image":self.image,"device":self.selected_device(),"write":"Not performed","firmware_boot":"Not performed"}));
             match serde_json::to_vec_pretty(&data)
                 .map_err(anyhow::Error::from)
                 .and_then(|b| std::fs::write(path, b).map_err(anyhow::Error::from))
@@ -410,6 +643,8 @@ impl App {
                             .add_filter("Boot images", &["iso", "img"])
                             .pick_file()
                     {
+                        self.download_report = None;
+                        self.raid_report = None;
                         self.analyze(path, ctx.clone());
                     }
                 });
@@ -425,7 +660,23 @@ impl App {
                 },
             );
             ui.add_space(10.);
-            muted(ui, "Publisher SHA-256 · optional authenticity check");
+            ui.add_enabled_ui(!self.busy, |ui| {
+                ui.checkbox(&mut self.show_download, "Download an ISO");
+                if self.show_download {
+                    ui.horizontal(|ui| {
+                        if ui.button("Zorin OS 18.1 Core").clicked() {
+                            self.download_url = download::ZORIN_URL.into();
+                            self.expected_hash = download::ZORIN_SHA256.into();
+                        }
+                        ui.hyperlink_to("Publisher checksums", download::CHECKSUM_PAGE);
+                    });
+                    ui.add(egui::TextEdit::singleline(&mut self.download_url)
+                        .hint_text("Direct HTTPS download URL")
+                        .desired_width(f32::INFINITY));
+                    muted(ui, "Use the preset or paste a direct link and its publisher checksum. Pro requires your own download link.");
+                }
+            });
+            muted(ui, if self.show_download { "Publisher SHA-256 · required for downloads" } else { "Publisher SHA-256 · optional for local images" });
             ui.add_enabled(
                 !self.busy,
                 egui::TextEdit::singleline(&mut self.expected_hash)
@@ -433,6 +684,18 @@ impl App {
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace),
             );
+            if self.show_download {
+                let valid = download::valid_checksum(&self.expected_hash) && !self.download_url.trim().is_empty();
+                if ui.add_enabled(!self.busy && valid, btn("Download and verify…")).clicked()
+                    && let Some(path) = rfd::FileDialog::new()
+                        .set_file_name(download::suggested_filename(&self.download_url, &self.expected_hash))
+                        .add_filter("ISO image", &["iso"])
+                        .save_file()
+                {
+                    self.start_download(path, ctx.clone());
+                }
+                muted(ui, "Choose a new filename. Cancelled or failed downloads are discarded; existing files are kept.");
+            }
             if self.image.is_some() && !self.hash_ok() {
                 ui.colored_label(RED, "Checksum mismatch. Creation is blocked.");
             }
@@ -506,7 +769,7 @@ impl App {
         card().show(ui, |ui| {
             caption(ui, "03   WRITE METHOD");
             ui.add_space(10.);
-            ui.add_enabled_ui(!self.busy, |ui| {
+            ui.add_enabled_ui(!self.busy && !self.raid_requested, |ui| {
                 ui.radio_value(
                     &mut self.mode,
                     Action::Compatible,
@@ -664,7 +927,7 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.receive();
+        self.receive(&ctx);
         if self.busy && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.phase = "Use Stop and wait for the operation to finish before closing.".into();
@@ -697,6 +960,7 @@ impl eframe::App for App {
             .show(ui, |ui| {
                 ui.add(
                     egui::ProgressBar::new(self.progress)
+                        .animate((self.downloading || self.preparing) && self.progress == 0.)
                         .fill(GREEN)
                         .desired_height(5.),
                 );
@@ -723,7 +987,8 @@ impl eframe::App for App {
                             self.stop();
                         }
                         if ui
-                            .add_enabled(self.can_write(), primary("Create USB  →"))
+                            .add_enabled_ui(self.can_write(), create_usb_button)
+                            .inner
                             .clicked()
                         {
                             self.confirm_text.clear();
@@ -781,6 +1046,8 @@ impl eframe::App for App {
                                     ui.set_min_width(left);
                                     self.source_card(ui, &ctx);
                                     ui.add_space(4.);
+                                    self.raid_card(ui, &ctx);
+                                    ui.add_space(4.);
                                     self.target_card(ui, &ctx);
                                     ui.add_space(4.);
                                     self.method_card(ui);
@@ -829,4 +1096,112 @@ pub fn launch(image: Option<PathBuf>) -> eframe::Result<()> {
         options,
         Box::new(move |cc| Ok(Box::new(App::new(cc, image)))),
     )
+}
+
+#[cfg(test)]
+mod download_ui_tests {
+    use super::*;
+    #[test]
+    fn reopening_prepared_image_selects_original_image_mode() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fixture.iso");
+        std::fs::write(&path, [0u8; 512]).unwrap();
+        let mut info = image::inspect(&path, &mut |_, _, _| {}, &|| false).unwrap();
+        info.checks.push(image::Check {
+            label: "Intel IMSM/RST startup".into(),
+            status: "info".into(),
+            detail: "Prepared".into(),
+        });
+        app.tx.send(Event::Image(Box::new(Ok(info)))).unwrap();
+        app.receive(&ctx);
+        assert!(app.raid_requested);
+        assert_eq!(app.mode, Action::Raw);
+        assert!(app.selected.is_none());
+        assert!(!app.can_write());
+    }
+
+    #[test]
+    fn raid_panel_explains_preparation_and_never_selects_a_device() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        app.raid_requested = true;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let ctx = ui.ctx().clone();
+            app.raid_card(ui, &ctx);
+        });
+        let text = output
+            .shapes
+            .iter()
+            .filter_map(|s| {
+                if let egui::epaint::Shape::Text(t) = &s.shape {
+                    Some(t.galley.text())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        output.textures_delta.clear();
+        assert!(text.contains("Prepare RAID image"));
+        assert!(text.contains("finalizer before reboot"));
+        assert!(!app.can_write());
+        assert!(app.selected.is_none());
+    }
+
+    #[test]
+    fn download_panel_renders_required_controls() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        app.show_download = true;
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let ctx = ui.ctx().clone();
+            app.source_card(ui, &ctx);
+        });
+        let labels = output
+            .shapes
+            .iter()
+            .filter_map(|shape| {
+                if let egui::epaint::Shape::Text(t) = &shape.shape {
+                    Some(t.galley.text())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        output.textures_delta.clear(); // Headless test deliberately does not upload textures.
+        assert!(labels.contains("Download an ISO"));
+        assert!(labels.contains("Download and verify"));
+        assert!(labels.contains("required for downloads"));
+        assert!(!app.can_write());
+    }
+    #[test]
+    fn verified_download_is_inspected_before_it_becomes_ready() {
+        let ctx = egui::Context::default();
+        let mut app = App::with_context(&ctx, None, false);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fixture.iso");
+        std::fs::write(&path, vec![0u8; 512]).unwrap();
+        app.busy = true;
+        app.downloading = true;
+        app.tx
+            .send(Event::Downloaded(Ok(download::Download {
+                path,
+                bytes: 512,
+                sha256: String::new(),
+            })))
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while app.busy && std::time::Instant::now() < deadline {
+            app.receive(&ctx);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!app.busy);
+        assert!(app.image.is_some());
+        assert!(app.download_report.is_some());
+        assert!(!app.can_write()); // No USB selected and no device operation started.
+        assert!(!app.write_verified);
+    }
 }
