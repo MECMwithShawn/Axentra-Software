@@ -139,50 +139,11 @@
     {
       "id": "mail",
       "name": "Axentra Mail",
-      "tagline": "Outlook.com with private, on-device AI triage",
+      "tagline": "Mail, calendar, people and to-do",
       "kind": "desktop",
       "order": 70,
       "accent": "#EF88C7",
       "icon": "{source}/assets/mail-512.png",
-      "install": {
-        "uninstall_key": "{A41250E3-53B3-4C55-AC97-C4EA060C4CA2}_is1",
-        "exe": "%ProgramFiles%/Axentra/Mail/AxentraMail.exe"
-      },
-      "launch": {
-        "exe": "%ProgramFiles%/Axentra/Mail/AxentraMail.exe"
-      },
-      "process": [
-        "AxentraMail.exe"
-      ],
-      "background_args": [
-        "--background"
-      ],
-      "tray": [
-        {
-          "label": "Check mail now",
-          "args": [
-            "--sync"
-          ],
-          "running_only": true
-        },
-        {
-          "label": "Exit Axentra Mail",
-          "args": [
-            "--exit"
-          ],
-          "running_only": true,
-          "separator": true
-        }
-      ]
-    },
-    {
-      "id": "outlook",
-      "name": "Axentra Outlook",
-      "tagline": "Mail, calendar, people and to-do in the Outlook layout",
-      "kind": "desktop",
-      "order": 75,
-      "accent": "#7C8CFF",
-      "icon": "%ProgramFiles%/Axentra/Outlook/icons/axentra-outlook.ico",
       "install": {
         "uninstall_key": "axentra-outlook",
         "exe": "%ProgramFiles%/Axentra/Outlook/axentra-outlook.exe"
