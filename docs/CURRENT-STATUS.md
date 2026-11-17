@@ -14,7 +14,7 @@ All nine applications have native Linux development previews installed and launc
 | [Vault](../Vault/) | 0.1.0 | None | [Installed preview](../Vault/LINUX.md) |
 | [PDF](../PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](../PDF-Suite/LINUX.md) |
 | [Archive](../Archive/) | 0.1.4 | None | [Installed preview](../Archive/LINUX.md) |
-| [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](../Edge-Extension-Suite/Horizon/LINUX.md) |
+| [Horizon](../Edge-Extension-Suite/Horizon/) | 0.6.19 | 0.6.19 pre-release (Linux .deb) | [Pre-release package](../Edge-Extension-Suite/Horizon/LINUX.md) |
 
 ## Axentra OneDrive (added 2026-10-19)
 
