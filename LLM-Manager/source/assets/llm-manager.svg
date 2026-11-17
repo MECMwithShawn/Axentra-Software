@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 96 96">
+  <title>LLM Manager</title>
+  <defs>
+    <linearGradient id="tile" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop stop-color="#244358"/>
+      <stop offset=".6" stop-color="#1a2b43"/>
+      <stop offset="1" stop-color="#1c1933"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="10%" y1="5%" x2="92%" y2="94%">
+      <stop stop-color="#587c96"/>
+      <stop offset=".54" stop-color="#3c566f"/>
+      <stop offset="1" stop-color="#49436e"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="18" y1="22" x2="77" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#76eaff"/>
+      <stop offset=".53" stop-color="#83d7ff"/>
+      <stop offset="1" stop-color="#b7a3ff"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop stop-color="#183a51"/>
+      <stop offset="1" stop-color="#232849"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0%" y1="0%" x2="75%" y2="100%">
+      <stop stop-color="#e1fbff"/>
+      <stop offset=".58" stop-color="#8deaff"/>
+      <stop offset="1" stop-color="#baaaff"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="90" height="90" rx="21" fill="url(#tile)" stroke="url(#rim)" stroke-width="2"/>
+  <rect x="6" y="6" width="84" height="84" rx="18" fill="none" stroke="#b8d3f0" stroke-opacity=".09"/>
+  <g fill="none" stroke="url(#signal)" stroke-width="3.8" stroke-linecap="round">
+    <path d="M37 19v10m22-10v10M19 37h10m-10 22h10m38-22h10m-10 22h10"/>
+    <path d="M37 67v10m11-10v13m11-13v10"/>
+  </g>
+  <rect x="28" y="29.5" width="40" height="40" rx="8" fill="#11192c" opacity=".53"/>
+  <rect x="28" y="28" width="40" height="40" rx="8" fill="url(#chip)" stroke="url(#signal)" stroke-width="3.8"/>
+  <path d="M48 34.5c1.35 8.35 5.2 12.15 13.5 13.5C53.2 49.35 49.35 53.2 48 61.5 46.65 53.2 42.8 49.35 34.5 48 42.8 46.65 46.65 42.85 48 34.5Z" fill="url(#spark)"/>
+  <g>
+    <circle cx="37" cy="77" r="2.5" fill="#8adcff"/>
+    <circle cx="48" cy="80" r="2.5" fill="#9ac8ff"/>
+    <circle cx="59" cy="77" r="2.5" fill="#b0adff"/>
+  </g>
+</svg>
