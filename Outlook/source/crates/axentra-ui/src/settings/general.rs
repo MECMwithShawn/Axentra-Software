@@ -87,7 +87,7 @@ pub fn LanguageTimePage() -> Element {
             }
         }
         Section { title: "Current time zone",
-            Row { label: "Time zone", description: "Axentra Outlook uses your system's time zone.",
+            Row { label: "Time zone", description: "Axentra Mail uses your system's time zone.",
                 span { class: "ax-set-value", "(UTC{offset}) {zone}" }
             }
         }
@@ -195,7 +195,7 @@ pub fn AppearancePage() -> Element {
         Section { title: "Title bar",
             Checkbox {
                 label: "Use the system title bar",
-                description: "Shows your desktop's own title bar and window buttons above the app instead of in the header. Applies the next time you start Axentra Outlook.",
+                description: "Shows your desktop's own title bar and window buttons above the app instead of in the header. Applies the next time you start Axentra Mail.",
                 checked: s.system_title_bar,
                 onchange: move |v| ctx.edit(|s| s.system_title_bar = v),
             }
@@ -221,10 +221,10 @@ pub fn AppearancePage() -> Element {
                 checked: s.pin_to_desktop,
                 onchange: move |v| ctx.edit(|s| s.pin_to_desktop = v),
             }
-            Note { text: "Keeps Axentra Outlook below your other windows, like part of the desktop, in a simpler layout that shows only your inbox. Open it from Axentra Command, the app menu or the taskbar to bring it forward." }
+            Note { text: "Keeps Axentra Mail below your other windows, like part of the desktop, in a simpler layout that shows only your inbox. Open it from Axentra Command, the app menu or the taskbar to bring it forward." }
             if let Some(pin) = pin.filter(|p| p.needs_restart && s.pin_to_desktop) {
                 div { style: "display:flex;align-items:center;gap:12px;flex-wrap:wrap",
-                    Note { text: "On Wayland, pinning starts when Axentra Outlook restarts. Save, then restart." }
+                    Note { text: "On Wayland, pinning starts when Axentra Mail restarts. Save, then restart." }
                     Button { label: "Restart now", onclick: move |_| pin.restart.call(()) }
                 }
             }
@@ -283,10 +283,10 @@ pub fn NotificationsPage() -> Element {
         }
         Section { title: "Calendar", description: "Event reminders.",
             Checkbox {
-                label: "Send notifications when Axentra Outlook is closed",
+                label: "Send notifications when Axentra Mail is closed",
                 checked: false,
                 disabled: true,
-                title: "Reminders need Axentra Outlook to be running. A background service isn't available yet.",
+                title: "Reminders need Axentra Mail to be running. A background service isn't available yet.",
                 onchange: move |_| {},
             }
         }
@@ -527,7 +527,7 @@ pub fn PrivacyPage() -> Element {
                 onchange: move |v: String| ctx.edit(|s| s.block_external_images = v == "block"),
             }
         }
-        Section { title: "Your data", description: "Axentra Outlook keeps your mail, calendar and contacts on this device and talks only to your email providers.",
+        Section { title: "Your data", description: "Axentra Mail keeps your mail, calendar and contacts on this device and talks only to your email providers.",
             Note { text: "No usage data is collected." }
             Note {
                 text: "Packages and topics are worked out on this device from mail you've already downloaded. They aren't backed up and are rebuilt from your mail; your corrections are backed up.",

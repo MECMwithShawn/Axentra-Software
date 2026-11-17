@@ -224,7 +224,7 @@ pub fn wait_result(request: &Path, pickup: Duration, total: Duration, mut on_wai
     loop {
         if let Ok(bytes) = fs::read(&answer) {
             let _ = fs::remove_file(&answer);
-            return Waited::Done(serde_json::from_slice(&bytes).unwrap_or(SendResult { sent: false, text: "Axentra Outlook gave an answer that couldn't be read.".into() }));
+            return Waited::Done(serde_json::from_slice(&bytes).unwrap_or(SendResult { sent: false, text: "Axentra Mail gave an answer that couldn't be read.".into() }));
         }
         let waited = start.elapsed();
         if waited >= pickup && request.exists() && fs::remove_file(request).is_ok() {

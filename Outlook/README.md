@@ -1,8 +1,10 @@
-<img src="logo.png" alt="Axentra Outlook logo" width="96" align="right">
+<img src="logo.png" alt="Axentra Mail logo" width="96" align="right">
 
-**Linux pre-release (0.1.7, built 2026-11-05):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+**Linux pre-release (0.1.8, built 2026-11-16):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
-# Axentra Outlook
+# Axentra Mail (formerly Axentra Outlook)
+
+From 0.1.8 this app is called **Axentra Mail** and takes the place of the earlier Axentra Mail app ([Mail](../Mail/), now retired). Installing it removes the old app. The package, program and data folders keep the name `axentra-outlook`, so existing accounts and mail carry over.
 
 A Linux desktop client for mail, calendar, people and to-do that looks and works like the new Outlook for
 Windows: the same header, app rail, Simplified ribbon, folder pane, conversation list, reading pane, calendar
@@ -10,14 +12,14 @@ views and keyboard shortcuts. It's a native Rust app (Dioxus on the system WebKi
 with a built-in demo mailbox, and connects to Microsoft 365 / Outlook.com through Microsoft Graph and to Gmail,
 iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subscription or tracking.
 
-> "Outlook" is a trademark of Microsoft Corporation. Axentra Outlook is an independent client built from
+> "Outlook" is a trademark of Microsoft Corporation. Axentra Mail is an independent client built from
 > Microsoft's public documentation; it contains no Microsoft code, logos or artwork, and isn't affiliated with
 > or endorsed by Microsoft. Toolbar icons are Microsoft's MIT-licensed Fluent UI System Icons.
 
 ![Axentra Outlook mail with the merged title bar](screenshots/linux-2026-10-20-titlebar-light.png)
 
-**Latest version: 0.1.7 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.7) ·
-[Release notes](releases/0.1.7.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
+**Latest version: 0.1.8 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.8) ·
+[Release notes](releases/0.1.8.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
 
 ## Features
 
@@ -47,15 +49,15 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ## Installation
 
-Download `axentra-outlook_0.1.7-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.7),
-check its SHA-256 against the [release notes](releases/0.1.7.md), then:
+Download `axentra-outlook_0.1.8-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.8),
+check its SHA-256 against the [release notes](releases/0.1.8.md), then:
 
 ```bash
-sha256sum axentra-outlook_0.1.7-1_amd64.deb
-sudo apt install ./axentra-outlook_0.1.7-1_amd64.deb
+sha256sum axentra-outlook_0.1.8-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.8-1_amd64.deb
 ```
 
-Open **Axentra Outlook** from the application menu. The first start creates a demo account (Alex Morgan, all
+Open **Axentra Mail** from the application menu. The first start creates a demo account (Alex Morgan, all
 fictional) so you can explore offline; remove it under **Settings › Accounts** once your own account is added.
 
 **Connecting a Microsoft 365 or Outlook.com account** needs a free Microsoft Entra app registration (a public

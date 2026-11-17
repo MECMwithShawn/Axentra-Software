@@ -1,10 +1,10 @@
 {
-  "id": "outlook",
-  "name": "Axentra Outlook",
-  "tagline": "Mail, calendar, people and to-do in the Outlook layout",
+  "id": "mail",
+  "name": "Axentra Mail",
+  "tagline": "Mail, calendar, people and to-do",
   "kind": "desktop",
-  "order": 75,
-  "accent": "#7C8CFF",
+  "order": 70,
+  "accent": "#EF88C7",
   "icon": "/usr/share/icons/hicolor/256x256/apps/axentra-outlook.png",
   "install": {
     "uninstall_key": "axentra-outlook",

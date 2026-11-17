@@ -1,4 +1,4 @@
-//! Axentra Outlook core: domain model, local SQLite store, demo data.
+//! Axentra Mail core: domain model, local SQLite store, demo data.
 //!
 //! See `docs/ARCHITECTURE.md` for how the crates fit together.
 

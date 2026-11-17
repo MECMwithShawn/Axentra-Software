@@ -1,14 +1,14 @@
-# Axentra Outlook on Linux
+# Axentra Mail (formerly Axentra Outlook) on Linux
 
-Built and tested 2026-11-05 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.7**; **pre-release**, not a stable release.
+Built and tested 2026-11-16 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.8**; **pre-release**, not a stable release.
 
 ## Install and run
 
 ```bash
-sudo apt install ./axentra-outlook_0.1.7-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.8-1_amd64.deb
 ```
 
-Open **Axentra Outlook** from the application menu, or run `axentra-outlook`. The package installs to
+Open **Axentra Mail** from the application menu, or run `axentra-outlook`. The package installs to
 `/opt/axentra/outlook` with a `VERSION` file, menu entry, icons in the hicolor theme and an Axentra Command
 manifest, so Command lists it like the other suite apps. Installation does not enable startup or change default
 applications.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Axentra Outlook .deb for Zorin OS 18 / Ubuntu 24.04 x86_64.
+"""Build the Axentra Mail .deb for Zorin OS 18 / Ubuntu 24.04 x86_64.
 
 Layout follows the rest of the Axentra suite, so Axentra Command finds it:
   /opt/axentra/outlook/axentra-outlook   program
@@ -7,7 +7,7 @@ Layout follows the rest of the Axentra suite, so Axentra Command finds it:
   /usr/bin/axentra-outlook               symlink
   /usr/share/applications/axentra-outlook.desktop
   /usr/share/icons/hicolor/<n>x<n>/apps/axentra-outlook.png
-  /usr/share/axentra/command/apps/outlook.json   Command app manifest
+  /usr/share/axentra/command/apps/mail.json      Command app manifest (replaces Axentra Mail)
   /opt/axentra/outlook/models/bge-small-en-v1.5/  search model (meaning search)
 
 The search model (BAAI/bge-small-en-v1.5, MIT licence) is downloaded once at a
@@ -55,7 +55,7 @@ if [ "$1" = configure ]; then
   for p in /proc/[0-9]*; do
     case "$(readlink "$p/exe" 2>/dev/null || true)" in
       /opt/axentra/outlook/axentra-outlook*)
-        echo "Axentra Outlook is still running (the version from before this update). Close it, then open it again."
+        echo "Axentra Mail is still running (the version from before this update). Close it, then open it again."
         break ;;
     esac
   done
@@ -132,7 +132,7 @@ def main() -> None:
             dest.parent.mkdir(parents=True)
             shutil.copy2(HERE / f"icons/axentra-outlook-{n}.png", dest)
 
-        manifest = stage / "usr/share/axentra/command/apps/outlook.json"
+        manifest = stage / "usr/share/axentra/command/apps/mail.json"
         manifest.parent.mkdir(parents=True)
         json.loads((HERE / "command-app.json").read_text())  # must be valid JSON
         shutil.copy2(HERE / "command-app.json", manifest)
@@ -140,12 +140,12 @@ def main() -> None:
         doc = stage / "usr/share/doc/axentra-outlook"
         doc.mkdir(parents=True)
         (doc / "copyright").write_text(
-            "Axentra Outlook\nCopyright Axentra contributors\n\n"
+            "Axentra Mail\nCopyright Axentra contributors\n\n"
             "Icons: Fluent UI System Icons, MIT License, (c) Microsoft Corporation.\n"
             "Search model: BAAI/bge-small-en-v1.5, MIT License, (c) 2022 staoxiao (see\n"
             "/opt/axentra/outlook/models/bge-small-en-v1.5/LICENSE.txt); stored as\n"
             "16-bit floats.\n"
-            "\"Outlook\" is a trademark of Microsoft Corporation. Axentra Outlook is an\n"
+            "\"Outlook\" is a trademark of Microsoft Corporation. Axentra Mail is an\n"
             "independent client and is not affiliated with or endorsed by Microsoft.\n"
         )
 
@@ -161,10 +161,12 @@ Maintainer: Axentra
 Installed-Size: {size_kb}
 Depends: {DEPENDS}
 Recommends: {RECOMMENDS}
+Conflicts: axentra-mail
+Replaces: axentra-mail
 Homepage: https://github.com/MECMwithShawn/Axentra-Software/tree/main/Outlook
-Description: Mail, calendar, people and to-do with the Outlook layout
- Axentra Outlook is a native Rust desktop client for Linux that mirrors the
- layout and keyboard of the new Outlook for Windows. It works offline with a
+Description: Axentra Mail: mail, calendar, people and to-do
+ Axentra Mail is a native Rust desktop client for Linux in the layout of the
+ new Outlook for Windows. It replaces the earlier Axentra Mail app. It works offline with a
  local demo mailbox and connects to Microsoft 365 / Outlook.com (Microsoft
  Graph) and IMAP/SMTP accounts. Built for Zorin OS 18 and Ubuntu 24.04.
 """)

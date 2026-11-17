@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-core"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-desktop"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "axentra-core",
  "axentra-sync",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-embed"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-junk-bench"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "axentra-core",
  "axentra-embed",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-preview"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "axentra-core",
  "axentra-sync",
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-sync"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "async-channel 2.5.0",
  "async-imap",
@@ -442,7 +442,7 @@ dependencies = [
 
 [[package]]
 name = "axentra-ui"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "axentra-core",
  "axentra-embed",

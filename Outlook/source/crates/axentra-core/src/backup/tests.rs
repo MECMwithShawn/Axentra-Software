@@ -300,7 +300,7 @@ fn wrong_password_and_tampering_are_refused() {
     truncated.truncate(bytes.len() - 1);
     assert!(matches!(open_bytes(&truncated, PW), Err(BackupError::CantOpen)));
     assert!(matches!(open_bytes(b"hello world, not a backup", PW), Err(BackupError::NotABackup)));
-    assert_eq!(BackupError::NotABackup.to_string(), "This file isn't an Axentra Outlook backup.");
+    assert_eq!(BackupError::NotABackup.to_string(), "This file isn't an Axentra Mail backup.");
 }
 
 #[test]
@@ -312,7 +312,7 @@ fn newer_versions_are_reported() {
     bytes[7] = 2;
     let err = open_bytes(&bytes, PW).unwrap_err();
     assert!(matches!(err, BackupError::NewerVersion));
-    assert_eq!(err.to_string(), "This backup was made by a newer version of Axentra Outlook.");
+    assert_eq!(err.to_string(), "This backup was made by a newer version of Axentra Mail.");
 
     // A newer document inside a version-1 container is refused as well.
     let mut payload = collect(&store, now()).unwrap();

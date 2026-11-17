@@ -142,7 +142,7 @@ fn send_outside_request(app: crate::state::AppState, db: &std::path::Path, req: 
                 }
                 _ if started.elapsed() > SEND_WAIT => {
                     let why = error.map(|(e, _)| format!(" Last error: {e}")).unwrap_or_default();
-                    answer(false, format!("Not sent yet: still in Outbox; Axentra Outlook will keep trying.{why}"));
+                    answer(false, format!("Not sent yet: still in Outbox; Axentra Mail will keep trying.{why}"));
                     return;
                 }
                 _ => tokio::time::sleep(std::time::Duration::from_secs(1)).await,

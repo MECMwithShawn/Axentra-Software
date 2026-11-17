@@ -2,6 +2,10 @@
 
 Earlier versions: see `Outlook/CHANGELOG.md` in the Axentra-Software repository.
 
+## 0.1.8 (pre-release, 2026-11-16)
+
+- **Now called Axentra Mail.** The app shows its own name and the Axentra Mail icon everywhere: the window, Settings › About, the app menu and Axentra Command. It takes the place of the earlier Axentra Mail app, which installing this package removes. Your mail, accounts and settings stay where they are.
+
 ## 0.1.7 (pre-release, 2026-11-05)
 
 - **Save draft is easy to find.** A new message now has Save draft next to Discard (and in the Message tab), and "Discard this draft?" offers Save draft too.

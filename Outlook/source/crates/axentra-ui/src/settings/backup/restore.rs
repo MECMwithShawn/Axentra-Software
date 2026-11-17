@@ -182,7 +182,7 @@ fn PreviewBody(payload: Arc<Payload>, also_settings: bool, on_settings: EventHan
     let made = when(p.created_at, h24);
     rsx! {
         p { class: "ax-dialog-text",
-            "Made on {made} with Axentra Outlook {p.app_version}. Items you already have are skipped; nothing is deleted or replaced."
+            "Made on {made} with Axentra Mail {p.app_version}. Items you already have are skipped; nothing is deleted or replaced."
         }
         if p.accounts.is_empty() {
             p { class: "ax-muted", "This backup has settings only, no accounts." }

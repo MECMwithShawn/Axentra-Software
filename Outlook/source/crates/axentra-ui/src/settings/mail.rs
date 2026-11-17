@@ -285,7 +285,7 @@ pub fn MessageHandlingPage() -> Element {
         }
         Section { title: "Message options",
             Switch {
-                label: "Empty Deleted Items when Axentra Outlook closes",
+                label: "Empty Deleted Items when Axentra Mail closes",
                 checked: s.empty_deleted_on_exit,
                 onchange: move |v| ctx.edit(|s| s.empty_deleted_on_exit = v),
             }
@@ -815,7 +815,7 @@ pub fn AutoArchivePage() -> Element {
             }
             if s.auto_archive {
                 if let Some(last) = last {
-                    Note { text: "Last run {last}. It runs again a day later while Axentra Outlook is open." }
+                    Note { text: "Last run {last}. It runs again a day later while Axentra Mail is open." }
                 }
             }
         }

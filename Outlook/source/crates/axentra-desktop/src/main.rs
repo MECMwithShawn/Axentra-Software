@@ -51,7 +51,7 @@ const USAGE: &str = "Usage: axentra-outlook [--version | --help]
                        (--body TEXT | --body-file FILE) [--attach FILE]...
        axentra-outlook mailto:ADDR?subject=...&body=...
 
-Opens Axentra Outlook, or shows its window when it is already open on this
+Opens Axentra Mail, or shows its window when it is already open on this
 profile.
 
 --compose and mailto: links open a new message, filled in, for you to
@@ -61,7 +61,7 @@ are attached only with --attach, never from a mailto: link.
 
 --send sends the message as given, without opening it: it needs a
 recipient, a subject, a body and readable attachments, and never works with
-a mailto: link. Axentra Outlook is started in the background if it isn't
+a mailto: link. Axentra Mail is started in the background if it isn't
 open. The command waits (up to about 10 minutes), prints one line saying
 what was sent or why not, and exits 0 when the message is in Sent Items,
 1 when it wasn't sent (it stays in Drafts when it got that far), 2 for a
@@ -169,7 +169,7 @@ fn send_from_command_line(db: &std::path::Path, req: &ComposeRequest) -> i32 {
     let request = match compose_request::submit(db, req) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("axentra-outlook: not sent: couldn't hand the message to Axentra Outlook: {e}");
+            eprintln!("axentra-outlook: not sent: couldn't hand the message to Axentra Mail: {e}");
             return 1;
         }
     };
@@ -179,17 +179,17 @@ fn send_from_command_line(db: &std::path::Path, req: &ComposeRequest) -> i32 {
         // starting). Start it once, detached, without a compose request.
         if !started && waited >= std::time::Duration::from_secs(3) && request.exists() {
             started = true;
-            eprintln!("axentra-outlook: starting Axentra Outlook to send the message…");
+            eprintln!("axentra-outlook: starting Axentra Mail to send the message…");
             if let Err(e) = start_app_detached() {
-                eprintln!("axentra-outlook: couldn't start Axentra Outlook: {e}");
+                eprintln!("axentra-outlook: couldn't start Axentra Mail: {e}");
             }
         }
     });
     let (code, line) = match waited {
         compose_request::Waited::Done(r) if r.sent => (0, r.text),
         compose_request::Waited::Done(r) => (1, r.text),
-        compose_request::Waited::NotTaken => (1, "Not sent: Axentra Outlook didn't take the message (is an older version open? Close it and try again).".to_string()),
-        compose_request::Waited::NoAnswer => (1, "No answer from Axentra Outlook yet; the message may still be in Outbox. Check Sent Items before sending again.".to_string()),
+        compose_request::Waited::NotTaken => (1, "Not sent: Axentra Mail didn't take the message (is an older version open? Close it and try again).".to_string()),
+        compose_request::Waited::NoAnswer => (1, "No answer from Axentra Mail yet; the message may still be in Outbox. Check Sent Items before sending again.".to_string()),
     };
     if code == 0 {
         println!("{line}");
