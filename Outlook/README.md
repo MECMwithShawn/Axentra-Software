@@ -1,6 +1,6 @@
 <img src="logo.png" alt="Axentra Mail logo" width="96" align="right">
 
-**Linux pre-release (0.1.8, built 2026-11-16):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+**Linux pre-release (0.1.9, built 2026-11-17):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
 # Axentra Mail (formerly Axentra Outlook)
 
@@ -18,8 +18,8 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ![Axentra Outlook mail with the merged title bar](screenshots/linux-2026-10-20-titlebar-light.png)
 
-**Latest version: 0.1.8 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.8) ·
-[Release notes](releases/0.1.8.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
+**Latest version: 0.1.9 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.9) ·
+[Release notes](releases/0.1.9.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
 
 ## Features
 
@@ -49,12 +49,12 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 
 ## Installation
 
-Download `axentra-outlook_0.1.8-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.8),
-check its SHA-256 against the [release notes](releases/0.1.8.md), then:
+Download `axentra-outlook_0.1.9-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.9),
+check its SHA-256 against the [release notes](releases/0.1.9.md), then:
 
 ```bash
-sha256sum axentra-outlook_0.1.8-1_amd64.deb
-sudo apt install ./axentra-outlook_0.1.8-1_amd64.deb
+sha256sum axentra-outlook_0.1.9-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.9-1_amd64.deb
 ```
 
 Open **Axentra Mail** from the application menu. The first start creates a demo account (Alex Morgan, all

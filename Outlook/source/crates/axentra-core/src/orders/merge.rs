@@ -262,10 +262,15 @@ pub fn build_order(g: &Group, user: Option<&OrderUserState>) -> Order {
             }
         }
         for t in &x.tracking {
-            match o.shipments.iter_mut().find(|s| s.tracking.number == t.number) {
+            match o.shipments.iter_mut().find(|s| s.tracking.carrier == t.carrier && s.tracking.number == t.number) {
                 Some(s) if t.validated == Validation::CheckDigit => s.tracking.validated = Validation::CheckDigit,
                 Some(_) => {}
-                None => o.shipments.push(Shipment { tracking: t.clone(), status: None, last_update: e.received_at }),
+                None => o.shipments.push(Shipment {
+                    tracking: t.clone(),
+                    status: None,
+                    last_update: e.received_at,
+                    replacement: x.dispatch_reply && o.delivered_at.is_some_and(|delivery| delivery < e.received_at),
+                }),
             }
         }
     }
@@ -274,27 +279,56 @@ pub fn build_order(g: &Group, user: Option<&OrderUserState>) -> Order {
         o.status = status;
         o.status_at = at;
     }
-    // Each shipment from the emails that list it; an email that lists no
-    // tracking number speaks for the whole order.
+    // An unnumbered update applies to shipments already known when it
+    // arrived. It cannot deliver (or return) a shipment announced later.
     let mut last_delivery: Option<DateTime<Utc>> = None;
+    let mut latest_replacement = None;
+    let mut replacement_eta = None;
     for s in &mut o.shipments {
-        let number = s.tracking.number.clone();
-        let lists = |e: &&&Entry| e.extraction.tracking.iter().any(|t| t.number == number);
+        let first_seen = s.last_update;
+        let lists = |e: &&&Entry| e.extraction.tracking.iter().any(|t| t.carrier == s.tracking.carrier && t.number == s.tracking.number);
+        let applies = |e: &&&Entry| lists(e) || (e.extraction.tracking.is_empty() && e.received_at >= first_seen);
+        let folded = fold(entries.iter().filter(applies));
+        if let Some((status, at)) = folded {
+            if status == OrderStatus::Delivered {
+                last_delivery = last_delivery.max(Some(at));
+            }
+            if o.delivered_at.is_some_and(|delivery| delivery < first_seen) && !status.is_terminal() && status != OrderStatus::Ordered {
+                latest_replacement = latest_replacement.max(Some((at, rank(status), status, first_seen)));
+                let eta = entries.iter().rev().filter(applies).find_map(|e| {
+                    if e.extraction.status.is_some_and(OrderStatus::is_terminal) {
+                        return None;
+                    }
+                    e.extraction.expected.map(|window| (e.received_at, window))
+                });
+                if let Some((at, window)) = eta
+                    && replacement_eta.is_none_or(|(prev, _)| at > prev)
+                {
+                    replacement_eta = Some((at, window));
+                }
+            }
+            s.last_update = at;
+        }
         if let Some(last) = entries.iter().rev().find(lists) {
-            s.last_update = last.received_at;
+            s.last_update = s.last_update.max(last.received_at);
         }
-        let folded = fold(entries.iter().filter(|e| e.extraction.tracking.is_empty() || lists(e)));
-        if let Some((OrderStatus::Delivered, at)) = folded {
-            last_delivery = last_delivery.max(Some(at));
-        }
-        s.status = folded.map(|(st, _)| st);
+        s.status = folded.map(|(status, _)| status);
     }
-    // Delivered when the last parcel arrived, not the first.
-    if o.status == OrderStatus::Delivered
+    if let Some((at, _, status, first_seen)) = latest_replacement
+        && (o.status == OrderStatus::Delivered || (matches!(o.status, OrderStatus::Delayed | OrderStatus::Exception) && first_seen > o.status_at))
+    {
+        o.status = status;
+        o.status_at = at;
+    } else if o.status == OrderStatus::Delivered
         && let Some(last) = last_delivery.filter(|last| *last > o.status_at)
     {
+        // Delivered when the last parcel arrived, not the first.
         o.status_at = last;
         o.delivered_at = Some(last);
+    }
+    if latest_replacement.is_some() && !o.status.is_terminal() {
+        o.delivered_at = None;
+        o.expected = replacement_eta.map(|(_, window)| window);
     }
     let known: Vec<OrderStatus> = o.shipments.iter().filter_map(|s| s.status).collect();
     if o.status == OrderStatus::Delivered && known.len() >= 2 && known.iter().any(|s| *s != OrderStatus::Delivered) {
@@ -457,6 +491,69 @@ mod tests {
         assert!(o.partly_delivered);
         assert_eq!(o.status, OrderStatus::InTransit);
         assert_eq!(section(&o, monday(12), monday(12).with_timezone(&Local).date_naive(), 30), Some(OrderSection::OnTheWay));
+    }
+
+    #[test]
+    fn a_later_batch_does_not_inherit_an_earlier_untracked_delivery() {
+        let numbers: Vec<String> = (1..=8).map(|i| format!("1ZTEST01000000000{i}")).collect();
+        let numbers: Vec<&str> = numbers.iter().map(String::as_str).collect();
+        let old_eta = DateWindow { from: days(12).date_naive(), to: days(12).date_naive() };
+        let old_shipment = Extraction { expected: Some(old_eta), ..ex(Some("BL-1"), &[], Some(OrderStatus::Shipped)) };
+        let mut entries = vec![
+            entry(1, days(14), old_shipment),
+            entry(2, days(12), ex(Some("BL-1"), &[], Some(OrderStatus::Delivered))),
+            entry(3, days(4), ex(Some("BL-1"), &numbers, Some(OrderStatus::Shipped))),
+        ];
+        let before_delivery = build_order(&group(entries.clone())[0], None);
+        assert_eq!((before_delivery.status, before_delivery.status_at), (OrderStatus::Shipped, days(4)));
+        assert_eq!((before_delivery.expected, before_delivery.delivered_at), (None, None));
+        assert_eq!(before_delivery.shipments.len(), numbers.len());
+        assert!(before_delivery.shipments.iter().all(|s| s.status == Some(OrderStatus::Shipped)));
+
+        for (i, number) in numbers.iter().enumerate() {
+            let at = if i + 1 == numbers.len() { days(0) } else { days(1) };
+            entries.push(entry(4 + i as i64, at, ex(None, &[number], Some(OrderStatus::Delivered))));
+        }
+        let delivered = build_order(&group(entries)[0], None);
+        assert_eq!((delivered.status, delivered.status_at, delivered.delivered_at), (OrderStatus::Delivered, days(0), Some(days(0))));
+    }
+
+    #[test]
+    fn a_new_tracking_number_can_reopen_a_delivered_order() {
+        let original = "1Z999AA10123456784";
+        let replacement = "1Z4X7Q203660123459";
+        let new_eta = DateWindow { from: days(0).date_naive(), to: days(0).date_naive() };
+        let entries = vec![
+            entry(1, days(14), ex(Some("BL-1"), &[original], Some(OrderStatus::Shipped))),
+            entry(2, days(12), ex(Some("BL-1"), &[], Some(OrderStatus::Delivered))),
+            entry(3, days(4), ex(Some("BL-1"), &[replacement], Some(OrderStatus::Shipped))),
+            entry(4, days(0), Extraction { expected: Some(new_eta), ..ex(None, &[replacement], Some(OrderStatus::OutForDelivery)) }),
+        ];
+        let o = build_order(&group(entries)[0], None);
+        assert_eq!((o.status, o.status_at, o.expected), (OrderStatus::OutForDelivery, days(0), Some(new_eta)));
+        assert_eq!(o.shipments[0].status, Some(OrderStatus::Delivered));
+        assert_eq!(o.shipments[0].last_update, days(12));
+        assert_eq!(o.shipments[1].status, Some(OrderStatus::OutForDelivery));
+        assert!(o.partly_delivered);
+    }
+
+    #[test]
+    fn a_shipped_replacement_is_current_after_a_problem_with_the_original() {
+        let original = "1Z999AA10123456784";
+        let replacement = "1Z4X7Q203660123459";
+        for status in [OrderStatus::Returned, OrderStatus::Exception] {
+            let entries = vec![
+                entry(1, days(14), ex(Some("BL-1"), &[original], Some(OrderStatus::Shipped))),
+                entry(2, days(12), ex(Some("BL-1"), &[original], Some(OrderStatus::Delivered))),
+                entry(3, days(5), ex(Some("BL-1"), &[], Some(status))),
+                entry(4, days(4), ex(Some("BL-1"), &[replacement], Some(OrderStatus::Shipped))),
+            ];
+            let o = build_order(&group(entries)[0], None);
+            assert_eq!((o.status, o.status_at), (OrderStatus::Shipped, days(4)), "{status:?}");
+            assert_eq!(o.shipments[0].status, Some(status));
+            assert_eq!(o.shipments[1].status, Some(OrderStatus::Shipped));
+            assert!(!o.partly_delivered);
+        }
     }
 
     #[test]

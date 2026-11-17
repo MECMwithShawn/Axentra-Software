@@ -31,7 +31,7 @@ pub use merge::{Entry, Group, KEEP_DAYS, OrderSection, build_order, group, secti
 
 /// Bump when what is extracted (or how) changes; cached extractions with
 /// another version are redone.
-pub const EXTRACT_VERSION: u32 = 7;
+pub const EXTRACT_VERSION: u32 = 9;
 /// Tracking numbers kept per message.
 pub const MAX_TRACKING: usize = 10;
 pub const MAX_ITEMS: usize = 10;
@@ -199,6 +199,8 @@ pub struct Extraction {
     /// from the carrier's domain (see `Input::sender_authenticated`). Only
     /// such mail confirms a shop's parcels (`trusted_merchant`).
     pub carrier_verified: bool,
+    /// A merchant reply announcing a fresh dispatch.
+    pub dispatch_reply: bool,
 }
 
 impl Extraction {
@@ -271,6 +273,9 @@ pub struct Shipment {
     pub tracking: TrackingNumber,
     pub status: Option<OrderStatus>,
     pub last_update: DateTime<Utc>,
+    /// First announced in a dispatch reply after an earlier delivery.
+    #[serde(default)]
+    pub replacement: bool,
 }
 
 /// One email of an order.

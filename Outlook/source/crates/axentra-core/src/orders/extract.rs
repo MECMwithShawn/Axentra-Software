@@ -5,11 +5,11 @@
 use super::carriers::{carrier_sender, claimed_carrier, sends_for, tracking};
 use super::dates::expected;
 use super::status::status_of;
-use super::{Carrier, Extraction, ExtractionKind, Input, MAX_ITEMS, Merchant, OrderReason, SuppressReason, TrackingNumber, Validation};
+use super::{Carrier, Extraction, ExtractionKind, Input, MAX_ITEMS, Merchant, OrderReason, OrderStatus, SuppressReason, TrackingNumber, Validation};
 use crate::junk::analyze::{Severity, registrable};
 use crate::junk::domain_of;
 use crate::model::{EmailAddress, Message};
-use crate::scan::{Prepared, contains_word, find_word, floor_char, has_unsubscribe, local_part_is, phone_word_before, prepare};
+use crate::scan::{Prepared, contains_word, find_word, floor_char, has_unsubscribe, local_part_is, phone_word_before, prepare, prepare_reply};
 use crate::topics::is_freemail;
 
 /// An order email needs at least this confidence.
@@ -211,6 +211,9 @@ pub fn extract(input: &Input) -> Extraction {
     if let Some(why) = scam(&m.from.name, &p, &domain, order_number.is_some(), &tracking, carrier_mail || known_shop) {
         return suppress(out, why);
     }
+    if let Some(reply) = dispatch_reply(input, &from, &out, carrier, &p) {
+        return reply;
+    }
 
     let status = status_of(&p);
     let mut out = Extraction {
@@ -263,7 +266,7 @@ pub fn extract(input: &Input) -> Extraction {
         reasons.push(OrderReason::TransactionalSender);
     }
     let subject = p.subject.to_ascii_lowercase();
-    let re = ["re:", "aw:", "sv:", "antw:"].iter().any(|r| subject.trim_start().starts_with(r));
+    let re = reply_subject(&subject);
     if re || (m.in_reply_to.is_some() && input.contacts.contains(&from)) {
         confidence -= 0.35;
         reasons.push(OrderReason::Reply);
@@ -314,6 +317,89 @@ pub fn extract(input: &Input) -> Extraction {
     out.tracking = tracking;
     out.status = status.map(|(s, _, _)| s);
     out
+}
+
+fn reply_subject(lower: &str) -> bool {
+    ["re:", "aw:", "sv:", "antw:"].iter().any(|r| lower.trim_start().starts_with(r))
+}
+
+/// A known shop's support team can issue several new tracking numbers in
+/// a reply without using the usual transactional subject. Count this as a
+/// shop-reported dispatch only on narrow positive evidence; a check digit
+/// alone never upgrades an arbitrary reply. The normal full-message scam
+/// gates ran before this step.
+fn dispatch_reply(input: &Input<'_>, from: &str, out: &Extraction, carrier: bool, whole: &Prepared) -> Option<Extraction> {
+    let message = input.message;
+    if (message.in_reply_to.is_none() && !reply_subject(&whole.subject.to_ascii_lowercase()))
+        || dispatch_phrase(whole.head_lower.get(whole.subject.len()..)?).is_none()
+    {
+        return None;
+    }
+    // If this is a dispatch thread, don't fall through to the ordinary
+    // parser on a failed check: old quoted dispatches are not new updates.
+    let no_update = || Some(out.clone());
+    if carrier
+        || !input.known_merchant
+        || out.merchant.domain.is_empty()
+        || out.merchant.key != out.merchant.domain
+        || is_freemail(&out.merchant.domain)
+        || input.junk.is_some()
+        || input.impersonation
+        || input.own_addresses.iter().any(|a| a == from)
+    {
+        return no_update();
+    }
+    let p = prepare_reply(message, input.html, input.text);
+    let Some(phrase) = p.head_lower.get(p.subject.len()..).and_then(dispatch_phrase) else { return no_update() };
+    // Never reuse a number in the subject as shipment evidence. An order
+    // identifier on the subject can still group the update with its order.
+    let body_only = Prepared { subject: String::new(), ..p.clone() };
+    let (numbers, capped) = super::carriers::tracking(&body_only, from, None);
+    let tracking: Vec<_> = numbers.into_iter().filter(|t| t.carrier == Carrier::Ups && t.validated == Validation::CheckDigit).collect();
+    if tracking.len() < 2 {
+        return no_update();
+    }
+    let (order_number, tracking) = self::numbers(&p, tracking);
+    if order_number.is_none() && !(input.sender_authenticated || input.sender_allowed) {
+        return no_update();
+    }
+    let confidence = if order_number.is_some() { 0.85 } else { THRESHOLD };
+    let mut reasons = vec![
+        OrderReason::KnownMerchant,
+        OrderReason::StatusPhrase { phrase: phrase.to_string(), in_subject: false },
+        OrderReason::Tracking { carrier: Carrier::Ups, check_digit: true },
+        OrderReason::Reply,
+    ];
+    if let Some(label) = &order_number {
+        reasons.push(OrderReason::OrderNumber { label: label.clone() });
+    }
+    Some(Extraction {
+        kind: ExtractionKind::Order,
+        order_number,
+        tracking,
+        status: Some(OrderStatus::Shipped),
+        expected: None,
+        truncated: out.truncated || p.truncated || capped,
+        confidence,
+        reasons,
+        dispatch_reply: true,
+        ..out.clone()
+    })
+}
+
+fn dispatch_phrase(body: &str) -> Option<&'static str> {
+    let has_label = contains_word(body, "tracking numbers") || contains_word(body, "tracking number");
+    [
+        "packages we are sending you",
+        "packages we're sending you",
+        "packages we have shipped",
+        "packages we've shipped",
+        "we have shipped your replacement",
+        "we've shipped your replacement",
+        "we shipped your replacement",
+    ]
+    .into_iter()
+    .find(|s| has_label && contains_word(body, s))
 }
 
 /// Tickets or a meal, not a parcel: from a ticket seller or food delivery
@@ -727,6 +813,92 @@ mod tests {
         known.contacts.insert("dana@home.example".into());
         let c = run(&fixtures::contact_chat(), &known);
         assert_eq!((c.kind, c.order_number.as_deref()), (ExtractionKind::None, None));
+    }
+
+    #[test]
+    fn support_dispatch_uses_eight_new_numbers_and_no_quoted_history() {
+        let old = "1Z4X7Q203660123459";
+        let numbers: Vec<_> = (0..8).map(|i| super::super::carriers::ups_with_check(&format!("4X7Q203660120{i:02}"))).collect();
+        let intro = "Here are the UPS tracking numbers for the packages we are sending you.";
+        let earlier = format!("Your order #BL-48213 was delivered! UPS tracking number {old}");
+        let plain = format!("{intro}\r\n{}\r\n\r\nFrom: Brightleaf Orders <orders@brightleaf.example>\r\nSent: Tuesday\r\n{earlier}", numbers.join("\r\n"));
+        let html = format!(
+            "<p>{intro}</p><p>{}</p><hr><div id='divRplyFwdMsg'>Original message</div><div>{earlier}</div>",
+            numbers.join("<br>")
+        );
+        let plain = Mail::new("Brightleaf Home", "support@brightleaf.example", "RE: Order #BL-48213").text(&plain);
+        let html = Mail::new("Brightleaf Home", "support@brightleaf.example", "RE: Order #BL-48213").html(&html);
+        for mail in [&plain, &html] {
+            let e = run(mail, &Known { merchant: true, ..Default::default() });
+            assert_eq!((e.kind, e.order_number.as_deref(), e.status), (ExtractionKind::Order, Some("BL-48213"), Some(OrderStatus::Shipped)));
+            assert_eq!(e.tracking.into_iter().map(|t| t.number).collect::<Vec<_>>(), numbers);
+            assert_eq!(e.expected, None);
+        }
+    }
+
+    #[test]
+    fn received_support_reply_reopens_previously_delivered_order() {
+        use super::super::{Entry, Group, build_order, group};
+        use super::super::fixtures::monday;
+
+        let old = "1Z4X7Q203660123459";
+        let replacement: Vec<_> = (0..8).map(|i| super::super::carriers::ups_with_check(&format!("4X7Q203660120{i:02}"))).collect();
+        let mut delivered = Mail::new("Brightleaf Home", "orders@brightleaf.example", "Delivered: order #BL-48213")
+            .text(&format!("Your order was delivered. UPS tracking number: {old}"));
+        delivered.message.received_at = monday(9);
+        let text = format!(
+            "Here are the UPS tracking numbers for the packages we are sending you.\n{}\n\n+             ---- Original Message ----\nYour order was delivered. Tracking number: {old}",
+            replacement.join("\n")
+        );
+        let later = Mail::new("Brightleaf Home", "support@brightleaf.example", "Re: Order #BL-48213").text(&text);
+        let entry = |id, mail: &Mail, known| Entry {
+            message_id: id,
+            account_id: 1,
+            received_at: mail.message.received_at,
+            internet_message_id: String::new(),
+            subject: mail.message.subject.clone(),
+            extraction: run(mail, &Known { merchant: known, ..Default::default() }),
+        };
+        let groups = group(vec![entry(1, &delivered, false), entry(2, &later, true)]);
+        let [g]: &[Group; 1] = groups.as_slice().try_into().unwrap();
+        let o = build_order(g, None);
+        assert_eq!(o.status, OrderStatus::Shipped);
+        assert_eq!(o.status_at, later.message.received_at);
+        assert_eq!(o.shipments.len(), 9);
+        assert_eq!(o.shipments.iter().find(|s| s.tracking.number == old).unwrap().status, Some(OrderStatus::Delivered));
+        assert_eq!(o.shipments.iter().filter(|s| s.replacement).count(), 8);
+        assert!(o.shipments.iter().filter(|s| replacement.contains(&s.tracking.number)).all(|s| s.replacement && s.status == Some(OrderStatus::Shipped)));
+    }
+
+    #[test]
+    fn support_dispatch_requires_positive_evidence_and_no_warnings() {
+        let n1 = "1Z4X7Q203660123459";
+        let n2 = "1Z999AA10123456784";
+        let dispatch = format!("Here are the UPS tracking numbers for the packages we are sending you.\n{n1}\n{n2}");
+        let mail = |subject, body: &str| Mail::new("Brightleaf Home", "support@brightleaf.example", subject).text(body);
+        let labelled = mail("Re: Order #BL-48213", &dispatch);
+        let unlabelled = mail("Re: Your question", &dispatch);
+        let known = Known { merchant: true, ..Default::default() };
+        assert_eq!(run(&labelled, &Known::default()).kind, ExtractionKind::None);
+        assert_eq!(run(&labelled, &Known { merchant: true, junk: Some(Severity::Caution), ..Default::default() }).kind, ExtractionKind::None);
+        assert_eq!(run(&labelled, &Known { merchant: true, reported: true, ..Default::default() }).suppressed, Some(SuppressReason::Danger));
+        assert_eq!(run(&unlabelled, &known).kind, ExtractionKind::None);
+        let authenticated = run(&unlabelled, &Known { merchant: true, authenticated: true, ..Default::default() });
+        assert_eq!((authenticated.kind, authenticated.status, authenticated.order_number), (ExtractionKind::Order, Some(OrderStatus::Shipped), None));
+        assert_eq!(authenticated.tracking.len(), 2);
+
+        let quoted = mail("Re: Order #BL-48213", &format!("Thanks for confirming.\n\nOn Tuesday, Brightleaf wrote:\n{dispatch}"));
+        assert_eq!(run(&quoted, &known).kind, ExtractionKind::None);
+        let ordinary = mail("Re: Order #BL-48213", &format!("Could you check these UPS tracking numbers?\n{n1}\n{n2}"));
+        assert_eq!(run(&ordinary, &known).status, None, "mentioning valid numbers isn't a dispatch");
+        let fee = mail("Re: Order #BL-48213", &format!("{dispatch}\nShipment on hold. Pay a fee at https://fees.example/pay"));
+        assert_eq!(run(&fee, &known).suppressed, Some(SuppressReason::DeliveryFeeLure));
+    }
+
+    #[test]
+    fn an_explicit_misdelivery_is_not_a_delivery() {
+        let mail = Mail::new("Brightleaf Orders", "orders@brightleaf.example", "Order #BL-48213: Delivered to the wrong house");
+        assert_eq!(order(&mail).status, Some(OrderStatus::Exception));
     }
 
     #[test]

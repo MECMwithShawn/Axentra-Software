@@ -43,6 +43,7 @@
 .ax-badge.ax-pkg-badge-neutral { background: var(--ax-bg-3); color: var(--ax-fg-2); border-color: var(--ax-stroke-2); }
 .ax-pkg-orderno { display: flex; align-items: center; gap: 4px; color: var(--ax-fg-2); font-size: var(--ax-text-200); }
 .ax-pkg-headline { font-size: var(--ax-text-400); line-height: var(--ax-lh-400); font-weight: var(--ax-weight-semibold); }
+.ax-pkg-update { color: var(--ax-fg-3); font-size: var(--ax-text-200); line-height: var(--ax-lh-200); }
 
 /* the tracker: Ordered → Shipped → Out for delivery → Delivered */
 .ax-pkg-steps { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; }
@@ -74,7 +75,9 @@
 
 /* shipments and items */
 .ax-pkg-shipments, .ax-pkg-items, .ax-pkg-emails { margin: 0; padding: 0; list-style: none; }
+.ax-pkg-shipment-heading { margin: 0 0 6px; font-size: var(--ax-text-300); font-weight: var(--ax-weight-semibold); }
 .ax-pkg-shipment { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.ax-pkg-shipment-update { flex-basis: 100%; }
 .ax-pkg-carrier { color: var(--ax-fg-2); font-size: var(--ax-text-200); }
 .ax-pkg-number { font-family: var(--ax-font-mono); font-size: var(--ax-text-200); overflow-wrap: anywhere; }
 .ax-pkg-items { display: flex; flex-direction: column; gap: 2px; color: var(--ax-fg-2); font-size: var(--ax-text-200); }

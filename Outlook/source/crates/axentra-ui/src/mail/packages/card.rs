@@ -3,7 +3,9 @@
 //! ever opens is a carrier's fixed tracking page
 //! (`Carrier::tracking_url`), and only from a click on Track.
 
-use axentra_core::orders::{DateWindow, Order, OrderSection, OrderStatus};
+use std::cmp::Reverse;
+
+use axentra_core::orders::{DateWindow, Order, OrderSection, OrderStatus, Shipment};
 use axentra_core::*;
 use chrono::{DateTime, Local, NaiveDate, Utc};
 use dioxus::prelude::*;
@@ -164,9 +166,16 @@ fn copy_text(app: AppState, text: &str, done: &str) {
     app.toast(done.to_string());
 }
 
-/// The first shipment's tracking page, if its carrier has one.
-fn first_track_url(o: &Order) -> Option<String> {
-    o.shipments.iter().find_map(|s| s.tracking.carrier.tracking_url(&s.tracking.number))
+/// Put active parcels ahead of the original delivery in replacement orders.
+fn prioritized_shipments(o: &Order) -> Vec<&Shipment> {
+    let mut shipments: Vec<_> = o.shipments.iter().collect();
+    shipments.sort_by_key(|s| (!s.replacement, s.status.is_some_and(OrderStatus::is_terminal), Reverse(s.last_update)));
+    shipments
+}
+
+/// The first accessible carrier page in the same order as the shipment rows.
+fn first_track_url(shipments: &[&Shipment]) -> Option<String> {
+    shipments.iter().find_map(|s| s.tracking.carrier.tracking_url(&s.tracking.number))
 }
 
 #[component]
@@ -186,8 +195,16 @@ pub fn OrderCard(order: Order, section: OrderSection, today: NaiveDate, first: b
     let key = o.key.clone();
     let dom_id = super::card_dom_id(&o.key);
     let newest = o.events.iter().max_by_key(|e| e.at).map(|e| e.message_id);
-    let track_first = first_track_url(&o);
+    let shipments = prioritized_shipments(&o);
+    let track_first = first_track_url(&shipments);
+    let replacement_count = shipments.iter().take_while(|s| s.replacement).count();
+    let (replacements, originals) = shipments.split_at(replacement_count);
+    let shipment_groups = [
+        ("Replacement parcels", replacements),
+        (if replacements.is_empty() { "" } else { "Original shipment" }, originals),
+    ];
     let h24 = app.settings.read().use_24h_time;
+    let last_email = o.events.iter().map(|e| e.at).max().map(|t| crate::fmt::full_time(t, h24));
     let mut events = o.events.clone();
     events.sort_by_key(|e| std::cmp::Reverse(e.at));
     let mut menu = vec![if o.status == OrderStatus::Delivered {
@@ -290,6 +307,9 @@ pub fn OrderCard(order: Order, section: OrderSection, today: NaiveDate, first: b
                     }
                 }
                 div { class: "ax-pkg-headline", "{head}" }
+                if let Some(when) = last_email {
+                    div { class: "ax-pkg-update", "Latest order email: {when}" }
+                }
                 if let Some(steps) = steps {
                     ol { class: "ax-pkg-steps", "aria-label": "Delivery progress",
                         for (i, st) in steps.into_iter().enumerate() {
@@ -309,47 +329,57 @@ pub fn OrderCard(order: Order, section: OrderSection, today: NaiveDate, first: b
                         }
                     }
                 }
-                if !o.shipments.is_empty() {
-                    ul { class: "ax-pkg-shipments",
-                        for (i, sh) in o.shipments.iter().cloned().enumerate() {
-                            {
-                                let carrier = sh.tracking.carrier.name();
-                                let number = sh.tracking.number.clone();
-                                let number_copy = number.clone();
-                                let url = sh.tracking.carrier.tracking_url(&number);
-                                let host = sh.tracking.carrier.host().unwrap_or("the carrier's website");
-                                let aria = format!("Track package from {name}");
-                                rsx! {
-                                    li { key: "{i}", class: "ax-pkg-shipment",
-                                        span { class: "ax-pkg-carrier", "{carrier}" }
-                                        span { class: "ax-pkg-number ax-selectable", "{number}" }
-                                        IconButton {
-                                            icon: "copy",
-                                            title: "Copy tracking number",
-                                            small: true,
-                                            onclick: move |_| copy_text(app, &number_copy, "Tracking number copied"),
-                                        }
-                                        span { class: "ax-grow" }
-                                        if let Some(url) = url {
-                                            button {
-                                                r#type: "button",
-                                                class: "ax-btn ax-small ax-pkg-track",
-                                                title: "Opens {host} in your browser",
-                                                "aria-label": "{aria}",
-                                                onclick: move |_| crate::calendar::actions::open_external(&url),
-                                                Icon { name: "open" }
-                                                span { class: "ax-btn-label", "Track package" }
+                for (label, parcels) in shipment_groups.into_iter().filter(|(_, parcels)| !parcels.is_empty()) {
+                    div { class: "ax-pkg-shipment-group", key: "{label}",
+                        if !label.is_empty() {
+                            h4 { class: "ax-pkg-shipment-heading", "{label} ({parcels.len()})" }
+                        }
+                        ul { class: "ax-pkg-shipments", "aria-label": if !label.is_empty() { label },
+                            for (i, sh) in parcels.iter().enumerate() {
+                                {
+                                    let carrier = sh.tracking.carrier.name();
+                                    let number = sh.tracking.number.clone();
+                                    let number_copy = number.clone();
+                                    let url = sh.tracking.carrier.tracking_url(&number);
+                                    let host = sh.tracking.carrier.host().unwrap_or("the carrier's website");
+                                    let aria = format!("Track package {i}: {carrier}, {number}", i = i + 1);
+                                    let status = sh.status.map(|s| s.label()).unwrap_or("Tracking number received");
+                                    let update = crate::fmt::full_time(sh.last_update, h24);
+                                    rsx! {
+                                        li { key: "{i}", class: "ax-pkg-shipment",
+                                            span { class: "ax-pkg-carrier", "{carrier}" }
+                                            span { class: "ax-pkg-number ax-selectable", "{number}" }
+                                            IconButton {
+                                                icon: "copy",
+                                                title: "Copy tracking number",
+                                                small: true,
+                                                onclick: move |_| copy_text(app, &number_copy, "Tracking number copied"),
                                             }
-                                        } else if let Some(id) = newest {
-                                            button {
-                                                r#type: "button",
-                                                class: "ax-mail-link",
-                                                title: "The order email has the tracking link",
-                                                onclick: {
-                                                    let key = key.clone();
-                                                    move |_| open_email(app, ctx, &key, id)
-                                                },
-                                                "Track from the order email"
+                                            span { class: "ax-grow" }
+                                            if let Some(url) = url {
+                                                button {
+                                                    r#type: "button",
+                                                    class: "ax-btn ax-small ax-pkg-track",
+                                                    title: "Opens {host} in your browser",
+                                                    "aria-label": "{aria}",
+                                                    onclick: move |_| crate::calendar::actions::open_external(&url),
+                                                    Icon { name: "open" }
+                                                    span { class: "ax-btn-label", "Track package" }
+                                                }
+                                            } else if let Some(id) = newest {
+                                                button {
+                                                    r#type: "button",
+                                                    class: "ax-mail-link",
+                                                    title: "The order email has the tracking link",
+                                                    onclick: {
+                                                        let key = key.clone();
+                                                        move |_| open_email(app, ctx, &key, id)
+                                                    },
+                                                    "Track from the order email"
+                                                }
+                                            }
+                                            span { class: "ax-pkg-shipment-update ax-pkg-update",
+                                                "{status} \u{b7} Email update: {update}"
                                             }
                                         }
                                     }
@@ -516,6 +546,25 @@ mod tests {
         assert_eq!(tracker(&o), None);
         o.status = OrderStatus::Refunded;
         assert_eq!(tracker(&o), None);
+    }
+
+    #[test]
+    fn track_shortcut_prefers_the_active_parcel() {
+        use axentra_core::orders::{Carrier, TrackingNumber, Validation};
+        let shipment = |number: &str, status| Shipment {
+            tracking: TrackingNumber { carrier: Carrier::Usps, number: number.into(), validated: Validation::CheckDigit },
+            status: Some(status),
+            last_update: at(2026, 10, 19),
+            replacement: false,
+        };
+        let original = shipment("9200190301123456789017", OrderStatus::Delivered);
+        let replacement = shipment("9200190301123456789024", OrderStatus::InTransit);
+        let replacement_url = Carrier::Usps.tracking_url(&replacement.tracking.number).unwrap();
+        let original_url = Carrier::Usps.tracking_url(&original.tracking.number).unwrap();
+        let mut order = Order { shipments: vec![original, replacement], ..Default::default() };
+        assert_eq!(first_track_url(&prioritized_shipments(&order)), Some(replacement_url));
+        order.shipments[1].status = Some(OrderStatus::Delivered);
+        assert_eq!(first_track_url(&prioritized_shipments(&order)), Some(original_url));
     }
 
     #[test]

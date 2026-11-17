@@ -851,7 +851,7 @@ pub fn PackagesPage() -> Element {
     rsx! {
         Section {
             title: "Package tracking",
-            description: "Order confirmations and shipping emails are listed in Mail > Packages, with where each order is.",
+            description: "Mail > Packages updates automatically from order and shipping emails as your accounts sync.",
             Switch {
                 label: "Find orders and deliveries in my mail",
                 checked: st.order_tracking,
@@ -872,7 +872,7 @@ pub fn PackagesPage() -> Element {
             }
             Note {
                 icon: "shield",
-                text: "Orders are found on this device. Nothing is sent to stores or carriers. Track opens the carrier's website only when you click it.",
+                text: "Outlook finds orders on this device. Package updates here come from your email. Choose Track package to see the carrier's live status.",
             }
         }
         Section { title: "Delivered packages", description: "Delivered, cancelled and returned orders stay in Packages for a while, then leave the list.",

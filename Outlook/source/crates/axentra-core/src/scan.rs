@@ -334,6 +334,64 @@ pub(crate) fn prepare(message: &Message, html: Option<&str>, text: &str) -> Prep
     out
 }
 
+/// A reply's new content for narrowly scoped evidence extraction. Keep
+/// `prepare` as the full-message path for all warning/scam checks.
+pub(crate) fn prepare_reply(message: &Message, html: Option<&str>, text: &str) -> Prepared {
+    // Common HTML quote containers start before the original message text.
+    // Find them in bounded input: rendered text alone loses these markers.
+    let html = html.map(|full| {
+        let html = &full[..floor_char(full, MAX_HTML)];
+        let lower = html.to_ascii_lowercase();
+        let mut after = 0;
+        while let Some(open) = lower[after..].find('<').map(|i| after + i) {
+            let Some(end) = lower[open..].find('>').map(|i| open + i) else { break };
+            after = end + 1;
+            let tag = &lower[open + 1..end];
+            let name = tag.split(|c: char| c.is_ascii_whitespace() || c == '/').next().unwrap_or_default();
+            let quote = match name {
+                "blockquote" => true,
+                "div" | "span" => {
+                    let id = attr(tag, "id");
+                    let classes = attr(tag, "class");
+                    id.as_deref().is_some_and(|i| matches!(i, "divrplyfwdmsg" | "appendonsend" | "replyforwardmessage"))
+                        || classes.as_deref().is_some_and(|c| {
+                            c.split_ascii_whitespace()
+                                .any(|word| matches!(word, "gmail_quote" | "gmail_attr" | "yahoo_quoted" | "moz-cite-prefix" | "protonmail_quote"))
+                        })
+                }
+                _ => false,
+            };
+            if quote {
+                return &html[..open];
+            }
+        }
+        html
+    });
+    let mut out = prepare(message, html, text);
+    let mut offset = 0;
+    for raw in out.body.split_inclusive('\n') {
+        let line = raw.trim();
+        let lower = line.to_ascii_lowercase();
+        let delimiter = lower.trim_matches('-').trim();
+        if line.starts_with('>')
+            || matches!(delimiter, "original message" | "forwarded message" | "begin forwarded message:")
+            || (lower.starts_with("on ") && lower.ends_with(" wrote:"))
+            || (lower.starts_with("from:") && (lower.contains('@') || out.body[offset + raw.len()..].trim_start().starts_with("Sent:")))
+        {
+            break;
+        }
+        offset += raw.len();
+    }
+    out.body.truncate(offset);
+    out.body_lower = out.body.to_ascii_lowercase();
+    out.head = format!("{}\n{}", out.subject, &out.body[..floor_char(&out.body, MAX_HEAD)]);
+    out.head_lower = out.head.to_ascii_lowercase();
+    // Only visible numbers count in the reply path. A URL can be quoted,
+    // hidden or retained by an HTML wrapper even after the text was cut.
+    out.links.clear();
+    out
+}
+
 /// Byte offsets of `needle` (ASCII lowercase, not empty) in `hay_lower`.
 pub(crate) fn find_ascii<'a>(hay_lower: &'a str, needle: &'a str) -> impl Iterator<Item = usize> + 'a {
     hay_lower.match_indices(needle).map(|(i, _)| i)

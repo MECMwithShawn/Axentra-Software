@@ -2,6 +2,12 @@
 
 Earlier versions: see `Outlook/CHANGELOG.md` in the Axentra-Software repository.
 
+## 0.1.9 (pre-release, 2026-11-17)
+
+- **Packages updates as mail syncs.** Axentra Mail checks for new shipping mail even when you're in another view. Packages has a refresh button and shows the last email update for each shipment. Use Track package for the live carrier status.
+- **Replacement shipments keep their own status.** Older delivery notices no longer mark a newly announced tracking number as delivered. The Track shortcut opens an active parcel first.
+- **Fixed in this release:** 0.1.8 left out these package fixes, so a reply mentioning an earlier delivery could mark newly sent replacement parcels as delivered. Opening 0.1.9 checks your orders again.
+
 ## 0.1.8 (pre-release, 2026-11-16)
 
 - **Now called Axentra Mail.** The app shows its own name and the Axentra Mail icon everywhere: the window, Settings › About, the app menu and Axentra Command. It takes the place of the earlier Axentra Mail app, which installing this package removes. Your mail, accounts and settings stay where they are.

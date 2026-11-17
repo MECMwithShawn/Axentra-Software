@@ -1,11 +1,11 @@
 # Axentra Mail (formerly Axentra Outlook) on Linux
 
-Built and tested 2026-11-16 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.8**; **pre-release**, not a stable release.
+Built and tested 2026-11-17 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.1.9**; **pre-release**, not a stable release.
 
 ## Install and run
 
 ```bash
-sudo apt install ./axentra-outlook_0.1.8-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.9-1_amd64.deb
 ```
 
 Open **Axentra Mail** from the application menu, or run `axentra-outlook`. The package installs to
@@ -23,7 +23,7 @@ folder, and the full mail, calendar, people and to-do interface described in the
 
 ## Verification
 
-- 910 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
+- 918 Rust tests passed (`cargo test --workspace`): store, recurrence, search, drafts, vCard/CSV, sync mapping
   (MIME, Graph JSON), OAuth PKCE, loopback callback, backup format/encryption/restore/retention, dialog sizing,
   account photo checks and limits, UI logic.
 - The account photo was checked by the user on this Zorin machine with a debug build of the same code and their

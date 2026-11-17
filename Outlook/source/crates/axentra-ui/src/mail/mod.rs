@@ -10,7 +10,7 @@ mod dates;
 mod dialogs;
 mod files;
 mod folders;
-mod insights_pass;
+pub(crate) mod insights_pass;
 pub(crate) mod meaning_pass;
 mod junk_pass;
 pub(crate) mod shadow_pass;
@@ -206,35 +206,6 @@ pub fn MailModule() -> Element {
         }
     });
 
-    // Junk checks: mail gets its warning signs (and the learned model's
-    // score) in the background, in batches off the UI thread, until none is
-    // left; a changed set of reports trains and checks a new model version.
-    // See `junk_pass` for when it runs.
-    use_future(move || async move {
-        let mut pass = junk_pass::JunkPass::default();
-        let mut refresh = junk_pass::Refresh::default();
-        loop {
-            let rev = *app.mail_rev.peek();
-            let (wait, changed) = if pass.due(rev) {
-                let out = tokio::task::spawn_blocking(|| junk_pass::run_batch(store()))
-                    .await
-                    .unwrap_or_else(|_| Err("the check stopped unexpectedly".into()));
-                if let Err(e) = &out {
-                    // The error only, never message content.
-                    eprintln!("axentra: junk check incomplete, retrying later: {e}");
-                }
-                let changed = out.as_ref().is_ok_and(|b| b.model_changed || b.checked > 0);
-                (pass.finished(rev, &out), changed)
-            } else {
-                (Duration::from_secs(2), false)
-            };
-            if refresh.now(changed, std::time::Instant::now()) {
-                app.bump_mail();
-            }
-            tokio::time::sleep(wait).await;
-        }
-    });
-
     // Local AI review (a pilot): one message at a time, and only what's new
     // from strangers. See `shadow_pass`.
     use_future(move || async move {
@@ -266,34 +237,6 @@ pub fn MailModule() -> Element {
                     Duration::from_secs(60)
                 }
             };
-            tokio::time::sleep(wait).await;
-        }
-    });
-
-    // Packages and topics: orders are found and topics sorted in the
-    // background the same way, newest mail first; switched off in Settings,
-    // a batch does nothing. See `insights_pass`.
-    use_future(move || async move {
-        let mut pass = junk_pass::JunkPass::default();
-        let mut refresh = junk_pass::Refresh::default();
-        loop {
-            let rev = *app.mail_rev.peek();
-            let (wait, changed) = if pass.due(rev) {
-                let out = tokio::task::spawn_blocking(|| insights_pass::run_batch(store()))
-                    .await
-                    .unwrap_or_else(|_| Err("the sorting stopped unexpectedly".into()));
-                if let Err(e) = &out {
-                    // The error only, never message content.
-                    eprintln!("axentra: package and topic sorting incomplete, retrying later: {e}");
-                }
-                let changed = out.as_ref().is_ok_and(|b| b.checked > 0);
-                (pass.finished(rev, &out), changed)
-            } else {
-                (Duration::from_secs(2), false)
-            };
-            if refresh.now(changed, std::time::Instant::now()) {
-                app.bump_mail();
-            }
             tokio::time::sleep(wait).await;
         }
     });

@@ -134,7 +134,11 @@ const PHRASES: &[(OrderStatus, &[&str])] = &[
     ),
     (
         OrderStatus::Exception,
-        &["delivery exception", "unable to deliver", "delivery attempted", "attempted delivery", "failed delivery", "missed delivery", "address issue", "held at", "zustellversuch"],
+        &[
+            "delivery exception", "unable to deliver", "delivery attempted", "attempted delivery", "failed delivery", "missed delivery",
+            "delivered to the wrong address", "delivered to the wrong house", "delivered to an incorrect address",
+            "address issue", "held at", "zustellversuch",
+        ],
     ),
     (OrderStatus::Delayed, &["delayed", "running late", "verspätet", "verspaetet", "retard", "retrasado", "遅延"]),
     (

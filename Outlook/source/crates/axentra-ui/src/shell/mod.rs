@@ -219,6 +219,8 @@ pub fn Shell() -> Element {
         }
     });
 
+    crate::mail::insights_pass::use_mail_insights(app);
+
     // New messages asked for from outside (`--compose`, mailto: links).
     use_future(move || async move {
         loop {

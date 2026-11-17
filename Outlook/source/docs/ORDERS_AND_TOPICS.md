@@ -13,9 +13,11 @@ downloaded:
 Neither ever moves mail, changes it or tells a server anything. Both are only
 views over mail you have: they can be switched off (Settings › Mail ›
 Packages / Topics), which deletes what was worked out and keeps your
-corrections. Nothing in either feature uses the network. The one page they
-ever open is a carrier's own tracking page, from a fixed template, when you
-click Track.
+corrections. The normal account sync fetches fresh mail. Packages updates in
+the background while Outlook is open, including from Calendar, People, or
+To Do. The refresh button in Packages requests that existing sync. Cards
+show when the supporting emails arrived. Outlook doesn't poll carriers;
+Track package opens the carrier's own page from a fixed template.
 
 One other feature uses topics to move mail, and only when you ask it to:
 auto-archive's "Sort into topic folders" (Settings › Mail › Auto-archive)
@@ -70,8 +72,8 @@ row with the current version, or (for order emails, for topics a phishing
 verdict changes, and for any topic when the message became phishing or
 stopped being it) when its junk check changed since. Writing a batch records
 exactly what the next query compares, so a second run after draining does
-nothing. Leaving Mail stops the pass; coming back resumes it where the store
-says. A batch worked out while a feature was switched off, a sender was
+nothing. Closing Outlook stops the pass; reopening resumes it where the
+store says. A batch worked out while a feature was switched off, a sender was
 ignored or a topic corrected isn't written; the next batch redoes it.
 
 **Failures.** Extraction and classification are wrapped in `catch_unwind`: a
@@ -107,7 +109,7 @@ of a rebuilt group.
 
 ## Versions and levels
 
-- `orders::EXTRACT_VERSION` (stored as `o6`): bump it when what is extracted
+- `orders::EXTRACT_VERSION` (stored as `o9`): bump it when what is extracted
   changes; every message is extracted again.
 - `topics::CLASSIFY_VERSION` and the kv `topics.context_rev` (stored as
   `t4-c{rev}`): bump the version when the rules or lexicon change.
@@ -229,6 +231,17 @@ hold for one in 7 or 10 numbers, so a shop's numeric order number near
 "Confirmation number" is also a hotel's and an airline's label: it counts
 only in mail about an order (an order word, or a tracking number) and never
 in a booking (reservation, flight, check-in, hotel, …).
+
+**Replacement dispatch replies.** A known shop's reply that says it is
+sending packages and lists multiple check-digit-valid UPS numbers can add
+those parcels to a labelled order. Only the new text is used for this
+update. Old numbers and delivery events in quoted messages are ignored.
+Without an explicit order number the sender must be authenticated or
+explicitly allowed. The full message still goes through the existing scam
+checks. A merchant's dispatch report is shown as Shipped; it does not
+establish a carrier scan or an estimated delivery time. Tracking numbers
+first announced in a dispatch reply after delivery stay in their own
+replacement group, including after they arrive.
 
 It is an order email at 0.70 or more with an order number or a tracking
 number. A tracking number alone without a check digit, or under a junk

@@ -186,10 +186,15 @@ pub fn PackagesPane(columns: bool, #[props(default)] style: String) -> Element {
     let app = use_app();
     let mut ctx = use_mail();
     let _ = app.mail_rev();
+    let _ = app.accounts_rev();
     let settings = app.settings.read().clone();
     let today = *ctx.today.read();
     let now = Utc::now();
     let s = store();
+    let mail_sync = crate::state::sync().filter(|_| {
+        s.accounts().is_ok_and(|accounts| accounts.iter().any(|a| a.kind != axentra_core::AccountKind::Local))
+    });
+    let syncing = mail_sync.is_some_and(|engine| engine.status().running);
     let list = s.orders(false).unwrap_or_default();
     // Off the UI thread: counting is a walk over the mailbox.
     let progress = use_resource(move || async move {
@@ -286,6 +291,17 @@ pub fn PackagesPane(columns: bool, #[props(default)] style: String) -> Element {
                         h2 { class: "ax-mail-title ax-ellipsis", "Packages" }
                     }
                     span { class: "ax-grow" }
+                    if let Some(engine) = mail_sync {
+                        IconButton {
+                            icon: "arrow_sync",
+                            title: if syncing { "Syncing mail…" } else { "Check for new shipping emails" },
+                            disabled: syncing,
+                            onclick: move |_| {
+                                engine.sync_now();
+                                dom::announce("Checking for new shipping emails.", false);
+                            },
+                        }
+                    }
                     IconButton {
                         icon: "info",
                         title: "Why only some orders?",
@@ -294,12 +310,12 @@ pub fn PackagesPane(columns: bool, #[props(default)] style: String) -> Element {
                     }
                 }
                 div { class: "ax-pkg-subtitle",
-                    "Found in your mail on this device"
-                    if progress.is_some_and(|p| !p.busy()) { " \u{b7} Up to date" }
+                    "Updates from your mail"
+                    if syncing { " \u{b7} Syncing mail…" }
                 }
                 if why() {
                     p { class: "ax-set-note ax-pkg-why", role: "note",
-                        "Packages are found on this device from order and shipping emails. Suspicious delivery emails are left out."
+                        "Packages update as new order and shipping emails sync. Suspicious notices are left out. Use Track package for live details from the carrier."
                     }
                 }
                 Pivot {

@@ -3,9 +3,14 @@
 //! work is whatever the store has no current row for. Scheduled like the
 //! junk pass, with its [`JunkPass`](super::junk_pass::JunkPass).
 
-use axentra_core::Store;
+use std::time::{Duration, Instant};
 
-use super::junk_pass::Batch;
+use axentra_core::Store;
+use dioxus::prelude::*;
+
+use crate::state::{AppState, Module, store};
+
+use super::junk_pass::{self, Batch};
 
 /// Messages extracted (and sorted) per batch.
 pub const BATCH: u32 = 250;
@@ -26,6 +31,59 @@ pub fn run_batch(s: &Store) -> Result<Batch, String> {
         checked += s.classify_topics_pending(BATCH).map_err(|e| e.to_string())?;
     }
     Ok(Batch { model_changed: false, checked })
+}
+
+/// Keep up with newly synced mail in any app view. Package extraction depends
+/// on the junk pass, so its prerequisite has the same lifetime.
+pub(crate) fn use_mail_insights(app: AppState) {
+    use_pass(app, junk_pass::run_batch, Some(assess_only), "junk check");
+    use_pass(app, run_batch, None, "package and topic sorting");
+}
+
+fn assess_only(s: &Store) -> Result<Batch, String> {
+    s.assess_pending(junk_pass::BATCH).map(|checked| Batch { model_changed: false, checked }).map_err(|e| e.to_string())
+}
+
+type RunBatch = fn(&Store) -> Result<Batch, String>;
+
+fn use_pass(app: AppState, run: RunBatch, away_from_mail: Option<RunBatch>, label: &'static str) {
+    use_future(move || async move {
+        let mut pass = junk_pass::JunkPass::default();
+        let mut refresh = junk_pass::Refresh::default();
+        let mut was_in_mail = true;
+        loop {
+            let in_mail = *app.module.peek() == Module::Mail;
+            let run = if let Some(assess) = away_from_mail {
+                // Away from Mail, only compute warnings needed by Packages.
+                // Moving junk and retraining still happen in the Mail view.
+                if in_mail != was_in_mail {
+                    pass = junk_pass::JunkPass::default();
+                    was_in_mail = in_mail;
+                }
+                if in_mail { run } else { assess }
+            } else {
+                run
+            };
+            let rev = *app.mail_rev.peek();
+            let (wait, changed) = if pass.due(rev) {
+                let out = tokio::task::spawn_blocking(move || run(store()))
+                    .await
+                    .unwrap_or_else(|_| Err("the check stopped unexpectedly".into()));
+                if let Err(e) = &out {
+                    // The error only, never message content.
+                    eprintln!("axentra: {label} incomplete, retrying later: {e}");
+                }
+                let changed = out.as_ref().is_ok_and(|b| b.model_changed || b.checked > 0);
+                (pass.finished(rev, &out), changed)
+            } else {
+                (Duration::from_secs(2), false)
+            };
+            if refresh.now(changed, Instant::now()) {
+                app.bump_mail();
+            }
+            tokio::time::sleep(wait).await;
+        }
+    });
 }
 
 #[cfg(test)]
