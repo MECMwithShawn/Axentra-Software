@@ -33,6 +33,10 @@ Add `--offline` when the pinned dependencies are already in the local Cargo cach
 - Models that Ollama reports as remote, or whose tag ends in `cloud`, are left out. The app refuses to load them even if asked.
 - A reading that is unavailable shows as an em dash. A model's own VRAM is kept apart from the whole GPU's VRAM.
 
+## Rankings
+
+`telemetry.rs` reads an optional `model-rankings.json` (see the main README for the format) with each sample. `ui.rs` sorts rows by rank, draws `#N` before the name, a **Recommended** pill after the state pill, the score after the parameter count, and the reason as a tooltip. Set `LLM_MANAGER_RANKINGS=/path/to/file.json` to test it with any file.
+
 ## Testing against a stub
 
 `LLM_MANAGER_OLLAMA_ADDRESS` points the app at another Ollama address. Only loopback addresses such as `127.0.0.1:18080` are accepted. Anything else is ignored and the app uses `127.0.0.1:11434`.

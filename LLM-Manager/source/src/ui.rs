@@ -6,7 +6,7 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::telemetry::{Engine, Gpu, Model, Resident, Snapshot, ollama_address};
+use crate::telemetry::{Engine, Gpu, Model, RankEntry, Resident, Snapshot, ollama_address};
 use eframe::egui::{
     self, Align, Align2, Color32, ColorImage, Context, CursorIcon, FontData, FontDefinitions,
     FontFamily, FontId, Frame, Id, Label, LayerId, Layout, Margin, Mesh, Order, PointerButton,
@@ -828,21 +828,51 @@ fn models(
         return None;
     }
 
+    let rankings = &snapshot.rankings;
+    let entry = |model: Option<&Model>| {
+        model.and_then(|model| rankings.for_model(&model.name, &model.digest))
+    };
+    // Ranked models first, best first; the rest keep Ollama's order.
+    let order = |model: Option<&Model>| entry(model).map_or(u32::MAX, |entry| entry.rank);
+
     let mut action = None;
+    if !rankings.models.is_empty() {
+        ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            ui.add_space(2.0);
+            let basis = if rankings.ranking == "benchmark" {
+                "Ranked by Offline Panel's benchmark: most correct answers, then quickest replies. \
+                 The top 3 that fit on the GPU are recommended."
+            } else {
+                "Ranked by size until Offline Panel has benchmarked every model that fits on the GPU."
+            };
+            ui.label(RichText::new(basis).font(regular(12.0)).color(MUTED));
+        });
+    }
     if !engine.residents.is_empty() {
         section(ui, "Loaded in memory");
-        for resident in &engine.residents {
-            let model = engine
-                .models
-                .iter()
-                .find(|model| model.name == resident.name);
-            if let Some(row_action) = model_row(ui, art, model, Some(resident), pending) {
+        let mut residents: Vec<_> = engine
+            .residents
+            .iter()
+            .map(|resident| {
+                let model = engine
+                    .models
+                    .iter()
+                    .find(|model| model.name == resident.name);
+                (resident, model)
+            })
+            .collect();
+        residents.sort_by_key(|(_, model)| order(*model));
+        for (resident, model) in residents {
+            if let Some(row_action) =
+                model_row(ui, art, model, Some(resident), entry(model), pending)
+            {
                 action = Some(row_action);
             }
         }
     }
 
-    let mut installed = engine
+    let mut installed: Vec<&Model> = engine
         .models
         .iter()
         .filter(|model| {
@@ -851,11 +881,14 @@ fn models(
                 .iter()
                 .any(|resident| resident.name == model.name)
         })
-        .peekable();
-    if installed.peek().is_some() {
+        .collect();
+    installed.sort_by_key(|model| order(Some(*model)));
+    if !installed.is_empty() {
         section(ui, "Installed on disk");
         for model in installed {
-            if let Some(row_action) = model_row(ui, art, Some(model), None, pending) {
+            if let Some(row_action) =
+                model_row(ui, art, Some(model), None, entry(Some(model)), pending)
+            {
                 action = Some(row_action);
             }
         }
@@ -870,6 +903,7 @@ fn model_row(
     art: &Art,
     model: Option<&Model>,
     resident: Option<&Resident>,
+    rank: Option<&RankEntry>,
     pending: Option<(&str, bool)>,
 ) -> Option<Action> {
     let name = model
@@ -943,6 +977,10 @@ fn model_row(
         })
         .filter(|role| !role.is_empty())
         .unwrap_or_else(|| "Missing from the local inventory".to_owned());
+    let role = match rank.and_then(RankEntry::score) {
+        Some(score) => format!("{role}  ·  {score}"),
+        None => role,
+    };
     let build = [
         details
             .map(|details| details.quantization_level.trim().to_owned())
@@ -963,15 +1001,44 @@ fn model_row(
     let chip_height = line_height(ui, &regular(11.0)) + 2.0;
     let block = name_height + 2.0 + role_height + 3.0 + chip_height;
     let top = identity.center().y - block / 2.0;
-    let pill_width = ui
-        .painter()
-        .layout_no_wrap(state.to_owned(), semibold(11.0), ink)
-        .size()
-        .x
-        + 20.0;
+    let pill_width = |ui: &Ui, text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), semibold(11.0), ink)
+            .size()
+            .x
+            + 20.0
+    };
+    let recommended = rank.filter(|rank| rank.recommended).map(|_| "Recommended");
+    let state_width = pill_width(ui, state);
+    let pills = state_width + recommended.map_or(0.0, |text| pill_width(ui, text) + 6.0);
+    // The rank, when Offline Panel has one, leads the name: "#1".
+    let rank_width = match rank {
+        Some(rank) => {
+            let label = format!("#{}", rank.rank);
+            let width = ui
+                .painter()
+                .layout_no_wrap(label.clone(), name_font.clone(), ACCENT)
+                .size()
+                .x;
+            text_at(
+                ui,
+                (name, "rank"),
+                Rect::from_min_size(pos2(identity.left(), top), vec2(width + 2.0, name_height)),
+                &label,
+                name_font.clone(),
+                ACCENT,
+                Align::Min,
+            );
+            width + 8.0
+        }
+        None => 0.0,
+    };
     let name_rect = Rect::from_min_size(
-        pos2(identity.left(), top),
-        vec2((identity.width() - pill_width - 8.0).max(40.0), name_height),
+        pos2(identity.left() + rank_width, top),
+        vec2(
+            (identity.width() - rank_width - pills - 8.0).max(40.0),
+            name_height,
+        ),
     );
     let name_label = text_at(
         ui,
@@ -990,6 +1057,23 @@ fn model_row(
         ink,
         fill,
     );
+    if let Some(text) = recommended {
+        pill(
+            ui,
+            (name, "recommended"),
+            pos2(
+                name_label.rect.right() + 8.0 + state_width + 6.0,
+                name_rect.center().y,
+            ),
+            text,
+            ACCENT,
+            ACCENT_FILL,
+        );
+    }
+    if let Some(rank) = rank.filter(|rank| !rank.reason.is_empty()) {
+        ui.interact(identity, Id::new((name, "rank-tip")), Sense::hover())
+            .on_hover_text(format!("#{}: {}", rank.rank, rank.reason));
+    }
     text_at(
         ui,
         (name, "role"),

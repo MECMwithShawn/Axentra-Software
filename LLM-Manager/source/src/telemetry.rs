@@ -7,6 +7,8 @@ use ureq::{Agent, Body, http::Response};
 
 const DEFAULT_OLLAMA_ADDRESS: &str = "127.0.0.1:11434";
 const ADDRESS_OVERRIDE: &str = "LLM_MANAGER_OLLAMA_ADDRESS";
+const RANKINGS_OVERRIDE: &str = "LLM_MANAGER_RANKINGS";
+const MAX_RANKINGS_BYTES: u64 = 1024 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_secs(3);
 const MODEL_TIMEOUT: Duration = Duration::from_secs(90);
 const GPU_TIMEOUT: Duration = Duration::from_secs(2);
@@ -18,6 +20,74 @@ const GPU_FIELDS: &str =
 pub struct Snapshot {
     pub engine: Result<Engine, String>,
     pub gpus: Result<Vec<Gpu>, String>,
+    pub rankings: Rankings,
+}
+
+/// Model ranking published by Offline Panel's benchmark (`model-rankings.json`).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Rankings {
+    pub ranking: String,
+    pub models: Vec<RankEntry>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RankEntry {
+    pub id: String,
+    pub digest: String,
+    pub rank: u32,
+    pub recommended: bool,
+    pub correct: Option<u32>,
+    pub total: Option<u32>,
+    pub seconds_per_answer: Option<f32>,
+    pub reason: String,
+}
+
+impl Rankings {
+    /// The entry for this exact build; a model updated since the benchmark has none.
+    pub fn for_model(&self, name: &str, digest: &str) -> Option<&RankEntry> {
+        self.models
+            .iter()
+            .find(|entry| entry.id == name && (entry.digest.is_empty() || entry.digest == digest))
+    }
+}
+
+impl RankEntry {
+    pub fn score(&self) -> Option<String> {
+        Some(format!(
+            "{}/{} right, {} s per answer",
+            self.correct?,
+            self.total?,
+            self.seconds_per_answer?
+        ))
+    }
+}
+
+fn rankings_path() -> Option<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os(RANKINGS_OVERRIDE) {
+        return Some(path.into());
+    }
+    let data = std::env::var_os("XDG_DATA_HOME")
+        .filter(|dir| !dir.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share")))?;
+    Some(data.join("axentra/model-rankings.json"))
+}
+
+fn read_rankings() -> Rankings {
+    use std::io::Read;
+    let Some(path) = rankings_path() else {
+        return Rankings::default();
+    };
+    let mut bytes = Vec::new();
+    match std::fs::File::open(path) {
+        Ok(file) => match file.take(MAX_RANKINGS_BYTES).read_to_end(&mut bytes) {
+            Ok(_) => serde_json::from_slice(&bytes).unwrap_or_default(),
+            Err(_) => Rankings::default(),
+        },
+        _ => Rankings::default(),
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -30,6 +100,7 @@ pub struct Engine {
 #[derive(Clone, Debug, Default)]
 pub struct Model {
     pub name: String,
+    pub digest: String,
     pub size: u64,
     pub details: ModelDetails,
     pub max_context: Option<u64>,
@@ -76,6 +147,7 @@ struct WireDetails {
 struct WireModel {
     name: String,
     model: String,
+    digest: String,
     size: u64,
     size_vram: u64,
     context_length: Option<u64>,
@@ -106,9 +178,10 @@ impl WireModel {
         self.size > 0 && self.is_local()
     }
 
-    fn installed(self) -> Model {
+    fn installed(mut self) -> Model {
         Model {
             name: self.name().to_owned(),
+            digest: std::mem::take(&mut self.digest),
             size: self.size,
             max_context: self
                 .details
@@ -379,6 +452,7 @@ pub fn snapshot() -> Snapshot {
     Snapshot {
         engine: Ollama::new(ollama_address()).engine(),
         gpus: read_gpus(),
+        rankings: read_rankings(),
     }
 }
 
@@ -537,6 +611,27 @@ mod tests {
         let error = Ollama::new(&address).engine().unwrap_err();
         worker.join().unwrap();
         assert!(error.contains("runners temporarily unavailable"));
+    }
+
+    #[test]
+    fn rankings_match_only_the_benchmarked_build() {
+        let rankings: Rankings = serde_json::from_value(json!({
+            "ranking": "benchmark",
+            "models": [
+                {"id": "local:9b", "digest": "aaa", "rank": 1, "recommended": true,
+                 "correct": 16, "total": 16, "secondsPerAnswer": 1.6, "reason": "best result"},
+                {"id": "local:4b", "digest": "", "rank": 2, "recommended": true, "reason": "by size"},
+                {"id": "unknown-fields-are-ignored", "extra": [1, 2]}
+            ]
+        }))
+        .unwrap();
+        let entry = rankings.for_model("local:9b", "aaa").unwrap();
+        assert_eq!(entry.rank, 1);
+        assert_eq!(entry.score().as_deref(), Some("16/16 right, 1.6 s per answer"));
+        assert!(rankings.for_model("local:9b", "bbb").is_none(), "an updated build has no score");
+        let unscored = rankings.for_model("local:4b", "anything").unwrap();
+        assert!(unscored.score().is_none());
+        assert!(serde_json::from_str::<Rankings>("not json").is_err());
     }
 
     #[test]
