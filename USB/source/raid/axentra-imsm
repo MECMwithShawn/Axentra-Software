@@ -1,0 +1,11 @@
+#!/bin/sh
+case "${1:-}" in prereqs) echo udev; exit 0;; esac
+for module in vmd nvme ahci efivarfs; do modprobe "$module" || true; done
+if [ -d /sys/firmware/efi/efivars ]; then
+    mount -t efivarfs -o ro efivarfs /sys/firmware/efi/efivars 2>/dev/null || true
+fi
+modprobe md_mod || true
+modprobe raid0 || true
+# No --force, --run, --create or platform-check bypass. Udev and the distro
+# mdadm scripts handle member arrival and mdmon's external-metadata lifecycle.
+mdadm --assemble --scan --no-degraded || true
