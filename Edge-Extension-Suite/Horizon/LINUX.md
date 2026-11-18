@@ -1,15 +1,15 @@
 # Axentra Horizon on Linux
 
-Built 2026-11-17 for Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.6.19**; **pre-release** for Brave on Linux.
+Built 2026-11-18 for Zorin OS 18.1 (Ubuntu 24.04), x86_64. Version **0.6.20**; **pre-release** for Brave on Linux.
 
 ## Install
 
-Download `axentra-horizon_0.6.19-2_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.6.19), check its SHA-256 against the
-[release notes](releases/0.6.19.md), then:
+Download `axentra-horizon_0.6.20-2_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.6.20), check its SHA-256 against the
+[release notes](releases/0.6.20.md), then:
 
 ```bash
-sha256sum axentra-horizon_0.6.19-2_amd64.deb
-sudo apt install ./axentra-horizon_0.6.19-2_amd64.deb
+sha256sum axentra-horizon_0.6.20-2_amd64.deb
+sudo apt install ./axentra-horizon_0.6.20-2_amd64.deb
 ```
 
 Restart Brave completely, then open a new tab and choose **Keep it** if Brave asks about the new-tab page. The
@@ -30,7 +30,7 @@ nothing is sent anywhere. Turn it on under Calendar › Calendars & appearance a
 - The Mail feed helper has 15 automated tests (deliveries, tracking links, appointment dates and times, time zones,
   reminders, cancellations, reschedules, marketing and payment mail that must be ignored).
 - The calendar's event parsing was checked in a browser with a generated feed, and the installed package was run on
-  the build machine: Brave loaded 0.6.19 and the helper returned that machine's deliveries and appointments.
+  the build machine: Brave loaded 0.6.20 and the helper returned that machine's deliveries and appointments.
 
 ## Remaining work and requirements
 

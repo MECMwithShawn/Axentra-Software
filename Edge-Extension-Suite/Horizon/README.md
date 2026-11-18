@@ -1,6 +1,6 @@
 <img src="logo.png" alt="Axentra Horizon logo" width="96" align="right">
 
-**Linux pre-release (0.6.19, built 2026-11-17):** [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.6.19) · [Installation, tests and limits](LINUX.md) · [Release notes](releases/0.6.19.md).
+**Linux pre-release (0.6.20, built 2026-11-18):** [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/horizon-v0.6.20) · [Installation, tests and limits](LINUX.md) · [Release notes](releases/0.6.20.md).
 
 <!-- current-suite-state -->
 ## Current local status — 2026-10-16

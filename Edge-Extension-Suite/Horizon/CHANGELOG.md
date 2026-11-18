@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.20 (pre-release, 2026-11-18)
+
+- **Mark calendar items done.** Each agenda row has a round check. Click it when you've finished a reminder or
+  been to an appointment (even early): the item stays on the calendar, greyed out and struck through. Click again
+  to undo. A done Horizon reminder also leaves the reminder strip.
+- Done marks follow your Brave profile through Sync and cover the last 60 days.
+
 ## 0.6.19 (pre-release, 2026-11-17)
 
 First public Linux package (`.deb` for Brave). The 0.6.1–0.6.18 builds were private Linux previews and are
