@@ -57,9 +57,7 @@ impl RankEntry {
     pub fn score(&self) -> Option<String> {
         Some(format!(
             "{}/{} right, {} s per answer",
-            self.correct?,
-            self.total?,
-            self.seconds_per_answer?
+            self.correct?, self.total?, self.seconds_per_answer?
         ))
     }
 }
@@ -71,7 +69,9 @@ fn rankings_path() -> Option<std::path::PathBuf> {
     let data = std::env::var_os("XDG_DATA_HOME")
         .filter(|dir| !dir.is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share")))?;
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share"))
+        })?;
     Some(data.join("axentra/model-rankings.json"))
 }
 
@@ -627,8 +627,14 @@ mod tests {
         .unwrap();
         let entry = rankings.for_model("local:9b", "aaa").unwrap();
         assert_eq!(entry.rank, 1);
-        assert_eq!(entry.score().as_deref(), Some("16/16 right, 1.6 s per answer"));
-        assert!(rankings.for_model("local:9b", "bbb").is_none(), "an updated build has no score");
+        assert_eq!(
+            entry.score().as_deref(),
+            Some("16/16 right, 1.6 s per answer")
+        );
+        assert!(
+            rankings.for_model("local:9b", "bbb").is_none(),
+            "an updated build has no score"
+        );
         let unscored = rankings.for_model("local:4b", "anything").unwrap();
         assert!(unscored.score().is_none());
         assert!(serde_json::from_str::<Rankings>("not json").is_err());
