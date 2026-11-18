@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Axentra LLM Manager
+GenericName=Local Model Manager
+Comment=Load, unload and watch local Ollama models and GPU use
+Exec="@EXECUTABLE@"
+Icon=@ICON@
+Terminal=false
+Categories=Utility;
+Keywords=Ollama;LLM;AI;GPU;Models;
+StartupNotify=true
+StartupWMClass=axentra-llm-manager
