@@ -1,0 +1,31 @@
+{
+  "id": "llm-manager",
+  "name": "Axentra LLM Manager",
+  "tagline": "Load, unload and watch local Ollama models and GPU use",
+  "kind": "desktop",
+  "order": 101,
+  "accent": "#5ECFF5",
+  "icon": "~/.local/share/axentra/llm-manager/axentra-llm-manager.png",
+  "install": {
+    "exe": "~/.local/share/axentra/llm-manager/llm-manager"
+  },
+  "launch": {
+    "exe": "~/.local/share/axentra/llm-manager/llm-manager",
+    "args": []
+  },
+  "process": [
+    "llm-manager"
+  ],
+  "source": {
+    "path": "~/code/Axentra-Software/LLM-Manager/source",
+    "version_file": "Cargo.toml"
+  },
+  "docs": "~/code/Axentra-Software/LLM-Manager",
+  "links": [
+    {
+      "label": "Source and documentation",
+      "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/LLM-Manager"
+    }
+  ],
+  "tray": []
+}
