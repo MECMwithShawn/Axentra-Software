@@ -1,3 +1,20 @@
+Axentra USB 0.1.1 - native Zorin development validation
+Date: 2026-10-19
+
+- Built natively on Zorin OS 18.1 / Ubuntu 24.04 x86_64, Rust 1.99.1.
+- cargo test --locked: 30 passed, zero failed/ignored.
+- cargo build --release --locked: passed.
+- Isolated X11/Xvfb startup with software OpenGL: a visible 1160 x 840
+  window opened and stayed running. Disposable XDG directories were used.
+  This is window startup, not visual approval or a complete UI test.
+- Three packaging regression tests passed. The native Zorin 18 package
+  baseline is explicitly glibc 2.39+, separate from the old cross-build.
+- No USB write, format, physical read-back or firmware boot was performed.
+- Wayland, host GPU behavior and system installation remain unverified.
+- No public Linux release is implied.
+
+Historical records follow unchanged:
+
 Axentra USB 0.1.1 preview - branding and Windows packaging
 Date: 2026-10-18
 

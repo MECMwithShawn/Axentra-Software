@@ -1,5 +1,7 @@
 # Linux / Zorin support
 
+> The [2026-10-19 Rust/Zorin source audit](RUST-ZORIN.md) distinguishes these historical previews from the recovered Windows source trees. Native Linux startup and Rust implementation are separate requirements; the suite does not yet meet both for every app. USB now has a separate [Linux validation page](../USB/LINUX.md).
+
 Verified 2026-10-17 on Zorin OS 18.1 (Ubuntu 24.04), x86_64. All nine development previews are installed locally and available from the application menu. No public Linux installer release is available yet.
 
 | App | Working Linux scope | Remaining checks or platform gaps |

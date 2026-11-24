@@ -1,0 +1,50 @@
+name: Rust / Linux source checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  usb-linux:
+    name: USB native Linux build and startup (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Linux build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libudev-dev xvfb xdotool dbus-x11
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup override set 1.99.1
+          rustc -Vv
+      - name: Test native Rust application
+        run: cargo test --locked --manifest-path USB/source/Cargo.toml
+      - name: Build native release executable
+        run: cargo build --release --locked --manifest-path USB/source/Cargo.toml
+      - name: Test packaging baseline declarations
+        run: python3 -m unittest discover -s USB/source/packaging -p 'test_*.py'
+      - name: Verify native window startup with disposable profile
+        run: timeout 40s dbus-run-session -- xvfb-run -a bash tools/smoke-usb-linux.sh USB/source/target/release/axentra-usb "$RUNNER_TEMP/usb-smoke"
+      - name: Package Ubuntu 24.04 / Zorin 18 build
+        run: |
+          python3 USB/source/packaging/package.py --linux USB/source/target/release/axentra-usb --linux-glibc-min 2.39 --output "$RUNNER_TEMP/usb-packages"
+          dpkg-deb --info "$RUNNER_TEMP"/usb-packages/axentra-usb_*_amd64.deb
+          cd "$RUNNER_TEMP/usb-packages"
+          sha256sum -c SHA256SUMS.txt
+      - name: Save development packages and startup logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: usb-linux-development-check
+          path: |
+            ${{ runner.temp }}/usb-packages/
+            ${{ runner.temp }}/usb-smoke/
+          if-no-files-found: warn

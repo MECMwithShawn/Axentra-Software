@@ -23,6 +23,8 @@ screenshots, release notes and security scan results. Installers and extension p
 
 Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md) and [Linux / Zorin support](docs/LINUX.md).
 
+**Rust / Zorin requirement:** every desktop app and native companion must use Rust and run natively on Zorin. The [2026-10-19 recovered-source audit](docs/RUST-ZORIN.md) found seven Rust apps and three migrations still needed (PDF, Spaces and Horizon's native companion). Of the seven Rust apps, USB built on Zorin; the other six recovered source trees failed Linux compilation. Older installed-preview records describe different snapshots, not current suite-wide readiness.
+
 ## Icon source and design kit
 
 The [Axentra Glass + Precision icon kit](Icon-Kit/) contains all eleven app icons, including OneDrive, Outlook,

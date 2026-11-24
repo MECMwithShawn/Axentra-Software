@@ -665,6 +665,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.receive();
+        let window_rect = ui.max_rect();
         if self.busy && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.phase = "Use Stop and wait for the operation to finish before closing.".into();
@@ -679,11 +680,14 @@ impl eframe::App for App {
                     .inner_margin(egui::Margin::symmetric(28, 18)),
             )
             .show(ui, |ui| {
+                let drag_rect = egui::Rect::from_min_size(ui.cursor().min, Vec2::new(ui.available_width()-240.,44.));
+                crate::window_chrome::drag(ui, drag_rect);
                 ui.horizontal(|ui| {
                     ui.image((self.logo.id(), Vec2::splat(44.)));
                     ui.label(RichText::new("AXENTRA").size(21.).strong());
                     ui.label(RichText::new("USB").size(21.).color(MUTED));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        crate::window_chrome::buttons(ui);
                         muted(ui, concat!("PREVIEW ", env!("CARGO_PKG_VERSION")));
                     });
                 });
@@ -803,6 +807,7 @@ impl eframe::App for App {
                     });
             });
         self.popups(&ctx);
+        crate::window_chrome::resize_grips(ui, window_rect);
     }
 }
 
@@ -819,6 +824,7 @@ pub fn launch(image: Option<PathBuf>) -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_icon(icon)
             .with_app_id("axentra-usb")
+            .with_decorations(false)
             .with_inner_size([1160., 840.])
             .with_min_inner_size([1000., 700.]),
         renderer: eframe::Renderer::Glow,
