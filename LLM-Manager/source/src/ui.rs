@@ -1008,7 +1008,13 @@ fn model_row(
             .x
             + 20.0
     };
-    let recommended = rank.filter(|rank| rank.recommended).map(|_| "Recommended");
+    let recommended = rank.filter(|rank| rank.recommended).map(|rank| {
+        if rank.runs_on.as_deref() == Some("desktop") {
+            "Recommended · Desktop"
+        } else {
+            "Recommended"
+        }
+    });
     let state_width = pill_width(ui, state);
     let pills = state_width + recommended.map_or(0.0, |text| pill_width(ui, text) + 6.0);
     // The rank, when Offline Panel has one, leads the name: "#1".

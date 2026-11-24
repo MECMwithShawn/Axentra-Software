@@ -38,6 +38,8 @@ pub struct RankEntry {
     pub digest: String,
     pub rank: u32,
     pub recommended: bool,
+    /// Machine the recommended copy runs on ("laptop" or "desktop"), when Offline Panel uses two.
+    pub runs_on: Option<String>,
     pub correct: Option<u32>,
     pub total: Option<u32>,
     pub seconds_per_answer: Option<f32>,

@@ -49,6 +49,8 @@ The app reads `~/.local/share/axentra/model-rankings.json` (under `$XDG_DATA_HOM
 
 A ranking only applies to the exact build it was measured on: if `digest` is set and Ollama now reports a different one (the model was updated), the row shows no rank or score. `ranking` is `"benchmark"` or `"size"` and only changes the line of text above the list. `LLM_MANAGER_RANKINGS` points the app at another file, for tests.
 
+An optional `runsOn` field (`"laptop"` or `"desktop"`) says which machine a recommended model runs on, for a ranking tool that spreads models over two computers. When it is `"desktop"`, the pill reads **Recommended · Desktop**; without it, the pill reads **Recommended**.
+
 ## Source and builds
 
 The complete [Rust source](source/), [locked dependencies](source/Cargo.lock) and [license](source/LICENSE) are included. The app uses eframe and egui 0.36.2. It was built with Rust 1.99; it uses the 2024 edition, so an older toolchain may not compile it.
