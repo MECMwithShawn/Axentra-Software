@@ -1197,9 +1197,10 @@ fn prepare_mountpoint(mountpoint: &Path) -> Result<()> {
             if entries.next().is_some() {
                 return Err(crate::config::NeedsUser(format!(
                     "{} already has files in it. Move them somewhere else (you can copy them \
-                     back in once Axentra OneDrive is running), or choose another folder with \
+                     back in once {} is running), or choose another folder with \
                      `axentra-onedrive setup --folder`.",
-                    mountpoint.display()
+                    mountpoint.display(),
+                    crate::BRAND
                 ))
                 .into());
             }

@@ -1,4 +1,4 @@
-"""Axentra OneDrive integration for GNOME Files (Nautilus 43+).
+"""Axentra CloudDrive integration for GNOME Files (Nautilus 43+).
 
 Status badges like the Windows Explorer status column (online-only cloud,
 available-locally check, always-available solid check, syncing, problem)
@@ -8,7 +8,7 @@ on this device, Free up space.
 Badges come from the mount's `user.axentra.onedrive.status` extended attribute, so
 showing them never blocks on the network, and are looked at again when the
 service says an item changed (an upload or download finishing, say). Actions
-go to the Axentra OneDrive service over D-Bus asynchronously.
+go to the Axentra CloudDrive service over D-Bus asynchronously.
 """
 
 import math
@@ -23,6 +23,8 @@ gi.require_version("Nautilus", "4.0")
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, GObject, Nautilus  # noqa: E402
 
+# The product name people see; the D-Bus names below keep the old ids.
+BRAND = "Axentra CloudDrive"
 BUS_NAME = "io.github.mecmwithshawn.AxentraOneDrive"
 OBJECT_PATH = "/io/github/mecmwithshawn/AxentraOneDrive"
 INTERFACE = "io.github.mecmwithshawn.AxentraOneDrive1"
@@ -133,7 +135,7 @@ def notify(summary, body=""):
             "/org/freedesktop/Notifications",
             "org.freedesktop.Notifications",
             "Notify",
-            GLib.Variant("(susssasa{sv}i)", ("Axentra OneDrive", 0, "axentra-onedrive", summary, body, [], {}, -1)),
+            GLib.Variant("(susssasa{sv}i)", (BRAND, 0, "axentra-onedrive", summary, body, [], {}, -1)),
             None,
             Gio.DBusCallFlags.NONE,
             -1,
@@ -150,7 +152,7 @@ NOT_RUNNING = ("org.freedesktop.DBus.Error.ServiceUnknown", "org.freedesktop.DBu
 def error_text(e):
     """What the service said, without GDBus's "GDBus.Error:<name>: " in front."""
     if Gio.DBusError.get_remote_error(e) in NOT_RUNNING:
-        return "Axentra OneDrive isn't running."
+        return f"{BRAND} isn't running."
     if Gio.DBusError.is_remote_error(e):
         return e.message.split(": ", 1)[-1]
     return e.message
@@ -355,7 +357,7 @@ class AxentraOneDriveExtension(GObject.GObject, Nautilus.InfoProvider, Nautilus.
         if not synced:
             return []
 
-        top = Nautilus.MenuItem(name="AxentraOneDrive::OneDrive", label="Axentra OneDrive")
+        top = Nautilus.MenuItem(name="AxentraOneDrive::OneDrive", label=BRAND)
         menu = Nautilus.Menu()
         top.set_submenu(menu)
 

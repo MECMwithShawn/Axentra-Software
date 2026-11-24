@@ -1,4 +1,4 @@
-//! An in-memory OneDrive that speaks the subset of Microsoft Graph Axentra OneDrive
+//! An in-memory OneDrive that speaks the subset of Microsoft Graph Axentra CloudDrive
 //! uses: delta feed (with paging and expiry), path addressing, simple and
 //! resumable session uploads, eTag preconditions, downloads via redirect, thumbnails
 //! of photos and videos, sharing links, versions, and the OAuth token endpoint.
@@ -690,6 +690,7 @@ async fn handle(
             }))
         }
         (Method::GET, "/me/drive/root/delta") => delta(&d, &uri, base),
+        (Method::GET, "/me/drive/root") => ok_json(d.json(&d.items[ROOT], base)),
         _ => {
             let Some(rest) = api.strip_prefix("/me/drive/items/") else {
                 return error(StatusCode::NOT_FOUND, "notFound", "unknown endpoint");
@@ -855,6 +856,30 @@ fn items(
             };
             match (method, tail.as_slice()) {
                 (Method::GET, []) => ok_json(d.json(&it, base)),
+                (Method::GET, ["children"]) => {
+                    // Pages of `page_size`, by name, like Graph's default order.
+                    let skip: usize = q.get("skip").and_then(|s| s.parse().ok()).unwrap_or(0);
+                    let mut kids: Vec<&MItem> = d
+                        .items
+                        .values()
+                        .filter(|c| c.parent.as_deref() == Some(id.as_str()))
+                        .collect();
+                    kids.sort_by(|a, b| a.name.cmp(&b.name).then(a.id.cmp(&b.id)));
+                    let page: Vec<Value> = kids
+                        .iter()
+                        .skip(skip)
+                        .take(d.page_size)
+                        .map(|c| d.json(c, base))
+                        .collect();
+                    let mut resp = json!({ "value": page });
+                    if skip + d.page_size < kids.len() {
+                        resp["@odata.nextLink"] = json!(format!(
+                            "{base}/v1.0/me/drive/items/{id}/children?skip={}",
+                            skip + d.page_size
+                        ));
+                    }
+                    ok_json(resp)
+                }
                 (Method::PATCH, []) => {
                     if let Some(r) = precondition(&it, headers) {
                         return r;

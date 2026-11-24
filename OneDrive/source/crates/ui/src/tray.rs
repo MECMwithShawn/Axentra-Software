@@ -4,6 +4,7 @@
 
 use std::sync::Mutex;
 
+use axentra_onedrive_core::BRAND;
 use ksni::menu::{StandardItem, SubMenu};
 use ksni::{Icon, MenuItem, ToolTip};
 use tokio::sync::mpsc::UnboundedSender;
@@ -30,7 +31,7 @@ impl ksni::Tray for AxentraOneDriveTray {
     }
 
     fn title(&self) -> String {
-        "Axentra OneDrive".into()
+        BRAND.into()
     }
 
     fn icon_pixmap(&self) -> Vec<Icon> {
@@ -53,7 +54,7 @@ impl ksni::Tray for AxentraOneDriveTray {
 
     fn tool_tip(&self) -> ToolTip {
         ToolTip {
-            title: "Axentra OneDrive".into(),
+            title: BRAND.into(),
             description: self.tooltip.clone(),
             icon_name: String::new(),
             icon_pixmap: Vec::new(),
@@ -85,7 +86,7 @@ impl ksni::Tray for AxentraOneDriveTray {
         let pause_menu: MenuItem<Self> = if self.state == "paused" {
             item("Resume syncing", || Cmd::Resume)
         } else if self.state == "stopped" {
-            item("Start Axentra OneDrive", || Cmd::StartService)
+            item(&format!("Start {BRAND}"), || Cmd::StartService)
         } else {
             SubMenu {
                 label: "Pause syncing".into(),
@@ -99,14 +100,14 @@ impl ksni::Tray for AxentraOneDriveTray {
             .into()
         };
         vec![
-            item("Open Axentra OneDrive", || Cmd::ShowFlyout(None)),
+            item(&format!("Open {BRAND}"), || Cmd::ShowFlyout(None)),
             item("Open your OneDrive folder", || Cmd::OpenFolder),
             item("View online", || Cmd::ViewOnline),
             MenuItem::Separator,
             pause_menu,
             item("Settings", || Cmd::ShowSettings),
             MenuItem::Separator,
-            item("Quit Axentra OneDrive", || Cmd::Quit),
+            item(&format!("Quit {BRAND}"), || Cmd::Quit),
         ]
     }
 }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Axentra OneDrive sync (Files On-Demand)
+Description=Axentra CloudDrive sync (Files On-Demand)
 # Retrying forever helps nothing when a start keeps failing the same way.
 # Starts by hand count too, so after a fix it's reset-failed, then restart.
 StartLimitIntervalSec=300

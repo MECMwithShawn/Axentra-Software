@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/graph", "crates/core", "crates/cli", "crates/ui", "crates/mock"]
+members = ["crates/graph", "crates/core", "crates/cli", "crates/ui", "crates/mock", "crates/provider", "crates/mirror"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.80"
@@ -20,6 +20,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
+sha1 = "0.10"
 sha2 = "0.10"
 url = "2"
 percent-encoding = "2"
@@ -42,6 +43,8 @@ png = "0.18"
 axentra-onedrive-graph = { path = "crates/graph" }
 axentra-onedrive-core = { path = "crates/core" }
 axentra-onedrive-mock = { path = "crates/mock" }
+axentra-clouddrive-provider = { path = "crates/provider" }
+axentra-clouddrive-mirror = { path = "crates/mirror" }
 
 [profile.release]
 lto = "thin"

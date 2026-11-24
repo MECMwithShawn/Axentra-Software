@@ -1,4 +1,4 @@
-Axentra OneDrive bundles the following Rust crates (normal dependencies of the
+Axentra CloudDrive bundles the following Rust crates (normal dependencies of the
 axentra-onedrive and AxentraOneDrive binaries). Each is used under the license shown;
 full texts are in each crate's source distribution on crates.io.
 

@@ -46,9 +46,12 @@ pub async fn run(paths: Paths, opts: DaemonOptions) -> Result<()> {
         Some(
             crate::ipc::serve(engine.clone(), quit_tx.clone())
                 .await
-                .context(
-                    "couldn't register on the session bus (is Axentra OneDrive already running?)",
-                )?,
+                .with_context(|| {
+                    format!(
+                        "couldn't register on the session bus (is {} already running?)",
+                        crate::BRAND
+                    )
+                })?,
         )
     } else {
         None

@@ -15,8 +15,9 @@ fn data_dir() -> PathBuf {
         })
 }
 
-/// Give the Axentra Command card (installed by install.sh) the colour's accent.
-fn tint_command_card(color: &str) -> std::io::Result<()> {
+/// Give the Axentra Command card (installed by install.sh) the colour's accent
+/// and the app's current name. Its id and icon stay as installed.
+fn sync_command_card(color: &str) -> std::io::Result<()> {
     let path = data_dir().join("axentra/command/apps/onedrive.json");
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(());
@@ -24,15 +25,27 @@ fn tint_command_card(color: &str) -> std::io::Result<()> {
     let Ok(mut card) = serde_json::from_str::<serde_json::Value>(&text) else {
         return Ok(());
     };
-    let [r, g, b] = axentra_onedrive_core::config::icon_accent(color);
-    let accent = serde_json::Value::from(format!("#{r:02X}{g:02X}{b:02X}"));
-    if card.get("accent") != Some(&accent) {
-        card["accent"] = accent;
+    if update_card(&mut card, color) {
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, serde_json::to_string_pretty(&card)? + "\n")?;
         std::fs::rename(tmp, path)?;
     }
     Ok(())
+}
+
+/// Set the card's accent and name; returns whether either changed.
+fn update_card(card: &mut serde_json::Value, color: &str) -> bool {
+    let [r, g, b] = axentra_onedrive_core::config::icon_accent(color);
+    let accent = serde_json::Value::from(format!("#{r:02X}{g:02X}{b:02X}"));
+    let name = serde_json::Value::from(axentra_onedrive_core::BRAND);
+    let mut changed = false;
+    for (key, value) in [("accent", accent), ("name", name)] {
+        if card.get(key) != Some(&value) {
+            card[key] = value;
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// Install `color`'s icons as `axentra-onedrive`. Returns whether anything
@@ -45,7 +58,7 @@ pub fn apply(color: &str) -> std::io::Result<bool> {
     if !source.is_dir() {
         return Ok(false);
     }
-    tint_command_card(color)?;
+    sync_command_card(color)?;
     let theme = data_dir().join("icons/hicolor");
     let mut changed = false;
     for n in SIZES {
@@ -65,4 +78,28 @@ pub fn apply(color: &str) -> std::io::Result<bool> {
             .status();
     }
     Ok(changed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_card_gets_brand_and_keeps_its_id_and_icon() {
+        let mut card = serde_json::json!({
+            "id": "onedrive",
+            "name": "Axentra OneDrive",
+            "icon": "/icons/hicolor/256x256/apps/axentra-onedrive.png",
+            "accent": "#000000",
+        });
+        assert!(update_card(&mut card, "ice"));
+        assert_eq!(card["name"], axentra_onedrive_core::BRAND);
+        assert_eq!(card["id"], "onedrive");
+        assert_eq!(
+            card["icon"],
+            "/icons/hicolor/256x256/apps/axentra-onedrive.png"
+        );
+        // Already up to date: nothing to write.
+        assert!(!update_card(&mut card, "ice"));
+    }
 }

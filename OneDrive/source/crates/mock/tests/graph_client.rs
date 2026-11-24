@@ -405,3 +405,53 @@ async fn a_late_401_for_a_replaced_token_does_not_refresh_again() {
     tokens.invalidate("mock-access-1").await;
     assert_eq!(tokens.access_token().await.unwrap(), "mock-access-2");
 }
+
+/// Another process (the sync service) owns the file: a read-only store never
+/// refreshes, saves or removes it, and picks up what the service saves.
+#[tokio::test]
+async fn a_read_only_sign_in_is_never_refreshed_here() {
+    let mock = MockServer::start().await;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tokens.json");
+    std::fs::write(&path, mock.tokens_json(true)).unwrap();
+    let expired = std::fs::read(&path).unwrap();
+    let tokens = TokenStore::open_read_only(&path, auth(&mock));
+    assert!(matches!(
+        tokens.access_token().await,
+        Err(axentra_onedrive_graph::GraphError::NotSignedIn)
+    ));
+    // No refresh happened (the mock would have issued mock-access-1), and
+    // the file is as it was.
+    assert_eq!(std::fs::read(&path).unwrap(), expired);
+    assert!(tokens.set(some_tokens()).await.is_err());
+    assert!(tokens.clear().await.is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), expired);
+
+    // The service renews it.
+    std::fs::write(&path, mock.tokens_json(false)).unwrap();
+    assert_eq!(tokens.access_token().await.unwrap(), "mock-access-0");
+    // Turned down by the server: not sent again, not refreshed here.
+    tokens.invalidate("mock-access-0").await;
+    assert!(tokens.access_token().await.is_err());
+    // Until the service saves a new one.
+    let renewed = mock
+        .tokens_json(false)
+        .replace("mock-access-0", "mock-access-7");
+    std::fs::write(&path, renewed).unwrap();
+    assert_eq!(tokens.access_token().await.unwrap(), "mock-access-7");
+    // A normal store still refreshes.
+    let mock2 = MockServer::start().await;
+    let path2 = dir.path().join("tokens2.json");
+    std::fs::write(&path2, mock2.tokens_json(true)).unwrap();
+    let rw = TokenStore::open(&path2, auth(&mock2));
+    assert!(!rw.is_read_only());
+    assert_eq!(rw.access_token().await.unwrap(), "mock-access-1");
+}
+
+fn some_tokens() -> axentra_onedrive_graph::Tokens {
+    axentra_onedrive_graph::Tokens {
+        access_token: "x".into(),
+        refresh_token: None,
+        expires_at: 0,
+    }
+}

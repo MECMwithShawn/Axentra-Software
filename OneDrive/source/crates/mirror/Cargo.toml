@@ -1,0 +1,24 @@
+[package]
+name = "axentra-clouddrive-mirror"
+description = "Axentra CloudDrive's one-way, non-destructive mirror: manifest, dry-run planner, executor and readiness report"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axentra-clouddrive-provider.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rusqlite.workspace = true
+sha1.workspace = true
+dirs.workspace = true
+libc.workspace = true
+futures-util.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+axentra-onedrive-graph.workspace = true
+axentra-onedrive-mock.workspace = true

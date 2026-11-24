@@ -11,7 +11,7 @@ pub mod throttle;
 pub mod types;
 
 pub use auth::{AuthConfig, DeviceCode, TokenStore, Tokens};
-pub use client::{DeltaPage, GResult, Graph, GraphError, UploadTarget};
+pub use client::{ChildrenPage, DeltaPage, GResult, Graph, GraphError, UploadTarget};
 pub use quickxor::QuickXorHash;
 pub use throttle::RateLimiter;
 pub use types::*;

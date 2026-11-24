@@ -1,6 +1,6 @@
 [package]
 name = "axentra-onedrive"
-description = "Axentra OneDrive: a OneDrive client for Linux modelled on the Windows OneDrive app"
+description = "Axentra CloudDrive: a Microsoft OneDrive client for Linux modelled on the Windows OneDrive app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,6 +12,8 @@ path = "src/main.rs"
 [dependencies]
 axentra-onedrive-graph.workspace = true
 axentra-onedrive-core.workspace = true
+axentra-clouddrive-provider.workspace = true
+axentra-clouddrive-mirror.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 clap.workspace = true
@@ -21,3 +23,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 zbus.workspace = true
 libc.workspace = true
+sha1.workspace = true
+
+[dev-dependencies]
+axentra-onedrive-mock.workspace = true
+tempfile.workspace = true
+parking_lot.workspace = true

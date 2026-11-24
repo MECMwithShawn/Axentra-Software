@@ -1,6 +1,6 @@
-# Axentra OneDrive: OneDrive for Linux, the way it works on Windows
+# Axentra CloudDrive: OneDrive for Linux, the way it works on Windows
 
-Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors how the Windows OneDrive app looks and behaves: a OneDrive folder with Files On-Demand, a tray icon with the activity panel, file badges and a right-click menu in the file manager, the Windows conflict rules, and the same Settings pages.
+Axentra CloudDrive (called Axentra OneDrive before 0.2.0) is a Microsoft OneDrive client for Linux, written in Rust, that mirrors how the Windows OneDrive app looks and behaves: a OneDrive folder with Files On-Demand, a tray icon with the activity panel, file badges and a right-click menu in the file manager, the Windows conflict rules, and the same Settings pages.
 
 ![The activity panel, dark](docs/screenshots/flyout-dark.png)
 ![The activity panel, light](docs/screenshots/flyout-light.png)
@@ -12,7 +12,7 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 
 ## What matches the Windows client
 
-| Windows OneDrive | Axentra OneDrive |
+| Windows OneDrive | Axentra CloudDrive |
 |---|---|
 | OneDrive folder in Explorer | `~/OneDrive`, a FUSE filesystem |
 | Files On-Demand: online-only files take no space | Files are listed instantly and download when opened; `du` shows 0 bytes for online-only files |
@@ -32,7 +32,7 @@ Axentra OneDrive is a OneDrive client for Linux, written in Rust, that mirrors h
 | Lock and temp files aren't uploaded | `~$*`, `.~lock.*#`, swap and partial-download files stay local |
 | Saving by "write temp, rename over" keeps version history | Same: the rename becomes a new version of the original |
 
-Not done yet: Personal Vault, folder backup (moving Desktop/Documents/Pictures into OneDrive), "Choose folders", files shared with you that were added as shortcuts, more than one account, and instant push notifications (Axentra OneDrive checks for changes every 30 seconds by default).
+Not done yet: Personal Vault, folder backup (moving Desktop/Documents/Pictures into OneDrive), "Choose folders", files shared with you that were added as shortcuts, more than one account, and instant push notifications (Axentra CloudDrive checks for changes every 30 seconds by default).
 
 ## How it works
 
@@ -56,7 +56,7 @@ axentra-onedrive CLI ───────────────────�
 
 You need Rust, `fuse3`, and for the file-manager badges `python3-nautilus`. On GNOME the tray icon needs the AppIndicator extension, which Zorin OS and Ubuntu ship enabled.
 
-1. **Register an app with Microsoft** (free, one time). Axentra OneDrive signs in through your own app registration rather than borrowing another app's identity:
+1. **Register an app with Microsoft** (free, one time). Axentra CloudDrive signs in through your own app registration rather than borrowing another app's identity:
    1. Go to [entra.microsoft.com](https://entra.microsoft.com) → App registrations → New registration.
    2. Name it "Axentra OneDrive". Under supported account types, choose *Accounts in any organizational directory and personal Microsoft accounts*.
    3. Set the redirect URI's platform to *Public client/native (mobile & desktop)* and the URI to `http://localhost`.
@@ -123,4 +123,4 @@ UI screenshots render headlessly with `cargo run -p axentra-onedrive-ui -- --scr
 
 ## Notes
 
-Axentra OneDrive is an independent project. It talks to OneDrive only through the documented Microsoft Graph API, contains no Microsoft code or artwork (the icons are original), and isn't made, endorsed or supported by Microsoft. OneDrive is a trademark of Microsoft Corporation.
+Axentra CloudDrive is an independent project that syncs with Microsoft OneDrive. It talks to OneDrive only through the documented Microsoft Graph API, contains no Microsoft code or artwork (the icons are original), and isn't made, endorsed or supported by Microsoft. OneDrive is a trademark of Microsoft Corporation.

@@ -344,7 +344,7 @@ component BarButton inherits Rectangle {
 }
 
 export component Flyout inherits Window {
-    title: "Axentra OneDrive";
+    title: Theme.app-name;
     icon: Theme.app-icon;
     width: 360px;
     height: 600px;
@@ -359,7 +359,7 @@ export component Flyout inherits Window {
     in property <string> detail;
     in property <float> progress;
     // "OneDrive - Personal"
-    in property <string> account-title: "OneDrive";
+    in property <string> account-title: Theme.app-name;
     in property <string> storage-text;
     in property <float> storage-fraction;
     in property <[ActivityRow]> rows;
@@ -562,7 +562,7 @@ export component Flyout inherits Window {
                                         alignment: start;
                                         FluentButton {
                                             text: root.paused ? "Resume syncing"
-                                                : root.state == "stopped" ? "Start Axentra OneDrive" : "Sign in";
+                                                : root.state == "stopped" ? "Start " + Theme.app-name : "Sign in";
                                             primary: true;
                                             clicked => {
                                                 if (root.paused) {
@@ -848,7 +848,7 @@ export component Flyout inherits Window {
                 }
                 MenuSeparator { }
                 quit-cmd := MenuItem {
-                    text: "Quit Axentra OneDrive";
+                    text: "Quit " + Theme.app-name;
                     has-icon: true;
                     icon: @image-url("icons/close.svg");
                     clicked => { root.quit(); }

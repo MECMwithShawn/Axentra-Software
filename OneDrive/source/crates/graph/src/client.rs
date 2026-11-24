@@ -210,6 +210,13 @@ pub struct DeltaPage {
     pub delta_link: Option<String>,
 }
 
+/// One page of a folder's children.
+#[derive(Debug, Clone)]
+pub struct ChildrenPage {
+    pub items: Vec<DriveItem>,
+    pub next_link: Option<String>,
+}
+
 /// Where an upload lands.
 #[derive(Debug, Clone, Copy)]
 pub enum UploadTarget<'a> {
@@ -482,6 +489,32 @@ impl Graph {
         }
     }
 
+    /// The drive's root folder.
+    pub async fn root(&self) -> GResult<DriveItem> {
+        self.get_json(&self.url("/me/drive/root")).await
+    }
+
+    /// One page of what is directly inside folder `parent_id`. Pass `None`
+    /// for the first page, otherwise the `next_link` of the page before.
+    pub async fn children_page(
+        &self,
+        parent_id: &str,
+        link: Option<&str>,
+    ) -> GResult<ChildrenPage> {
+        let url = match link {
+            Some(l) => l.to_string(),
+            None => self.url(&format!(
+                "/me/drive/items/{}/children?$top=1000",
+                enc(parent_id)
+            )),
+        };
+        let page: Collection<DriveItem> = self.get_json(&url).await?;
+        Ok(ChildrenPage {
+            items: page.value,
+            next_link: page.next_link,
+        })
+    }
+
     /// One page of the change feed. Pass `None` to start a full enumeration,
     /// otherwise the `next_link` or saved `delta_link` from a previous page.
     /// A 410 error means the saved link is stale and a full resync is needed.
@@ -571,6 +604,31 @@ impl Graph {
         let url = self.url(&format!("/me/drive/items/{id}/content"));
         let resp = self.send(|c| c.get(&url)).await?;
         let mut file = tokio::fs::File::create(dest).await?;
+        let done = self.stream_into(resp, &mut file, progress).await?;
+        file.sync_all().await?;
+        Ok(done)
+    }
+
+    /// Like [`Graph::download`], but into a file the caller already has
+    /// open, so no path is opened (or followed) here. Writes from the
+    /// file's current position and flushes; syncing is left to the caller.
+    pub async fn download_into(
+        &self,
+        id: &str,
+        file: &mut tokio::fs::File,
+        progress: &(dyn Fn(u64) + Send + Sync),
+    ) -> GResult<u64> {
+        let url = self.url(&format!("/me/drive/items/{id}/content"));
+        let resp = self.send(|c| c.get(&url)).await?;
+        self.stream_into(resp, file, progress).await
+    }
+
+    async fn stream_into(
+        &self,
+        resp: Response,
+        file: &mut tokio::fs::File,
+        progress: &(dyn Fn(u64) + Send + Sync),
+    ) -> GResult<u64> {
         let mut stream = resp.bytes_stream();
         let mut done = 0u64;
         while let Some(chunk) = stream.next().await {
@@ -581,7 +639,6 @@ impl Graph {
             progress(done);
         }
         file.flush().await?;
-        file.sync_all().await?;
         Ok(done)
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "axentra-onedrive-ui"
-description = "Axentra OneDrive tray icon, activity flyout and settings window (Fluent style)"
+description = "Axentra CloudDrive tray icon, activity flyout and settings window (Fluent style)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,4 +1,4 @@
-//! A local fake OneDrive with sample files, for trying Axentra OneDrive without an
+//! A local fake OneDrive with sample files, for trying Axentra CloudDrive without an
 //! account: `axentra-onedrive-mock [ADDR]`, then point graph_base/authority at it.
 
 use axentra_onedrive_mock::MockServer;

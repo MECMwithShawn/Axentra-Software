@@ -1,6 +1,6 @@
 {
   "id": "onedrive",
-  "name": "Axentra OneDrive",
+  "name": "Axentra CloudDrive",
   "tagline": "OneDrive with Files On-Demand, working the way it does on Windows",
   "kind": "desktop",
   "order": 80,
