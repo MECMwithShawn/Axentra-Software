@@ -698,7 +698,7 @@ impl Engine {
                 issues[0].message.clone(),
             )
         } else if let Some(e) = last_error {
-            ("error", "Axentra OneDrive couldn't sync".into(), e)
+            ("error", format!("{} couldn't sync", crate::BRAND), e)
         } else if pending > 0 {
             (
                 "syncing",

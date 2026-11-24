@@ -60,6 +60,69 @@ pub struct Config {
     /// Show OneDrive's thumbnails of online-only photos and videos in file
     /// managers and file choosers, without downloading the files.
     pub cloud_thumbnails: bool,
+    /// The one-way mirror to Proton Drive (`[mirror]`). Left out of the file
+    /// while it has only default values, so saving settings doesn't add it.
+    #[serde(skip_serializing_if = "MirrorConfig::is_default")]
+    pub mirror: MirrorConfig,
+}
+
+/// `[mirror]` in config.toml: copying OneDrive to Proton Drive, one way and
+/// never deleting, moving or replacing anything on either side.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct MirrorConfig {
+    /// Let the sync service mirror on its own. Off by default; the
+    /// `axentra-onedrive mirror` commands work either way.
+    pub enabled: bool,
+    /// The Proton Drive folder OneDrive is mirrored into, `/my-files/...`.
+    pub dest_root: String,
+    /// Where files wait between download and upload. Empty for
+    /// `~/.cache/axentra/onedrive/mirror-staging`. `~` is expanded.
+    pub staging_dir: String,
+    /// The most the staging folder may hold; larger files are skipped.
+    pub staging_cap_bytes: u64,
+    /// The official `proton-drive` CLI (0.9.0). `~` is expanded.
+    pub proton_cli: String,
+    /// A file that changes on OneDrive after it was mirrored: `diverged`
+    /// records it and leaves Proton's copy alone (the only choice for now).
+    pub changed_content: String,
+}
+
+impl Default for MirrorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            dest_root: "/my-files/OneDrive".into(),
+            staging_dir: String::new(),
+            staging_cap_bytes: 2 << 30,
+            proton_cli: "~/.local/share/axentra/proton-drive-cli/0.9.0/proton-drive".into(),
+            changed_content: "diverged".into(),
+        }
+    }
+}
+
+impl MirrorConfig {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    pub fn proton_cli_path(&self) -> PathBuf {
+        expand_tilde(&self.proton_cli)
+    }
+
+    /// The staging folder, or `None` for the default one.
+    pub fn staging_path(&self) -> Option<PathBuf> {
+        (!self.staging_dir.trim().is_empty()).then(|| expand_tilde(&self.staging_dir))
+    }
+}
+
+/// `~` expanded; anything else as given.
+fn expand_tilde(p: &str) -> PathBuf {
+    if p == "~" || p.starts_with("~/") {
+        expand_home(p)
+    } else {
+        PathBuf::from(p)
+    }
 }
 
 impl Default for Config {
@@ -81,6 +144,7 @@ impl Default for Config {
             notify_errors: true,
             icon_color: "ice".into(),
             cloud_thumbnails: true,
+            mirror: MirrorConfig::default(),
             ignore: vec![
                 // Office and LibreOffice lock files, editor swap files, partial downloads.
                 "~$*".into(),
@@ -119,7 +183,8 @@ impl Config {
             std::fs::create_dir_all(dir)?;
         }
         let text = format!(
-            "# Axentra OneDrive settings. Edit here or in Settings; run `axentra-onedrive reload` after editing by hand.\n{}",
+            "# {} settings. Edit here or in Settings; run `axentra-onedrive reload` after editing by hand.\n{}",
+            crate::BRAND,
             toml::to_string_pretty(self)?
         );
         let tmp = path.with_extension("tmp");
@@ -178,7 +243,7 @@ pub fn normalize(p: &Path) -> PathBuf {
     out
 }
 
-/// Every file Axentra OneDrive keeps, so tests and alternate profiles can relocate them.
+/// Every file Axentra CloudDrive keeps, so tests and alternate profiles can relocate them.
 #[derive(Debug, Clone)]
 pub struct Paths {
     pub config_file: PathBuf,
@@ -243,6 +308,36 @@ mod tests {
         assert_eq!(old.icon_color(), "ice");
         assert!(old.cloud_thumbnails);
         assert_eq!(icon_accent("periwinkle"), [139, 151, 255]);
+    }
+
+    #[test]
+    fn the_mirror_table_is_optional() {
+        // Older files load with the mirror off and its defaults.
+        let old: Config = toml::from_str("client_id = \"x\"").unwrap();
+        assert_eq!(old.mirror, MirrorConfig::default());
+        assert!(!old.mirror.enabled);
+        assert_eq!(old.mirror.dest_root, "/my-files/OneDrive");
+        assert_eq!(old.mirror.staging_cap_bytes, 2 << 30);
+        assert_eq!(old.mirror.changed_content, "diverged");
+        assert_eq!(old.mirror.staging_path(), None);
+        let home = dirs::home_dir().unwrap_or_default();
+        assert_eq!(
+            old.mirror.proton_cli_path(),
+            home.join(".local/share/axentra/proton-drive-cli/0.9.0/proton-drive")
+        );
+        // Saving defaults doesn't add the table.
+        let text = toml::to_string_pretty(&old).unwrap();
+        assert!(!text.contains("mirror"), "{text}");
+        // A partial table keeps the other defaults, and survives a save.
+        let cfg: Config = toml::from_str(
+            "client_id = \"x\"\n[mirror]\nstaging_dir = \"~/stage\"\nstaging_cap_bytes = 1024\n",
+        )
+        .unwrap();
+        assert_eq!(cfg.mirror.staging_cap_bytes, 1024);
+        assert_eq!(cfg.mirror.staging_path(), Some(home.join("stage")));
+        assert_eq!(cfg.mirror.dest_root, "/my-files/OneDrive");
+        let again: Config = toml::from_str(&toml::to_string_pretty(&cfg).unwrap()).unwrap();
+        assert_eq!(again, cfg);
     }
 
     #[test]

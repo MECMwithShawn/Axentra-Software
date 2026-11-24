@@ -6,6 +6,7 @@ use std::path::Path;
 use axentra_onedrive_core::config::Config;
 use axentra_onedrive_core::db::Activity;
 use axentra_onedrive_core::status::{human_size, Account, Issue, Status};
+use axentra_onedrive_core::BRAND;
 use slint::{Model, ModelRc, SharedString, VecModel};
 
 use crate::{ActivityRow, Flyout, SettingsWindow};
@@ -223,11 +224,7 @@ pub fn apply_flyout(ui: &Flyout, st: &Status, acct: &Account, activity: Option<&
     } else {
         0.0
     });
-    ui.set_account_title(if acct.signed_in {
-        acct.title().into()
-    } else {
-        "OneDrive".into()
-    });
+    ui.set_account_title(header_title(acct).into());
     ui.set_storage_text(storage_text(acct).into());
     ui.set_storage_fraction(storage_fraction(acct));
     let Some(activity) = activity else { return };
@@ -321,12 +318,27 @@ pub fn apply_settings(
         .unwrap_or(POLL_CHOICES.len() - 1);
     ui.set_poll_index(poll as i32);
     ui.set_version(env!("CARGO_PKG_VERSION").into());
-    ui.set_notice(
-        "Axentra OneDrive is an independent, open-source OneDrive client for Linux. It talks to OneDrive \
-         through the documented Microsoft Graph API and isn't made, endorsed or supported by \
-         Microsoft. OneDrive is a trademark of Microsoft Corporation."
-            .into(),
-    );
+    ui.set_notice(about_notice().into());
+}
+
+/// The panel header: the account's OneDrive ("OneDrive - Personal"), or the
+/// app's name while signed out.
+pub fn header_title(acct: &Account) -> String {
+    if acct.signed_in {
+        acct.title()
+    } else {
+        BRAND.into()
+    }
+}
+
+/// The independence and trademark notice in Settings > About.
+pub fn about_notice() -> String {
+    format!(
+        "{BRAND} is an independent, open-source client for Linux that syncs with Microsoft \
+         OneDrive. It talks to OneDrive through the documented Microsoft Graph API and isn't \
+         made, endorsed or supported by Microsoft. OneDrive is a trademark of Microsoft \
+         Corporation."
+    )
 }
 
 /// Read the settings window back into a config.
@@ -349,7 +361,9 @@ pub fn read_settings(ui: &SettingsWindow, cfg: &mut Config) {
     cfg.files_on_demand = ui.get_files_on_demand();
 }
 
-pub const NOT_RUNNING: &str = "Axentra OneDrive isn't running";
+pub fn not_running() -> String {
+    format!("{BRAND} isn't running")
+}
 
 /// What "Free up space" says about the files it had to keep, if any.
 pub fn kept_note(kept: u32) -> Option<String> {
@@ -374,7 +388,7 @@ pub fn error_text(e: &anyhow::Error) -> String {
     match e.downcast_ref::<zbus::Error>() {
         Some(zbus::Error::MethodError(name, detail, _)) => match name.as_str() {
             "org.freedesktop.DBus.Error.ServiceUnknown"
-            | "org.freedesktop.DBus.Error.NameHasNoOwner" => NOT_RUNNING.into(),
+            | "org.freedesktop.DBus.Error.NameHasNoOwner" => not_running(),
             "org.freedesktop.DBus.Error.FileNotFound" => "That item isn't in your OneDrive".into(),
             _ => detail.clone().unwrap_or_else(|| e.to_string()),
         },
@@ -419,6 +433,23 @@ pub fn config_problem(e: &anyhow::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn product_name_is_the_brand_and_the_service_keeps_its_name() {
+        assert_eq!(BRAND, "Axentra CloudDrive");
+        assert_eq!(not_running(), "Axentra CloudDrive isn't running");
+        assert_eq!(header_title(&Account::default()), BRAND);
+        let personal = Account {
+            signed_in: true,
+            ..Default::default()
+        };
+        assert_eq!(header_title(&personal), "OneDrive - Personal");
+        let notice = about_notice();
+        assert!(notice.starts_with("Axentra CloudDrive is an independent"));
+        assert!(notice.contains("syncs with Microsoft OneDrive"));
+        assert!(notice.ends_with("OneDrive is a trademark of Microsoft Corporation."));
+        assert!(!notice.contains("Axentra OneDrive"));
+    }
 
     #[test]
     fn times() {
@@ -660,7 +691,7 @@ mod tests {
                 "org.freedesktop.DBus.Error.ServiceUnknown",
                 "The name is not activatable"
             )),
-            NOT_RUNNING
+            not_running()
         );
         assert_eq!(error_text(&anyhow::anyhow!("plain")), "plain");
     }

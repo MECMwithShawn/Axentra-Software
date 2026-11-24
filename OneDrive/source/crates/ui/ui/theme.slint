@@ -6,6 +6,10 @@ import { Palette } from "std-widgets.slint";
 export global Theme {
     in-out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
 
+    // The product name people see (axentra_onedrive_core::BRAND). The panel's
+    // window title is matched by the GNOME Shell extension.
+    out property <string> app-name: "Axentra CloudDrive";
+
     // App icon colour chosen in Settings > Appearance: "ice", "periwinkle" or "azure".
     in-out property <string> icon-color: "ice";
     out property <image> app-icon: icon-color == "periwinkle" ? @image-url("icons/app/periwinkle.png")

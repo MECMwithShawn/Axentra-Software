@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remove Axentra OneDrive for the current user. Your settings, sign-in and
+# Remove Axentra CloudDrive for the current user. Your settings, sign-in and
 # downloaded copies are kept unless you pass --purge. Files on OneDrive aren't touched.
 set -euo pipefail
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
@@ -39,7 +39,7 @@ rm -rf "$DATA/gnome-shell/extensions/$EXT"
 
 if [ -n "$purge" ]; then
   rm -rf "$CONFIG/axentra/onedrive" "$DATA/axentra/onedrive" "$CACHE/axentra/onedrive"
-  echo "Removed Axentra OneDrive and its settings, sign-in and local copies."
+  echo "Removed Axentra CloudDrive and its settings, sign-in and local copies."
 else
-  echo "Removed Axentra OneDrive. Settings and local copies are kept (run with --purge to remove them)."
+  echo "Removed Axentra CloudDrive. Settings and local copies are kept (run with --purge to remove them)."
 fi

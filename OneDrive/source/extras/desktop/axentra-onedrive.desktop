@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Axentra OneDrive
+Name=Axentra CloudDrive
 GenericName=Cloud storage
 Comment=Sync your OneDrive files with Files On-Demand
 Exec=@APP@/AxentraOneDrive --panel
 Icon=axentra-onedrive
 Terminal=false
 Categories=Network;FileTransfer;Utility;
-Keywords=onedrive;cloud;sync;microsoft;files;
+Keywords=clouddrive;onedrive;cloud;sync;microsoft;files;
 StartupNotify=false
 StartupWMClass=axentra-onedrive
 Actions=Settings;Folder;

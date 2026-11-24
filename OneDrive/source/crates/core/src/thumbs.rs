@@ -318,7 +318,7 @@ pub fn write(
         enc.add_text_chunk("Thumb::URI".into(), of.uri.into())?;
         enc.add_text_chunk("Thumb::MTime".into(), of.mtime.to_string())?;
         enc.add_text_chunk("Thumb::Size".into(), of.size.to_string())?;
-        enc.add_text_chunk("Software".into(), "Axentra OneDrive".into())?;
+        enc.add_text_chunk("Software".into(), crate::BRAND.into())?;
         let mut w = enc.write_header()?;
         w.write_image_data(&pixels)?;
         w.finish()?;

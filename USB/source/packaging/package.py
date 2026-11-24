@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import io
+import re
 from pathlib import Path
 import struct
 import tarfile
@@ -10,7 +11,17 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
-DEPENDS = 'libc6 (>= 2.35), libgcc-s1, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libxkbcommon0, libwayland-client0, util-linux, parted, dosfstools, ntfs-3g, udev, pkexec'
+DEPENDS = 'libgcc-s1, libgl1, libegl1, libx11-6, libxcursor1, libxi6, libxrandr2, libxkbcommon0, libwayland-client0, util-linux, parted, dosfstools, ntfs-3g, udev, pkexec'
+
+
+def linux_dependencies(glibc_min):
+    # The build host/sysroot determines compatibility, not the Rust target triple.
+    # In particular, a native Zorin 18 build must not silently claim Zorin 17.
+    if not isinstance(glibc_min, str) or not re.fullmatch(r'2\.[0-9]+', glibc_min):
+        raise ValueError('Linux packaging requires --linux-glibc-min (for example 2.39 for a Zorin 18 / Ubuntu 24.04 build)')
+    if int(glibc_min.split('.')[1]) < 35:
+        raise ValueError('The supported Linux packaging baseline is glibc 2.35 or newer')
+    return f'libc6 (>= {glibc_min}), {DEPENDS}'
 
 
 def tar(entries):
@@ -29,7 +40,11 @@ def ar(name, data):
     return header + data + (b'\n' if len(data) % 2 else b'')
 
 
-def build(windows, linux, out):
+def build(windows, linux, out, linux_glibc_min=None, linux_revision=None):
+    if linux_revision is not None and (not str(linux_revision).isdigit() or int(linux_revision) < 1):
+        raise ValueError("Linux package revision must be a positive integer")
+    deb_version = VERSION + (f"-{linux_revision}" if linux_revision is not None else "")
+    dependencies = linux_dependencies(linux_glibc_min) if linux else None
     out.mkdir(parents=True, exist_ok=True)
     win = windows.read_bytes() if windows else None
     elf = linux.read_bytes() if linux else None
@@ -46,12 +61,12 @@ def build(windows, linux, out):
     if elf:
         (out/f'AxentraUSB-{VERSION}-Linux-x64.tar.gz').write_bytes(tar([('AxentraUSB/axentra-usb',elf,0o755)]+[('AxentraUSB/'+n,b,m) for n,b,m in docs]))
         control = f'''Package: axentra-usb
-Version: {VERSION}
+Version: {deb_version}
 Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Axentra
-Depends: {DEPENDS}
+Depends: {dependencies}
 Recommends: xdg-desktop-portal, xdg-desktop-portal-gtk
 Description: Native Rust USB image writer with boot diagnostics (preview)
  Inspects, creates and verifies original-image and reviewed Zorin USB media.
@@ -60,11 +75,11 @@ Description: Native Rust USB image writer with boot diagnostics (preview)
         payload = [('usr/bin/axentra-usb',elf,0o755),('usr/share/applications/axentra-usb.desktop',(ROOT/'packaging/axentra-usb.desktop').read_bytes(),0o644),('usr/share/icons/hicolor/scalable/apps/axentra-usb.svg',(ROOT/'packaging/axentra-usb.svg').read_bytes(),0o644)]
         payload += [('usr/share/doc/axentra-usb/'+n,b,m) for n,b,m in docs]
         deb = b'!<arch>\n'+ar('debian-binary',b'2.0\n')+ar('control.tar.gz',tar([('control',control,0o644)]))+ar('data.tar.gz',tar(payload))
-        (out/f'axentra-usb_{VERSION}_amd64.deb').write_bytes(deb)
+        (out/f'axentra-usb_{deb_version}_amd64.deb').write_bytes(deb)
     source = [(f'AxentraUSB-Rust/{p.relative_to(ROOT).as_posix()}',p.read_bytes(),0o644) for p in ROOT.rglob('*') if p.is_file() and not any(x in p.parts for x in ('target','dist','__pycache__','.git'))]
     with zipfile.ZipFile(out/f'AxentraUSB-{VERSION}-Rust-source.zip','w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for name,b,_ in source:z.writestr(name,b)
-    files = [p for p in out.iterdir() if p.suffix in ('.zip','.gz','.deb','.exe') and VERSION in p.name]
+    files = [p for p in out.iterdir() if p.suffix in ('.zip','.gz','.deb','.exe') and VERSION in p.name and (p.suffix != '.deb' or p.name == f'axentra-usb_{deb_version}_amd64.deb')]
     (out/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(files)),encoding='ascii')
     print('\n'.join(f'{p.name}: {p.stat().st_size:,} bytes' for p in files))
 
@@ -73,7 +88,14 @@ if __name__ == '__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--windows',type=Path)
     parser.add_argument('--linux',type=Path)
+    parser.add_argument('--linux-glibc-min', help='glibc baseline of the Linux build host/sysroot, e.g. 2.35 or 2.39')
+    parser.add_argument('--linux-revision', type=int, help='Debian packaging revision for a Linux-only update')
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
     if not (args.windows or args.linux): parser.error('Provide --windows and/or --linux')
-    build(args.windows,args.linux,args.output)
+    if args.linux:
+        try:
+            linux_dependencies(args.linux_glibc_min)
+        except ValueError as error:
+            parser.error(str(error))
+    build(args.windows,args.linux,args.output,args.linux_glibc_min,args.linux_revision)

@@ -1,0 +1,2 @@
+Proton Drive CLI cli-drive@0.10.0+0badc0de
+Proton Drive SDK js@0.23.0+0badc0de

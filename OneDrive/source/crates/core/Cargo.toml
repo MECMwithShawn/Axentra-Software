@@ -1,6 +1,6 @@
 [package]
 name = "axentra-onedrive-core"
-description = "Axentra OneDrive sync engine, local state, Files On-Demand FUSE mount and D-Bus service"
+description = "Axentra CloudDrive sync engine, local state, Files On-Demand FUSE mount and D-Bus service"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

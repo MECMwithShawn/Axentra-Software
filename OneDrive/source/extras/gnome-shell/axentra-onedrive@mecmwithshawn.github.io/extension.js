@@ -1,4 +1,4 @@
-// Opens the Axentra OneDrive panel just above its tray icon, with the
+// Opens the Axentra CloudDrive panel just above its tray icon, with the
 // keyboard focus, as Windows does. On Wayland apps can't place or focus
 // their own windows, so the shell does it for this one window.
 
@@ -8,7 +8,9 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const APP_ID = 'axentra-onedrive';
-const PANEL_TITLE = 'Axentra OneDrive';
+// The panel's window title: the current name, and the one builds before
+// 0.2.0 used, so an older app with a newer extension (or the reverse) works.
+const PANEL_TITLES = ['Axentra CloudDrive', 'Axentra OneDrive'];
 // Space between the panel and the taskbar or the screen edge.
 const GAP = 12;
 
@@ -34,7 +36,7 @@ export default class AxentraOneDrivePanel extends Extension {
         // panel's first frame is still transparent, so the move isn't seen.
         const id = actor.connect('first-frame', () => {
             actor.disconnect(id);
-            if (window.get_wm_class() === APP_ID && window.get_title() === PANEL_TITLE)
+            if (window.get_wm_class() === APP_ID && PANEL_TITLES.includes(window.get_title()))
                 this._place(window);
         });
     }

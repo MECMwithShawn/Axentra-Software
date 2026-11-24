@@ -27,7 +27,7 @@ cargo test --locked
 cargo build --release --locked
 ```
 
-Linux source and packaging are included. The earlier 0.1.0 Linux build was cross-compiled; this Windows branding update does not claim a new Linux build or Linux hardware validation. See the [full app documentation](source/README.md) for dependencies, compatibility limits and storage behavior.
+Linux source and packaging are included. A native 0.1.1 development build passed 30 Rust tests and isolated X11 window startup on Zorin OS 18.1 on 2026-10-19. See [Linux build and validation](LINUX.md) for the glibc 2.39 packaging baseline and remaining hardware/Wayland checks, and the [full app documentation](source/README.md) for storage behavior. This is not a public Linux release.
 
 ## Icon and Command
 

@@ -1,10 +1,10 @@
-# Axentra OneDrive on Linux
+# Axentra CloudDrive on Linux
 
-Verified 2026-10-21 on Zorin OS 18.1 (Ubuntu 24.04), x86_64, GNOME on Wayland (125% scaling) and X11. Source version **0.1.0**; **development preview**, not a published release.
+Verified 2026-10-21 on Zorin OS 18.1 (Ubuntu 24.04), x86_64, GNOME on Wayland (125% scaling) and X11. Verified with source version **0.1.0** (before the rename; 0.2.0 not yet re-verified); **development preview**, not a published release.
 
 ## Run
 
-Open **Axentra OneDrive** from the application menu, or run:
+Open **Axentra CloudDrive** from the application menu (called Axentra OneDrive before 0.2.0; the paths and commands below are unchanged), or run:
 
 ```bash
 ~/.local/share/axentra/apps/onedrive/AxentraOneDrive
@@ -28,6 +28,6 @@ Needs your own Microsoft Entra app registration (free); none is bundled. Conflic
 
 ## Screenshot
 
-![Axentra OneDrive Linux preview](screenshots/linux-2026-10-21.png)
+![Axentra CloudDrive Linux preview](screenshots/linux-2026-10-21.png)
 
 Rendered from the app's UI with demo data; no real account appears.

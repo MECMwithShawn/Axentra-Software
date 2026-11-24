@@ -36,7 +36,7 @@ impl Notifier {
                 Some("org.freedesktop.Notifications"),
                 "Notify",
                 &(
-                    "Axentra OneDrive",
+                    crate::BRAND,
                     0u32,
                     "axentra-onedrive",
                     summary,

@@ -1,0 +1,22 @@
+[package]
+name = "axentra-clouddrive-provider"
+description = "Provider-neutral source and mirror-destination interfaces for Axentra CloudDrive, with a read-only OneDrive source and in-memory fakes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axentra-onedrive-graph.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+libc.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+axentra-onedrive-mock.workspace = true
+tempfile.workspace = true

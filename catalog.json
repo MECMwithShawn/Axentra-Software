@@ -352,6 +352,20 @@
           "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/iMessage"
         }
       ]
+    },
+    {
+      "id": "notepad",
+      "name": "Axentra Notepad",
+      "tagline": "Text and code editing with tabs, highlighting and find in files",
+      "kind": "desktop",
+      "order": 46,
+      "accent": "#C8D4E8",
+      "links": [
+        {
+          "label": "Linux preview and documentation",
+          "url": "https://github.com/MECMwithShawn/Axentra-Software/tree/main/Notepad"
+        }
+      ]
     }
   ]
 }

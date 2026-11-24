@@ -1,0 +1,1 @@
+Failed to load session from secrets (ensure you have secrets available, read the README for more information): Cannot autolaunch D-Bus without X11 $DISPLAY

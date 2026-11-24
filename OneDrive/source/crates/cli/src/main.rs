@@ -10,8 +10,11 @@ use axentra_onedrive_core::engine::{Engine, Options};
 use axentra_onedrive_core::ipc::AxentraOneDriveProxy;
 use axentra_onedrive_core::notify::Notifier;
 use axentra_onedrive_core::status::{human_size, Account, Status};
+use axentra_onedrive_core::BRAND;
 use axentra_onedrive_graph::{auth, Graph, TokenStore};
 use clap::{Parser, Subcommand};
+
+mod mirror;
 
 /// How `daemon` exits on a [`NeedsUser`] problem (EX_CONFIG). The systemd
 /// unit doesn't restart on it, since nothing changes until the user acts.
@@ -27,7 +30,7 @@ const START_AGAIN: &str =
 #[command(
     name = "axentra-onedrive",
     version,
-    about = "Axentra OneDrive: OneDrive for Linux, modelled on the Windows client"
+    about = "Axentra CloudDrive: Microsoft OneDrive sync for Linux, modelled on the Windows client"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -36,7 +39,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Connect Axentra OneDrive to your Microsoft Entra app registration.
+    /// Connect Axentra CloudDrive to your Microsoft Entra app registration.
     Setup {
         /// Application (client) ID of the app registration.
         #[arg(long)]
@@ -127,6 +130,17 @@ enum Cmd {
     Reload,
     /// Stop the sync service.
     Quit,
+    /// Proton Drive, where the one-way mirror copies OneDrive to.
+    Proton {
+        #[command(subcommand)]
+        cmd: mirror::ProtonCmd,
+    },
+    /// Copy OneDrive to Proton Drive: one way, adding only, never deleting,
+    /// moving or replacing anything on either side.
+    Mirror {
+        #[command(subcommand)]
+        cmd: mirror::MirrorCmd,
+    },
 }
 
 #[tokio::main]
@@ -161,7 +175,7 @@ async fn main() -> Result<()> {
                     format!("{why}\n\nOnce that's fixed, start it again with:\n{START_AGAIN}");
                 eprintln!("Error: {why}");
                 Notifier::new(true)
-                    .send("Axentra OneDrive can't start", &why)
+                    .send(&format!("{BRAND} can't start"), &why)
                     .await;
                 std::process::exit(EXIT_NEEDS_USER);
             }
@@ -276,6 +290,8 @@ async fn main() -> Result<()> {
             note_folder_move(&paths).await
         }
         Cmd::Quit => Ok(proxy().await?.quit().await?),
+        Cmd::Proton { cmd } => mirror::proton(&paths, cmd).await,
+        Cmd::Mirror { cmd } => mirror::mirror(&paths, cmd).await,
     }
 }
 
@@ -283,9 +299,9 @@ async fn proxy() -> Result<AxentraOneDriveProxy<'static>> {
     let conn = zbus::Connection::session().await?;
     let p = AxentraOneDriveProxy::new(&conn).await?;
     // Fail early with a clear message if the service isn't running.
-    p.status().await.context(
-        "the Axentra OneDrive service isn't running (start it with `systemctl --user start axentra-onedrive`)",
-    )?;
+    p.status().await.with_context(|| {
+        format!("the {BRAND} service isn't running (start it with `systemctl --user start axentra-onedrive`)")
+    })?;
     Ok(p)
 }
 
@@ -346,7 +362,7 @@ fn prompt(q: &str) -> Result<String> {
 }
 
 const REGISTRATION_HELP: &str = "\
-Axentra OneDrive signs in through your own (free) Microsoft Entra app registration:
+Axentra CloudDrive signs in through your own (free) Microsoft Entra app registration:
 
   1. Open https://entra.microsoft.com > App registrations > New registration
   2. Name it \"Axentra OneDrive\". Under supported account types choose

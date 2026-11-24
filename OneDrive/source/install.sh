@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Axentra OneDrive for the current user (no sudo), in the Axentra suite
+# Install Axentra CloudDrive for the current user (no sudo), in the Axentra suite
 # layout: the app in ~/.local/share/axentra/apps/onedrive, plus icons, the
 # Nautilus extension, systemd user services for sync and the tray icon.
 # An earlier install under the project's working name, Cirrus, is upgraded in
@@ -15,9 +15,9 @@ APP="$DATA/axentra/apps/onedrive"
 CARGO="${CARGO:-$(command -v cargo || echo "$HOME/.cargo/bin/cargo")}"
 
 [ -x "$CARGO" ] || { echo "cargo wasn't found. Install Rust from https://rustup.rs" >&2; exit 1; }
-command -v fusermount3 >/dev/null || { echo "Axentra OneDrive needs FUSE 3: sudo apt install fuse3" >&2; exit 1; }
+command -v fusermount3 >/dev/null || { echo "Axentra CloudDrive needs FUSE 3: sudo apt install fuse3" >&2; exit 1; }
 
-echo "Building Axentra OneDrive (release)..."
+echo "Building Axentra CloudDrive (release)..."
 "$CARGO" build --release --bin axentra-onedrive --bin AxentraOneDrive
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
 
@@ -149,10 +149,10 @@ if grep -qs '^client_id = ".' "$CONFIG/axentra/onedrive/config.toml"; then
   start_tray
   echo
   if [ -n "$upgraded" ]; then
-    echo "Upgraded to Axentra OneDrive $version and started it again."
+    echo "Upgraded to Axentra CloudDrive $version and started it again."
     echo "The command is now: axentra-onedrive (status, pin, free, share, ...)"
   else
-    echo "Updated Axentra OneDrive to this build ($version) and restarted it."
+    echo "Updated Axentra CloudDrive to this build ($version) and restarted it."
   fi
   if [ -n "$ext_login" ]; then
     echo "Sign out and back in once so GNOME opens the panel above the tray icon."
@@ -174,7 +174,7 @@ fi
 start_tray
 cat <<MSG
 
-Installed Axentra OneDrive $version in $APP. Next:
+Installed Axentra CloudDrive $version in $APP. Next:
   1. axentra-onedrive setup        connect your Microsoft app registration (once)
   2. axentra-onedrive login        sign in in your browser
   3. systemctl --user start axentra-onedrive

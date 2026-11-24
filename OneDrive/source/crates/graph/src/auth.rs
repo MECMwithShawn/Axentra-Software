@@ -25,6 +25,11 @@ pub const SCOPES: &str = "Files.ReadWrite.All User.Read offline_access";
 /// Refresh this long before the access token actually expires.
 const EXPIRY_MARGIN_SECS: i64 = 300;
 
+/// A [read-only](TokenStore::open_read_only) store uses a token until this
+/// close to its expiry. Smaller than [`EXPIRY_MARGIN_SECS`], so a token the
+/// sync service keeps fresh is never turned down while it's still good.
+const READ_ONLY_MARGIN_SECS: i64 = 60;
+
 #[derive(Clone, Debug)]
 pub struct AuthConfig {
     /// Application (client) ID of a public-client app registration.
@@ -126,6 +131,11 @@ pub struct TokenStore {
     cfg: std::sync::Mutex<AuthConfig>,
     tokens: tokio::sync::Mutex<Option<Tokens>>,
     http: reqwest::Client,
+    /// Never refresh, save or remove: see [`TokenStore::open_read_only`].
+    read_only: bool,
+    /// Read-only: the access token the server last turned down, never sent
+    /// again whatever the file says about its expiry.
+    rejected: std::sync::Mutex<Option<String>>,
 }
 
 impl TokenStore {
@@ -137,7 +147,32 @@ impl TokenStore {
             cfg: std::sync::Mutex::new(cfg),
             tokens: tokio::sync::Mutex::new(tokens),
             http: reqwest::Client::new(),
+            read_only: false,
+            rejected: std::sync::Mutex::new(None),
         }
+    }
+
+    /// The tokens another process (the sync service) keeps in `path`, used
+    /// as they are and never refreshed, saved or removed from here.
+    ///
+    /// For commands that run beside the service. Two processes refreshing
+    /// the same sign-in would race: both write `tokens.tmp` before renaming
+    /// it over the file, so one could rename the other's half-written file
+    /// into place, or save an older refresh token over a newer one; and a
+    /// refresh one of them was refused would remove the file the other
+    /// depends on. Here, an access token close to expiry makes the file be
+    /// read again (the service may have renewed it since; its writes are
+    /// atomic renames, so a read sees a whole file). If it hasn't, this is
+    /// [`GraphError::NotSignedIn`] and the file is left exactly as it was.
+    pub fn open_read_only(path: impl Into<PathBuf>, cfg: AuthConfig) -> Self {
+        Self {
+            read_only: true,
+            ..Self::open(path, cfg)
+        }
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
     }
 
     pub fn set_config(&self, cfg: AuthConfig) {
@@ -158,12 +193,18 @@ impl TokenStore {
     }
 
     pub async fn set(&self, tokens: Tokens) -> Result<()> {
+        if self.read_only {
+            bail!("this sign-in is read-only here; it is kept by the sync service");
+        }
         write_tokens(&self.path, &tokens)?;
         *self.tokens.lock().await = Some(tokens);
         Ok(())
     }
 
     pub async fn clear(&self) -> Result<()> {
+        if self.read_only {
+            bail!("this sign-in is read-only here; it is kept by the sync service");
+        }
         *self.tokens.lock().await = None;
         match std::fs::remove_file(&self.path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
@@ -175,6 +216,9 @@ impl TokenStore {
     /// 401. A no-op once a newer token replaced it, so that a burst of
     /// requests sent with the old token refreshes only once.
     pub async fn invalidate(&self, rejected: &str) {
+        if self.read_only {
+            *self.rejected.lock().unwrap() = Some(rejected.to_string());
+        }
         if let Some(t) = self.tokens.lock().await.as_mut() {
             if t.access_token == rejected {
                 t.expires_at = 0;
@@ -184,6 +228,26 @@ impl TokenStore {
 
     pub async fn access_token(&self) -> Result<String, GraphError> {
         let mut guard = self.tokens.lock().await;
+        if self.read_only {
+            let rejected = self.rejected.lock().unwrap().clone();
+            let usable = |t: &Tokens| {
+                t.expires_at - READ_ONLY_MARGIN_SECS > now()
+                    && Some(&t.access_token) != rejected.as_ref()
+            };
+            if let Some(t) = guard.as_ref().filter(|t| usable(t)) {
+                return Ok(t.access_token.clone());
+            }
+            // Expired, or turned down by the server: see whether the
+            // service has renewed it since.
+            match read_tokens(&self.path) {
+                Some(t) if usable(&t) => {
+                    let access = t.access_token.clone();
+                    *guard = Some(t);
+                    return Ok(access);
+                }
+                _ => return Err(GraphError::NotSignedIn),
+            }
+        }
         let Some(tokens) = guard.as_ref() else {
             return Err(GraphError::NotSignedIn);
         };
@@ -266,7 +330,7 @@ fn write_tokens(path: &Path, tokens: &Tokens) -> Result<()> {
 const SIGNED_IN_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Signed in</title>\
 <body style=\"font-family:system-ui,sans-serif;display:grid;place-items:center;height:90vh;color:#1b1b1b\">\
 <div style=\"text-align:center\"><h2 style=\"font-weight:600\">You're signed in</h2>\
-<p>Axentra OneDrive is setting up your files. You can close this tab.</p></div>";
+<p>Axentra CloudDrive is setting up your files. You can close this tab.</p></div>";
 
 const FAILED_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Sign-in failed</title>\
 <body style=\"font-family:system-ui,sans-serif;display:grid;place-items:center;height:90vh\">\

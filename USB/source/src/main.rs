@@ -1,5 +1,6 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod gui;
+mod window_chrome;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 

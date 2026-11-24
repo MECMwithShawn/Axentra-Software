@@ -1,6 +1,6 @@
 # Cloud thumbnails
 
-Windows shows thumbnails of online-only photos without downloading them, and so does Axentra OneDrive. It writes OneDrive's own previews of photos and videos into the [freedesktop thumbnail cache](https://specifications.freedesktop.org/thumbnail-spec/latest/), where GIO, GTK file choosers, GNOME Files and Eye of GNOME look before reading a file.
+Windows shows thumbnails of online-only photos without downloading them, and so does Axentra CloudDrive. It writes OneDrive's own previews of photos and videos into the [freedesktop thumbnail cache](https://specifications.freedesktop.org/thumbnail-spec/latest/), where GIO, GTK file choosers, GNOME Files and Eye of GNOME look before reading a file.
 
 ## How it works
 
@@ -49,7 +49,7 @@ The file itself is never downloaded. For an online-only file the first call fetc
 | `org.freedesktop.DBus.Error.FileNotFound` | no such file in OneDrive |
 | `org.freedesktop.DBus.Error.Failed` | OneDrive couldn't be reached or returned an error |
 | `org.freedesktop.DBus.Error.TimedOut` | no answer from OneDrive within 20 seconds |
-| `org.freedesktop.DBus.Error.ServiceUnknown` / `NameHasNoOwner` | Axentra OneDrive isn't running: treat as no thumbnail |
+| `org.freedesktop.DBus.Error.ServiceUnknown` / `NameHasNoOwner` | Axentra CloudDrive isn't running: treat as no thumbnail |
 
 **Calling it**
 

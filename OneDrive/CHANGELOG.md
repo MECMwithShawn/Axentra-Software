@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0-dev (unreleased) — mirror to Proton Drive (preview, offline-tested only)
+
+The package version stays 0.2.0 until a release.
+
+- **New `axentra-onedrive mirror plan|run|status`:** copies OneDrive to Proton Drive one way.
+  - Only adds folders and new files. Nothing is ever deleted, moved, renamed, trashed or replaced on either side.
+  - Content that changed, or a same-named file with other content, is recorded as diverged and left alone.
+  - `run` needs `--only <folder>` for now: a whole-drive run is refused until it is approved and given its own `--all` flag.
+  - `run` asks before starting unless `--yes` is given.
+  - `--round-trip` downloads each file back to check it (L4).
+- **New `axentra-onedrive proton status|login`:**
+  - Checks Proton's official `proton-drive` CLI (pinned to 0.9.0 by SHA-512 and version).
+  - Reports only whether it is signed in.
+  - Starts its browser sign-in.
+- **Optional `[mirror]` table in config.toml:**
+  - Keys: `enabled`, `dest_root`, `staging_dir`, `staging_cap_bytes`, `proton_cli` and `changed_content`.
+  - Off by default. Existing settings files load unchanged, and the table isn't written while it holds only defaults.
+- **The OneDrive sign-in is only read:** the mirror commands never refresh, save or remove `tokens.json`, so they can't race the running sync service.
+- **New crates:**
+  - `axentra-clouddrive-mirror`: manifest, planner, executor and readiness report.
+  - The Proton CLI adapter in `axentra-clouddrive-provider`.
+- **Docs:** `docs/clouddrive/PROTON_INTEGRATION.md` and `docs/clouddrive/MIGRATION_READINESS.md`. No production measurement has been made yet.
+- **Unchanged:** all existing commands, identifiers and sync behaviour.
+
+## 0.2.0 — Axentra CloudDrive (display rename; provider groundwork)
+
+- Renamed to Axentra CloudDrive, an independent client that syncs with Microsoft OneDrive. Only the name people see changed: the tray, panel, Settings, notifications, app menu, Axentra Command card, GNOME Files menu, service descriptions and the sign-in page now say Axentra CloudDrive. The icon is unchanged.
+- Everything an install depends on keeps its old id, so upgrading keeps sign-in, sync state and settings: the `axentra-onedrive` and `AxentraOneDrive` commands, `~/OneDrive`, the `~/.config/axentra/onedrive` and `~/.local/share/axentra/onedrive` folders, the systemd units, D-Bus names, extended attributes, the desktop file, the icon theme name and the Command id `onedrive`.
+- The GNOME Shell extension places the panel whether its window is titled Axentra CloudDrive or, from an older build, Axentra OneDrive.
+
 ## 0.1.0 (development preview, 2026-10-19; unpublished)
 
 - First version: Files On-Demand OneDrive folder over FUSE, two-way sync through Microsoft Graph, Windows-style conflict copies, pin and free up space, sharing links, version history and restore, pause, bandwidth limits and notifications.

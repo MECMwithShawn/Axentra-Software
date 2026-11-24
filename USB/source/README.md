@@ -8,13 +8,13 @@ The application, image reader, initramfs inspector, copy engine, raw writer, ver
 
 **Windows x64:** run `AxentraUSB-0.1.1-Setup.exe` to install into `Program Files\Axentra\USB` with Start menu and optional desktop shortcuts. Alternatively, extract `AxentraUSB-0.1.1-Windows-x64.zip` and run `AxentraUSB.exe` for portable use. Both builds are unsigned. Setup requires administrator authorization; the app normally runs unelevated and requests elevation only for physical device operations.
 
-**Zorin / Ubuntu x64:** the previously built Linux packages remain at 0.1.0; the 0.1.1 source includes the updated launcher icon, but no new Linux binary is claimed. Install the Debian package, then open **Axentra USB** from the applications menu:
+**Zorin / Ubuntu x64:** a native 0.1.1 development build passed 30 Rust tests and isolated X11 startup on Zorin OS 18.1 on 2026-10-19. The new native build targets Zorin 18 / Ubuntu 24.04 (glibc 2.39+). It is not a public Linux release. If you have that development Debian package, install it and open **Axentra USB** from the applications menu:
 
 ```sh
-sudo apt install ./axentra-usb_0.1.0_amd64.deb
+sudo apt install ./axentra-usb_0.1.1_amd64.deb
 ```
 
-The package contains a native x86-64 Linux ELF executable, installs `/usr/bin/axentra-usb`, an application-menu entry and icon, and declares its required runtime dependencies. It targets glibc 2.35 or newer, suitable for Zorin OS 17/18 and Ubuntu 22.04/24.04. Installation and GUI execution on Zorin still need validation.
+The package contains a native x86-64 Linux ELF executable, installs `/usr/bin/axentra-usb`, an application-menu entry and icon, and declares its required runtime dependencies. The older cross-compiled 0.1.0 artifact targeted glibc 2.35; do not apply that compatibility claim to a native 0.1.1 build. System installation, Wayland and physical-device workflows remain separate checks.
 
 The Linux portable archive contains the same executable. Extract it and run `./axentra-usb` from the extracted directory; the system dependencies listed in `packaging/package.py` must already be present. No Rust toolchain is needed to run either binary. An OpenGL-capable graphics driver is required.
 
@@ -49,7 +49,7 @@ This supports testing the FAT32 + NTFS profile; it does not prove that Alienware
 
 ## Validation and limits
 
-See `VALIDATION.txt` for the release's actual tests. Core tests use ordinary temporary files and synthetic devices; none formats a real disk. Windows device inventory and image inspection have been exercised. The Linux binary is cross-compiled and structurally checked but has not been run on Zorin. Actual Windows/Linux formatting, physical USB read-back, Alienware boot and live-session startup require testing with a spare USB.
+See `VALIDATION.txt` for the actual tests. Core tests use ordinary temporary files and synthetic devices; none formats a real disk. Windows device inventory and image inspection have been exercised. The native Linux 0.1.1 release build and isolated X11 window startup passed on Zorin 18.1. Actual Windows/Linux formatting, physical USB read-back, Alienware boot and live-session startup require testing with a spare USB.
 
 No runtime telemetry, account, cloud service or automatic network access is used. Exported reports contain local file paths and device identifiers; review them before sharing. Worker events stay in the private temporary job directory while the application owns it. Firmware boot is always reported as untested.
 
@@ -62,7 +62,7 @@ cargo test --locked
 cargo build --release --locked
 ```
 
-On Linux, building requires a C linker plus the normal X11/Wayland development environment for eframe. This release was cross-linked from Windows with Zig 0.15.2 targeting `x86_64-linux-gnu.2.35`.
+On Linux, building requires a C linker plus the normal X11/Wayland development environment for eframe. The 0.1.1 development build was compiled natively on Zorin 18.1. The historical 0.1.0 build was cross-linked from Windows with Zig 0.15.2 targeting `x86_64-linux-gnu.2.35`.
 
 Read-only commands:
 
@@ -74,6 +74,6 @@ axentra-usb --hash-entry /path/to/image.iso casper/filesystem.squashfs entry-sha
 
 Supply an output filename on Windows because the desktop executable does not attach a terminal. The worker accepts only typed verify/raw/compatible requests. Image data is never executed. All unsafe Rust is isolated to platform calls for device control, privilege launching and locking.
 
-`packaging/package.py` assembles `.deb`, portable archives and checksums from already-built native binaries. Python is a development packaging tool only and is not part of the app or its runtime dependencies.
+`packaging/package.py` assembles `.deb`, portable archives and checksums from already-built native binaries. Linux packaging requires an explicit `--linux-glibc-min` matching the build host/sysroot (use `2.39` for native Zorin 18 / Ubuntu 24.04 builds). Python is a development packaging tool only and is not part of the app or its runtime dependencies.
 
 Axentra USB is independently implemented and is not affiliated with Rufus, balenaEtcher or Zorin. No installation ISO, OS bootloader or Zorin proprietary content is redistributed.

@@ -14,6 +14,7 @@ use axentra_onedrive_core::db::Activity;
 use axentra_onedrive_core::ipc::{AxentraOneDriveProxy, ChangedStream};
 use axentra_onedrive_core::notify::Notifier;
 use axentra_onedrive_core::status::{Account, Status};
+use axentra_onedrive_core::BRAND;
 use futures_util::StreamExt;
 use ksni::TrayMethods;
 use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -96,7 +97,7 @@ pub fn run(start_with_settings: bool, show_panel: bool) -> Result<()> {
             return rt.block_on(show_in_running(what));
         }
         Err(e) => {
-            tracing::warn!("couldn't check for a running Axentra OneDrive: {e:#}");
+            tracing::warn!("couldn't check for a running {BRAND}: {e:#}");
             None
         }
     };
@@ -470,12 +471,12 @@ where
         "{0} setup && {0} login; echo; read -p 'Press Enter to close' _",
         cli.display()
     );
-    if terminal("Set up Axentra OneDrive", &script).is_ok() {
+    if terminal(&format!("Set up {BRAND}"), &script).is_ok() {
         return Ok(SignIn::InTerminal);
     }
     if !registered {
         anyhow::bail!(
-            "Couldn't open a terminal. Run `axentra-onedrive setup` in one to set up Axentra OneDrive."
+            "Couldn't open a terminal. Run `axentra-onedrive setup` in one to set up {BRAND}."
         );
     }
     login();
@@ -717,7 +718,7 @@ impl Backend {
         let color = self.config().icon_color().to_string();
         let tray = AxentraOneDriveTray {
             state: "starting".into(),
-            tooltip: "Axentra OneDrive".into(),
+            tooltip: BRAND.into(),
             accent: axentra_onedrive_core::config::icon_accent(&color),
             tx: self.tx.clone(),
         };
@@ -820,7 +821,7 @@ impl Backend {
             };
             let started = start(asked, at, systemctl, run_directly).await;
             if let (true, Started::Refused(why)) = (asked, &started) {
-                report.error(&anyhow::anyhow!("Couldn't start Axentra OneDrive: {why}"));
+                report.error(&anyhow::anyhow!("Couldn't start {BRAND}: {why}"));
             }
             if started != Started::Running {
                 let _ = tx.send(Cmd::StartFailed(at));
@@ -838,14 +839,14 @@ impl Backend {
         let st = if starting {
             Status {
                 state: "starting".into(),
-                message: "Starting Axentra OneDrive".into(),
+                message: format!("Starting {BRAND}"),
                 detail: "Waiting for the sync service to start".into(),
                 ..Default::default()
             }
         } else {
             Status {
                 state: "stopped".into(),
-                message: present::NOT_RUNNING.into(),
+                message: present::not_running(),
                 detail: "Your files aren't syncing until you start it again.".into(),
                 ..Default::default()
             }
@@ -876,7 +877,7 @@ impl Backend {
     fn proxy(&self) -> Result<&AxentraOneDriveProxy<'static>> {
         self.proxy
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!(present::NOT_RUNNING))
+            .ok_or_else(|| anyhow::anyhow!(present::not_running()))
     }
 
     /// Whether the panel and Settings are open, asked on the UI thread.
@@ -1360,7 +1361,7 @@ mod tests {
         // Nothing could be freed up without the service, so nothing is saved.
         for on in [true, false] {
             let e = block_on(backend.handle(Cmd::SetOnDemand(on))).unwrap_err();
-            assert_eq!(e.to_string(), present::NOT_RUNNING);
+            assert_eq!(e.to_string(), present::not_running());
         }
         assert_eq!(std::fs::read_to_string(&paths.config_file).unwrap(), text);
         assert!(!backend.config.files_on_demand);
@@ -1382,7 +1383,7 @@ mod tests {
             assert!(backend.proxy.is_none());
             assert!(backend.started.is_none());
             assert_eq!(backend.status.state, "stopped");
-            assert_eq!(backend.status.message, present::NOT_RUNNING);
+            assert_eq!(backend.status.message, present::not_running());
             // Looking for it again doesn't start it.
             assert!(!backend.should_auto_start(false));
         }

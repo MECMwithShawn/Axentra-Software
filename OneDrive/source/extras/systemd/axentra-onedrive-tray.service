@@ -1,5 +1,5 @@
 [Unit]
-Description=Axentra OneDrive tray icon and panel
+Description=Axentra CloudDrive tray icon and panel
 # Runs with the desktop session and stops with it.
 PartOf=graphical-session.target
 After=graphical-session.target

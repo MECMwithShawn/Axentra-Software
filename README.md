@@ -19,8 +19,11 @@ screenshots, release notes and security scan results. Installers and extension p
 | [USB](USB/) | 0.1.1 Windows preview | None | Source / packaging included; hardware validation pending |
 | [iMessage](iMessage/) | Service 0.1.0 / GTK frontend | None | [Local preview; Rust frontend migration pending](iMessage/) |
 | [OneDrive](OneDrive/) | 0.1.0 Linux preview | None | [Installed preview](OneDrive/LINUX.md); source included |
+| [Notepad](Notepad/) | 0.1.5 Linux preview | None | [Installed preview](Notepad/LINUX.md); source included |
 
 Local builds are not automatically public releases. See [current suite status](docs/CURRENT-STATUS.md) and [Linux / Zorin support](docs/LINUX.md).
+
+**Rust / Zorin requirement:** every desktop app and native companion must use Rust and run natively on Zorin. The [2026-10-19 recovered-source audit](docs/RUST-ZORIN.md) found seven Rust apps and three migrations still needed (PDF, Spaces and Horizon's native companion). Of the seven Rust apps, USB built on Zorin; the other six recovered source trees failed Linux compilation. Older installed-preview records describe different snapshots, not current suite-wide readiness.
 
 ## Icon source and design kit
 
