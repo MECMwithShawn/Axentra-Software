@@ -178,13 +178,13 @@ impl BrowserSignIn {
                     Some(got) = rx.recv() => got,
                 };
                 if cb.state.as_deref() != Some(self.state.as_str()) {
-                    let _ = sock.write_all(page("Sign-in link expired", "Start signing in again from Axentra Outlook.").as_bytes()).await;
+                    let _ = sock.write_all(page("Sign-in link expired", "Start signing in again from Axentra Mail.").as_bytes()).await;
                     continue;
                 }
                 let reply = if cb.error.is_some() {
-                    page("Sign-in didn't finish", "Return to Axentra Outlook to try again.")
+                    page("Sign-in didn't finish", "Return to Axentra Mail to try again.")
                 } else {
-                    page("You're signed in", "You're signed in. You can close this tab and return to Axentra Outlook.")
+                    page("You're signed in", "You're signed in. You can close this tab and return to Axentra Mail.")
                 };
                 let _ = sock.write_all(reply.as_bytes()).await;
                 let _ = sock.shutdown().await;

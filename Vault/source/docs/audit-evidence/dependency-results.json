@@ -1,0 +1,166 @@
+{
+  "rustsec_revision": "6aed84668c23d7f535077a9fe918bf1fa0f6a5bc",
+  "lock_packages": 536,
+  "windows_normal_and_build_packages": 325,
+  "matching_advisories": [
+    {
+      "affected": {},
+      "date": "2026-07-11",
+      "id": "RUSTSEC-2026-0206",
+      "informational": "unmaintained",
+      "package": "rustybuzz",
+      "title": "`rustybuzz` is unmaintained",
+      "url": "https://github.com/harfbuzz/rustybuzz/issues/166",
+      "version": "0.20.1",
+      "versions": {
+        "patched": []
+      },
+      "windows": true
+    },
+    {
+      "affected": {},
+      "date": "2026-06-28",
+      "id": "RUSTSEC-2026-0192",
+      "informational": "unmaintained",
+      "package": "ttf-parser",
+      "title": "`ttf-parser` is unmaintained",
+      "url": "https://github.com/harfbuzz/ttf-parser/issues/217",
+      "version": "0.25.1",
+      "versions": {
+        "patched": []
+      },
+      "windows": true
+    }
+  ],
+  "licenses": {
+    "(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0": 1,
+    "(MIT OR Apache-2.0) AND Unicode-3.0": 1,
+    "0BSD OR MIT OR Apache-2.0": 1,
+    "Apache-2.0": 12,
+    "Apache-2.0 AND ISC": 1,
+    "Apache-2.0 AND MIT": 1,
+    "Apache-2.0 OR GPL-2.0-only": 1,
+    "Apache-2.0 OR ISC OR MIT": 1,
+    "Apache-2.0 OR MIT": 30,
+    "Apache-2.0/MIT": 2,
+    "BSD-2-Clause": 1,
+    "BSD-2-Clause OR Apache-2.0 OR MIT": 2,
+    "BSD-3-Clause": 3,
+    "BSD-3-Clause OR Apache-2.0": 2,
+    "BSL-1.0": 2,
+    "CC0-1.0 OR MIT-0 OR Apache-2.0": 1,
+    "CDLA-Permissive-2.0": 1,
+    "ISC": 3,
+    "MIT": 38,
+    "MIT OR Apache-2.0": 169,
+    "MIT OR Apache-2.0 OR Zlib": 7,
+    "MIT OR Zlib OR Apache-2.0": 2,
+    "MIT/Apache-2.0": 11,
+    "UNSPECIFIED": 3,
+    "Unicode-3.0": 18,
+    "Unlicense OR MIT": 5,
+    "Zlib": 3,
+    "Zlib OR Apache-2.0 OR MIT": 3
+  },
+  "missing_license": [
+    "axentra-vault",
+    "passkey-win",
+    "vault-core"
+  ],
+  "non_crates_io_sources": [],
+  "duplicates": {
+    "base64": [
+      "0.22.1",
+      "0.23.1"
+    ],
+    "bitflags": [
+      "1.3.2",
+      "2.13.2"
+    ],
+    "block-buffer": [
+      "0.10.4",
+      "0.12.1"
+    ],
+    "cpufeatures": [
+      "0.2.17",
+      "0.3.1"
+    ],
+    "crypto-common": [
+      "0.1.7",
+      "0.2.2"
+    ],
+    "digest": [
+      "0.10.7",
+      "0.11.3"
+    ],
+    "getrandom": [
+      "0.2.17",
+      "0.3.4",
+      "0.4.3"
+    ],
+    "gif": [
+      "0.13.3",
+      "0.14.2"
+    ],
+    "hashbrown": [
+      "0.16.1",
+      "0.17.1"
+    ],
+    "hmac": [
+      "0.12.1",
+      "0.13.0"
+    ],
+    "kurbo": [
+      "0.11.3",
+      "0.13.1"
+    ],
+    "miniz_oxide": [
+      "0.8.9",
+      "0.9.1"
+    ],
+    "png": [
+      "0.17.16",
+      "0.18.1"
+    ],
+    "rustc-hash": [
+      "1.1.0",
+      "2.1.3"
+    ],
+    "sha2": [
+      "0.10.9",
+      "0.11.1"
+    ],
+    "syn": [
+      "2.0.119",
+      "3.0.9"
+    ],
+    "windows-sys": [
+      "0.52.0",
+      "0.60.2",
+      "0.61.2"
+    ],
+    "windows-targets": [
+      "0.52.6",
+      "0.53.5"
+    ],
+    "windows_x86_64_msvc": [
+      "0.52.6",
+      "0.53.1"
+    ],
+    "zune-core": [
+      "0.4.12",
+      "0.5.3"
+    ],
+    "zune-jpeg": [
+      "0.4.21",
+      "0.5.15"
+    ]
+  },
+  "cached_index_yanked": [],
+  "cached_index_unchecked": [],
+  "limitations": [
+    "Yanked status is from the local cached index, not refreshed.",
+    "No project deny.toml exists; license expressions and duplicate versions are inventoried, not approved by a policy.",
+    "Windows set excludes dev edges and includes build dependencies; a match is not proof of an exploitable reachable code path."
+  ]
+}

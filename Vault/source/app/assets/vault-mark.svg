@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="46%" r="72%">
+      <stop offset="0" stop-color="#1d5486"/>
+      <stop offset="0.42" stop-color="#0c2038"/>
+      <stop offset="1" stop-color="#050911"/>
+    </radialGradient>
+    <radialGradient id="bloom" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#6fe8ff" stop-opacity="0.65"/>
+      <stop offset="0.55" stop-color="#2fb8ff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#2fb8ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2fdff"/>
+      <stop offset="1" stop-color="#a6e9ff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <rect x="8.75" y="8.75" width="238.5" height="238.5" rx="55.25" fill="none" stroke="#6fe8ff" stroke-opacity="0.28" stroke-width="1.5"/>
+  <circle cx="128" cy="128" r="84" fill="url(#bloom)"/>
+
+  <!-- Circuit rings: solid segments, dotted and dashed tracks -->
+  <g fill="none" stroke="#5fe3ff" stroke-linecap="round" filter="url(#glow)">
+    <circle cx="128" cy="128" r="98" stroke-width="3.2" stroke-dasharray="190 26 54 22 132 40" transform="rotate(-24 128 128)"/>
+    <circle cx="128" cy="128" r="85" stroke-width="2.2" stroke-opacity="0.85" stroke-dasharray="0.1 7.2"/>
+    <circle cx="128" cy="128" r="72" stroke-width="3" stroke-dasharray="120 24 70 30 130 78" transform="rotate(38 128 128)"/>
+    <circle cx="128" cy="128" r="60" stroke-width="1.6" stroke-opacity="0.7" stroke-dasharray="44 12 18 12 70 20" transform="rotate(-70 128 128)"/>
+  </g>
+
+  <!-- Glowing nodes at segment ends -->
+  <g fill="#e6fcff" filter="url(#glow)">
+    <circle cx="133.0" cy="225.9" r="4.2"/>
+    <circle cx="60.1" cy="198.7" r="4.2"/>
+    <circle cx="57.4" cy="60.1" r="4.2"/>
+    <circle cx="78.4" cy="180.2" r="3.6"/>
+    <circle cx="64.6" cy="93.9" r="3.6"/>
+  </g>
+
+  <!-- Padlock -->
+  <circle cx="128" cy="138" r="44" fill="#7ff0ff" fill-opacity="0.35" filter="url(#soft)"/>
+  <g filter="url(#glow)">
+    <path d="M107 122 v-13 a21 21 0 0 1 42 0 v13" fill="none" stroke="url(#body)" stroke-width="9.5" stroke-linecap="round"/>
+    <rect x="94" y="118" width="68" height="54" rx="11" fill="url(#body)"/>
+  </g>
+  <circle cx="128" cy="139" r="7.5" fill="#0d3a66"/>
+  <rect x="124.25" y="142" width="7.5" height="16" rx="3.75" fill="#0d3a66"/>
+</svg>

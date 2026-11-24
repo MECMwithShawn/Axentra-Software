@@ -75,9 +75,10 @@ fn DiscardDialog() -> Element {
             on_close: move |_| close(form),
             actions: rsx! {
                 Button { label: "Discard", variant: Variant::Danger, onclick: move |_| { close(form); actions::confirm_discard(app, form); } }
+                Button { label: "Save draft", onclick: move |_| { close(form); form.spawn(actions::close(app, form)); } }
                 Button { label: "Cancel", onclick: move |_| close(form) }
             },
-            p { class: "ax-compose-dialog-text", "The draft will be moved to Deleted Items." }
+            p { class: "ax-compose-dialog-text", "Discarding moves it to Deleted Items. Save draft keeps it in Drafts to finish later." }
         }
     }
 }

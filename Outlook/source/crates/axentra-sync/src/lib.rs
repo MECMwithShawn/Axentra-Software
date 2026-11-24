@@ -16,6 +16,7 @@ pub mod imap;
 pub mod mime;
 pub mod notify;
 pub mod oauth;
+pub mod ollama;
 pub mod outbox;
 pub mod secrets;
 pub mod smtp;
@@ -170,6 +171,12 @@ impl SyncHandle {
     /// counter and show `app.error(..)` / `app.toast(..)`.
     pub fn take_notices(&self) -> Vec<Notice> {
         self.inner.take_notices()
+    }
+
+    /// Why sending Outbox message `id` failed last, and whether that was
+    /// final (it went back to Drafts) or it will be retried.
+    pub fn send_error(&self, id: axentra_core::MessageId) -> Option<(String, bool)> {
+        self.inner.send_error(id)
     }
 
     /// Run a future on the engine's runtime (network code needs it).

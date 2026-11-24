@@ -1,0 +1,323 @@
+{
+ "about": "Holdout for the junk filter fix (assistant-authored synthetic, written 2026-11-03 after the tricky.json results and before the fix ran on anything; never trained or tuned on). Same invented user as modern-dev.json. Wanted mail from strangers that looks like junk on the surface (code-only subjects, bare or urgent attachments, senders on mail.com / email.com / ymail.com, domains with 'cloud' or 'apply' in them) and unwanted mail at the edge of what the filter catches (code-subject lures with and without an urgent mark, an urgent zip, an HTML attachment). Labels are the author's.",
+ "messages": [
+  {
+   "id": "ho-w01",
+   "label": "legitimate",
+   "from_name": "Permit Desk",
+   "from": "permits@riverton-city.example",
+   "subject": "Re: 2026-0457",
+   "text": "Hello,\n\nYour building permit application 2026-0457 has been reviewed. One more document is needed: a site plan showing the setback from the property line. You can upload it through the permit portal or reply to this email with it attached.\n\nRiverton Permit Desk"
+  },
+  {
+   "id": "ho-w02",
+   "label": "legitimate",
+   "from_name": "Scanner",
+   "from": "scanner@fernleaf-supplies.example",
+   "subject": "Scan_20261103_0915",
+   "text": "",
+   "attachments": [
+    {
+     "name": "Scan_20261103_0915.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "ho-w03",
+   "label": "legitimate",
+   "from_name": "Tom Becker",
+   "from": "tom.becker@mail.com",
+   "subject": "Question about the bike you listed",
+   "text": "Hi, is the blue road bike still for sale? I could come by Saturday morning to look at it. Would you take $300? Thanks, Tom"
+  },
+  {
+   "id": "ho-w04",
+   "label": "legitimate",
+   "from_name": "Jenny Park",
+   "from": "j.park@ymail.com",
+   "subject": "Carpool next week",
+   "text": "Hi! I can drive Monday and Wednesday next week, can you take Tuesday and Thursday? Friday is a half day so pickup is at 12:30. Jenny"
+  },
+  {
+   "id": "ho-w05",
+   "label": "legitimate",
+   "from_name": "Cloud Kitchen Co",
+   "from": "hello@cloud-kitchen.example",
+   "subject": "Your menu for the week of Nov 9",
+   "html": "<h2>This week's menu</h2><p>Butternut squash soup, chicken tikka, and a lemon tart. Orders close Thursday at noon.</p><p><a href=\"https://cloud-kitchen.example/menu\">See the menu</a> · <a href=\"https://cloud-kitchen.example/unsubscribe\">Unsubscribe</a></p>"
+  },
+  {
+   "id": "ho-w06",
+   "label": "legitimate",
+   "from_name": "State College Admissions",
+   "from": "admissions@apply-statecollege.example",
+   "subject": "Your application is complete",
+   "html": "<p>Thank you for applying to State College. We have received all of your documents and your application is now complete. Decisions are released in March.</p><p><a href=\"https://apply-statecollege.example/status\">Check your status</a></p>"
+  },
+  {
+   "id": "ho-w07",
+   "label": "legitimate",
+   "from_name": "Dana Whitfield",
+   "from": "dana@whitfield-law.example",
+   "subject": "Documents for signing",
+   "text": "Please sign where marked and send back by Friday. Thanks, Dana",
+   "attachments": [
+    {
+     "name": "Closing-documents.pdf",
+     "type": "application/pdf"
+    }
+   ],
+   "importance": "high"
+  },
+  {
+   "id": "ho-w08",
+   "label": "legitimate",
+   "from_name": "Ray's Roofing",
+   "from": "office@rays-roofing.example",
+   "subject": "Estimate",
+   "text": "Attached is the estimate we discussed.",
+   "attachments": [
+    {
+     "name": "Estimate-1187.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "ho-w09",
+   "label": "legitimate",
+   "from_name": "Lincoln Elementary",
+   "from": "office@lincoln-elementary.example",
+   "subject": "Field trip permission form due Friday",
+   "text": "Dear families,\n\nThe third grade will visit the science museum on November 14. Please sign the attached permission form and return it with your child by Friday. The trip is free; lunch will be provided.\n\nThank you,\nLincoln Elementary Office",
+   "attachments": [
+    {
+     "name": "field-trip-form.pdf",
+     "type": "application/pdf"
+    }
+   ],
+   "importance": "high"
+  },
+  {
+   "id": "ho-w10",
+   "label": "legitimate",
+   "from_name": "Northwind Bank Tax Documents",
+   "from": "taxdocs@northwindbank.example",
+   "subject": "1099-INT 2026",
+   "text": "Your 2026 Form 1099-INT for the savings account ending 4471 is now available. Sign in to online banking and open Statements & Documents to download it. We don't attach tax forms to email."
+  },
+  {
+   "id": "ho-w11",
+   "label": "legitimate",
+   "from_name": "Lisa Grant",
+   "from": "lisa.grant@email.com",
+   "subject": "Re: 4/12",
+   "text": "Works for me! I'll bring the folding chairs. See you on the 12th."
+  },
+  {
+   "id": "ho-w12",
+   "label": "legitimate",
+   "from_name": "",
+   "from": "5555550123@mms.carrier.example",
+   "subject": "",
+   "text": "",
+   "attachments": [
+    {
+     "name": "IMG_4471.jpg",
+     "type": "image/jpeg"
+    }
+   ]
+  },
+  {
+   "id": "ho-w13",
+   "label": "legitimate",
+   "from_name": "Fernleaf Supplies Billing",
+   "from": "billing@fernleaf-supplies.example",
+   "subject": "Reminder: invoice INV-20931 is overdue",
+   "text": "Hello,\n\nOur records show invoice INV-20931 for $1,284.00 was due on November 1 and is still open. If you've already paid, please ignore this reminder. Otherwise you can pay by bank transfer using the details on the invoice.\n\nThank you,\nFernleaf Supplies",
+   "importance": "high"
+  },
+  {
+   "id": "ho-w14",
+   "label": "legitimate",
+   "from_name": "Contoso Payroll",
+   "from": "payroll@contoso-payroll.example",
+   "subject": "W-2 2026",
+   "text": "Your 2026 Form W-2 is now available in the employee portal under Pay > Tax Forms. For your security we don't send tax forms by email. Questions? Contact payroll through the HR help desk."
+  },
+  {
+   "id": "ho-w15",
+   "label": "legitimate",
+   "from_name": "Fontanería Ruiz",
+   "from": "info@fontaneria-ruiz.example",
+   "subject": "Factura 2026-118",
+   "text": "Buenos días, le adjunto la factura del arreglo. Gracias.",
+   "attachments": [
+    {
+     "name": "Factura-2026-118.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "ho-w16",
+   "label": "legitimate",
+   "from_name": "Brightleaf Support",
+   "from": "support@brightleaf.example",
+   "subject": "RE: Ticket #88213",
+   "text": "Hi,\n\nSorry about the broken pot in order 77310. We've sent a replacement at no charge; it should arrive in 3 to 5 days. You don't need to return the broken one.\n\nBrightleaf Support"
+  },
+  {
+   "id": "ho-p01",
+   "label": "phishing",
+   "from_name": "Accounts Payable",
+   "from": "ap@nordline-freight.example",
+   "subject": "77812-2026",
+   "text": "",
+   "attachments": [
+    {
+     "name": "INV_77812_2026.pdf",
+     "type": "application/pdf"
+    }
+   ],
+   "importance": "high"
+  },
+  {
+   "id": "ho-p02",
+   "label": "phishing",
+   "from_name": "Finance",
+   "from": "finance@crestmoor-holdings.example",
+   "subject": "Payment 88213-A",
+   "text": "See attached.",
+   "attachments": [
+    {
+     "name": "Payment_88213-A.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  },
+  {
+   "id": "ho-p03",
+   "label": "phishing",
+   "from_name": "Purchasing",
+   "from": "purchasing@vexa-industrial.example",
+   "subject": "RFQ 2026-1103 / 4471",
+   "text": "Please quote urgently.",
+   "attachments": [
+    {
+     "name": "RFQ_2026-1103.zip",
+     "type": "application/zip"
+    }
+   ],
+   "importance": "high"
+  },
+  {
+   "id": "ho-p04",
+   "label": "phishing",
+   "from_name": "SharePoint Online",
+   "from": "no-reply@sharepoint-docs-view.example",
+   "subject": "Shared document: Q4 Bonus.pdf",
+   "html": "<p>Hannah Okafor shared a file with you.</p><p><a href=\"https://sharepoint-docs-view.example/s/q4\">https://contoso.sharepoint.com/sites/HR/Q4 Bonus.pdf</a></p>"
+  },
+  {
+   "id": "ho-p05",
+   "label": "phishing",
+   "from_name": "PayPal",
+   "from": "service@paypa1-billing.example",
+   "subject": "Your account has been limited",
+   "html": "<p>We noticed unusual activity and limited your account. Confirm your details within 24 hours to restore access.</p><p><a href=\"https://paypa1-billing.example/restore\">Restore access</a></p>"
+  },
+  {
+   "id": "ho-p06",
+   "label": "spam",
+   "from_name": "Amazon Orders",
+   "from": "orders@prime-refund-desk.example",
+   "subject": "Your Amazon order #112-4471 has been placed: $899.00",
+   "text": "Thank you for your order of an Apple MacBook Air for $899.00. If you did not place this order, call our refund department at 1 (888) 555-0147 immediately to cancel."
+  },
+  {
+   "id": "ho-p07",
+   "label": "phishing",
+   "from_name": "Linda Hayes",
+   "from": "linda.hayes.ap@gmail.example",
+   "subject": "Re: invoice",
+   "text": "Kindly see attached and confirm.",
+   "attachments": [
+    {
+     "name": "Invoice_Nov.htm",
+     "type": "text/html"
+    }
+   ]
+  },
+  {
+   "id": "ho-p08",
+   "label": "spam",
+   "from_name": "Crypto Alpha",
+   "from": "alpha@moonshot-signals.example",
+   "subject": "This coin is about to 10x",
+   "text": "Our members bought before the last three pumps. The next signal goes out tonight. Join the private channel for $99 and never miss a launch again."
+  },
+  {
+   "id": "ho-p09",
+   "label": "phishing",
+   "from_name": "Priya Raman",
+   "from": "priya.raman.office@outlook-mail.example",
+   "subject": "Quick favor",
+   "text": "Are you available? I need you to buy four $100 Apple gift cards for a client and send me photos of the codes. I'll pay you back today."
+  },
+  {
+   "id": "ho-p10",
+   "label": "phishing",
+   "from_name": "Microsoft 365",
+   "from": "alerts@m365-account-center.example",
+   "subject": "Your password expires today",
+   "html": "<p>Your Microsoft 365 password expires today. Keep your current password to avoid interruption.</p><p><a href=\"https://m365-account-center.example/keep\">https://login.microsoftonline.com/keep-password</a></p>"
+  },
+  {
+   "id": "ho-p11",
+   "label": "spam",
+   "from_name": "Flash Deals",
+   "from": "promo@mega-flash-deals.example",
+   "subject": "",
+   "html": "<a href=\"https://mega-flash-deals.example/r?x=77\"><img src=\"https://mega-flash-deals.example/img/77.png\" alt=\"\"></a>"
+  },
+  {
+   "id": "ho-p12",
+   "label": "phishing",
+   "from_name": "Scan Center",
+   "from": "scan@docs-relay-center.example",
+   "subject": "SCAN0042 20261103",
+   "text": "",
+   "attachments": [
+    {
+     "name": "SCAN0042.pdf",
+     "type": "application/pdf"
+    }
+   ],
+   "importance": "high"
+  },
+  {
+   "id": "ho-p13",
+   "label": "spam",
+   "from_name": "International Lottery Board",
+   "from": "claims@euro-millions-awards.example",
+   "subject": "You have won 2,500,000 EUR",
+   "text": "Your email address won 2,500,000 EUR in our international draw. To claim, send your full name, address, phone number and a copy of your passport to our claims agent."
+  },
+  {
+   "id": "ho-p14",
+   "label": "phishing",
+   "from_name": "Orders",
+   "from": "orders@talvik-trading.example",
+   "subject": "8841-AX-2026",
+   "text": "",
+   "attachments": [
+    {
+     "name": "8841-AX-2026.pdf",
+     "type": "application/pdf"
+    }
+   ]
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-//! Axentra Outlook user interface (Dioxus). Rendered by `axentra-desktop`
+//! Axentra Mail user interface (Dioxus). Rendered by `axentra-desktop`
 //! (native window) and `axentra-preview` (liveview in a browser).
 
 pub mod calendar;
@@ -18,7 +18,7 @@ pub use state::init;
 
 /// Product name shown in the header and window title. Microsoft owns the
 /// "Outlook" trademark; change this before distributing the app.
-pub const APP_NAME: &str = "Axentra Outlook";
+pub const APP_NAME: &str = "Axentra Mail";
 
 /// All stylesheets, in cascade order.
 pub const CSS: &str = concat!(
@@ -27,6 +27,7 @@ pub const CSS: &str = concat!(
     include_str!("../styles/kit.css"),
     include_str!("../styles/shell.css"),
     include_str!("../styles/mail.css"),
+    include_str!("../styles/packages.css"),
     include_str!("../styles/compose.css"),
     include_str!("../styles/calendar.css"),
     include_str!("../styles/people.css"),

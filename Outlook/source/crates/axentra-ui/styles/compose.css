@@ -243,6 +243,22 @@
   border-radius: var(--ax-radius-xl); box-shadow: var(--ax-shadow-28);
   animation: ax-fade var(--ax-duration-normal);
 }
+.ax-compose-window.ax-compose-window-min { display: none; }
+/* A minimized message: a small bar at the bottom right. */
+.ax-compose-minibar {
+  position: fixed; z-index: 850; right: 16px; bottom: 16px; width: 280px; max-width: calc(100vw - 32px);
+  display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 0;
+  background: var(--ax-bg-canvas); border: 1px solid var(--ax-stroke-2);
+  border-radius: var(--ax-radius-l); box-shadow: var(--ax-shadow-16);
+  animation: ax-fade var(--ax-duration-normal);
+}
+.ax-compose-minibar-open {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px;
+  background: none; border: none; border-radius: var(--ax-radius-m); color: var(--ax-fg-1);
+  font: inherit; font-weight: var(--ax-weight-semibold); text-align: left; cursor: pointer;
+}
+.ax-compose-minibar-open:hover { background: var(--ax-bg-1-hover); }
+.ax-compose-minibar-open:focus-visible { outline: 2px solid var(--ax-stroke-focus-outer); outline-offset: -2px; }
 .ax-compose-titlebar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 0 0 8px; flex: none; color: var(--ax-fg-1); }
 .ax-compose-titlebar-text { flex: 1 1 auto; font-weight: var(--ax-weight-semibold); }
 .ax-compose-window-ribbon { flex: none; }

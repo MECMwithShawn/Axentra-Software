@@ -7,8 +7,8 @@
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::Store;
-use super::mail::MoveRecord;
+use super::mail::{MoveRecord, id_list};
+use super::{Store, bump_sql, changed_sql, has_column};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -65,13 +65,17 @@ CREATE TABLE IF NOT EXISTS junk_models (
 CREATE TABLE IF NOT EXISTS junk_routing (
     message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     rule_id INTEGER, pattern TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS junk_filtered (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    reasons TEXT NOT NULL, moved INTEGER NOT NULL, at INTEGER NOT NULL);
 "#;
 
 /// The cached checks of each message: the warning signs (`json`, an
 /// [`analyze::Analysis`]) and features, valid for `version` (what was
 /// checked and against which contacts / accounts), plus the score of the
 /// model `model` ('' for none), which is redone on its own when only the
-/// model changes. Triggers drop a row when its message's content changes.
+/// model changes. `gate` is the verdict orders and topics depend on (see
+/// [`gate_of`]). Triggers drop a row when its message's content changes.
 const ASSESSMENTS_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS junk_assessments (
     message_id INTEGER PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
@@ -80,10 +84,13 @@ CREATE TABLE IF NOT EXISTS junk_assessments (
     features TEXT NOT NULL,
     model TEXT NOT NULL DEFAULT '',
     score REAL,
-    created_at INTEGER NOT NULL);
+    created_at INTEGER NOT NULL,
+    gate TEXT);
 "#;
 
 const LEGACY_MIGRATED: &str = "junk.legacy_migrated";
+/// When the junk filter started: mail that arrived before it stays put.
+const FILTER_SINCE: &str = "junk.filter_since";
 /// Schema / repair level of the junk tables (see [`upgrade_schema_in`]).
 const SCHEMA_LEVEL: &str = "junk.schema";
 /// Bumped on every confirmed-label change; the learner rebuilds from it, and
@@ -97,14 +104,6 @@ fn account_key(account: Option<AccountId>) -> i64 {
     account.unwrap_or(0)
 }
 
-/// SQL that bumps a kv counter (usable inside a trigger).
-fn bump_sql(key: &str) -> String {
-    format!(
-        "INSERT OR IGNORE INTO kv (key, value) VALUES ('{key}', '0');
-         UPDATE kv SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = '{key}';"
-    )
-}
-
 /// Triggers that keep cached checks honest: a message's own content
 /// (sender, subject, reply-to, authentication header, body, attachments)
 /// drops its cached check; contacts, addresses written to and accounts bump
@@ -114,13 +113,10 @@ fn triggers_sql() -> String {
         format!("CREATE TRIGGER IF NOT EXISTS {name} {when} BEGIN DELETE FROM junk_assessments WHERE message_id = {id}; END;\n")
     };
     let bump = |name: &str, when: &str| format!("CREATE TRIGGER IF NOT EXISTS {name} {when} BEGIN {} END;\n", bump_sql(CONTEXT_REVISION));
-    let changed = |fields: &[&str]| {
-        fields.iter().map(|f| format!("json_extract(OLD.json, '$.{f}') IS NOT json_extract(NEW.json, '$.{f}')")).collect::<Vec<_>>().join(" OR ")
-    };
     let mut s = String::new();
     s += &drop(
         "junk_recheck_message",
-        &format!("AFTER UPDATE OF json ON messages WHEN {}", changed(&["from", "subject", "reply_to", "auth_results", "account_id"])),
+        &format!("AFTER UPDATE OF json ON messages WHEN {}", changed_sql(&["from", "subject", "reply_to", "auth_results", "account_id"])),
         "NEW.id",
     );
     s += &drop("junk_recheck_body_insert", "AFTER INSERT ON message_bodies", "NEW.message_id");
@@ -136,20 +132,13 @@ fn triggers_sql() -> String {
     s += &bump("junk_context_recent_update", "AFTER UPDATE OF address ON recent_addresses");
     s += &bump("junk_context_recent_delete", "AFTER DELETE ON recent_addresses");
     s += &bump("junk_context_account_insert", "AFTER INSERT ON accounts");
-    s += &bump("junk_context_account_update", &format!("AFTER UPDATE OF json ON accounts WHEN {}", changed(&["email", "config"])));
+    s += &bump("junk_context_account_update", &format!("AFTER UPDATE OF json ON accounts WHEN {}", changed_sql(&["email", "config", "display_name"])));
     s += &bump("junk_context_account_delete", "AFTER DELETE ON accounts");
+    // A label outlives its message (it is kept by fingerprint), but not its
+    // message id: SQLite gives a later message the same id.
+    s += "CREATE TRIGGER IF NOT EXISTS junk_labels_forget_message AFTER DELETE ON messages BEGIN
+            UPDATE junk_labels SET message_id = 0 WHERE message_id = OLD.id; END;\n";
     s
-}
-
-fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
-    let names = stmt.query_map([], |r| r.get::<_, String>(1))?;
-    for n in names {
-        if n? == column {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 /// Bring junk tables written by earlier 0.1.5 builds up to date, and repair
@@ -182,6 +171,9 @@ pub(crate) fn upgrade_schema_in(conn: &Connection) -> Result<()> {
         conn.execute("DROP TABLE junk_assessments", [])?;
     }
     conn.execute_batch(ASSESSMENTS_DDL)?;
+    if !has_column(conn, "junk_assessments", "gate")? {
+        conn.execute("ALTER TABLE junk_assessments ADD COLUMN gate TEXT", [])?;
+    }
     let level: i64 =
         conn.query_row("SELECT value FROM kv WHERE key = ?1", [SCHEMA_LEVEL], |r| r.get::<_, String>(0)).optional()?.and_then(|v| v.parse().ok()).unwrap_or(0);
     if level < 2 {
@@ -190,6 +182,17 @@ pub(crate) fn upgrade_schema_in(conn: &Connection) -> Result<()> {
         conn.execute("UPDATE junk_sender_rules SET effective_at = ?1 WHERE source = 'legacy' AND effective_at = 0", [now])?;
         conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, '2')", [SCHEMA_LEVEL])?;
     }
+    if level < 3 {
+        // Your own name now counts too: renaming an account changes checks.
+        conn.execute("DROP TRIGGER IF EXISTS junk_context_account_update", [])?;
+        conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, '3')", [SCHEMA_LEVEL])?;
+    }
+    if level < 4 {
+        // Labels of messages deleted before `junk_labels_forget_message`.
+        conn.execute("UPDATE junk_labels SET message_id = 0 WHERE message_id != 0 AND message_id NOT IN (SELECT id FROM messages)", [])?;
+        conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?1, '4')", [SCHEMA_LEVEL])?;
+    }
+    conn.execute_batch(super::junk_shadow::SHADOW_DDL)?;
     conn.execute_batch(&triggers_sql())?;
     Ok(())
 }
@@ -480,6 +483,26 @@ fn known_people_in(conn: &Connection) -> Result<Vec<(String, Vec<String>)>> {
     Ok(by_name.into_iter().collect())
 }
 
+/// Your own names (the display names of your accounts), lower-cased, each
+/// with every one of your account addresses: mail using your name from any
+/// other address is flagged.
+fn own_names_in(conn: &Connection) -> Result<Vec<(String, Vec<String>)>> {
+    let mut stmt = conn.prepare_cached("SELECT lower(trim(json_extract(json, '$.display_name'))), lower(trim(json_extract(json, '$.email'))) FROM accounts")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, Option<String>>(0)?.unwrap_or_default(), r.get::<_, Option<String>>(1)?.unwrap_or_default())))?;
+    let mut names = Vec::new();
+    let mut addrs = Vec::new();
+    for row in rows {
+        let (n, a) = row?;
+        if n.contains(' ') && !names.contains(&n) {
+            names.push(n);
+        }
+        if !a.is_empty() {
+            addrs.push(a);
+        }
+    }
+    Ok(names.into_iter().map(|n| (n, addrs.clone())).collect())
+}
+
 /// authserv-ids believed for an account: its IMAP provider's, for the few
 /// providers known to clean up forged headers. Microsoft (Graph) and local
 /// accounts get no headers, so none.
@@ -508,6 +531,7 @@ struct CheckContext {
     version: String,
     familiar: Vec<String>,
     people: Vec<(String, Vec<String>)>,
+    own_names: Vec<(String, Vec<String>)>,
     model: Option<Arc<Model>>,
 }
 
@@ -526,6 +550,55 @@ struct CachedCheck {
 fn analyze_guarded(input: &analyze::Input<'_>) -> analyze::Analysis {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| analyze::analyze(input)))
         .unwrap_or_else(|_| analyze::Analysis { version: analyze::ANALYSIS_VERSION, incomplete: true, ..Default::default() })
+}
+
+/// What an order extraction or a topic depends on in a check: its
+/// severity (and, under a caution, whether the sender poses as someone
+/// else), not the check's version (which changes with every contact or
+/// new recipient, and the check is redone to the same verdict).
+pub(crate) fn gate_of(a: &analyze::Analysis) -> &'static str {
+    match a.severity() {
+        Some(Severity::Danger) => "danger",
+        Some(Severity::Caution) if a.impersonation() => "impersonation",
+        Some(Severity::Caution) => "caution",
+        Some(Severity::Info) | None => "none",
+    }
+}
+
+/// The junk gate an order extraction or topic was worked out with, as SQL
+/// over the check row `j`: the check's verdict ([`gate_of`]; the version
+/// for a row checked before there was one), marked when the user reported
+/// the message as phishing (which counts as a phishing verdict, whatever
+/// the check found). [`cached_junk_in`] gives the same value.
+pub(crate) const GATE_VERSION_SQL: &str = "(COALESCE(j.gate, j.version) || CASE WHEN EXISTS (SELECT 1 FROM junk_labels l WHERE l.message_id = j.message_id AND l.label = 'phishing') THEN ':phishing' ELSE '' END)";
+
+/// Cached checks by message: (gate version, severity, reported as
+/// phishing, the sender poses as someone else, the trusted
+/// `Authentication-Results`).
+pub(crate) type CachedJunk = HashMap<MessageId, (String, Option<Severity>, bool, bool, analyze::Auth)>;
+
+/// The cached checks of `ids`, for the order and topic passes: they never
+/// run the check themselves. A message you reported as phishing counts as
+/// Danger. A message missing from the map hasn't been checked yet.
+pub(crate) fn cached_junk_in(conn: &Connection, ids: &[MessageId]) -> Result<CachedJunk> {
+    let mut out = HashMap::new();
+    for chunk in ids.chunks(500) {
+        let mut stmt = conn.prepare(&format!(
+            "SELECT j.message_id, {GATE_VERSION_SQL}, j.json, EXISTS (SELECT 1 FROM junk_labels l WHERE l.message_id = j.message_id AND l.label = 'phishing')
+             FROM junk_assessments j WHERE j.message_id IN ({})",
+            id_list(chunk)
+        ))?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, MessageId>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, bool>(3)?)))?;
+        for row in rows {
+            let (id, version, json, reported) = row?;
+            let analysis = serde_json::from_str::<analyze::Analysis>(&json).ok();
+            let severity = analysis.as_ref().and_then(|a| a.severity());
+            let impersonation = analysis.as_ref().is_some_and(|a| a.impersonation());
+            let auth = analysis.map(|a| a.auth).unwrap_or_default();
+            out.insert(id, (version, if reported { Some(Severity::Danger) } else { severity }, reported, impersonation, auth));
+        }
+    }
+    Ok(out)
 }
 
 /// A message's confirmed label as prepared outside the transaction that
@@ -696,12 +769,12 @@ impl Store {
     // ------------------------------------------------------------ assessments
 
     fn check_context(&self) -> Result<CheckContext> {
-        let (version, familiar, people) = {
+        let (version, familiar, people, own_names) = {
             let conn = self.conn();
             let rev = kv_in(&conn, CONTEXT_REVISION)?.unwrap_or_else(|| "0".into());
-            (format!("a{}-c{rev}", analyze::ANALYSIS_VERSION), familiar_domains_in(&conn)?, known_people_in(&conn)?)
+            (format!("a{}-c{rev}", analyze::ANALYSIS_VERSION), familiar_domains_in(&conn)?, known_people_in(&conn)?, own_names_in(&conn)?)
         };
-        Ok(CheckContext { version, familiar, people, model: self.active_model()? })
+        Ok(CheckContext { version, familiar, people, own_names, model: self.active_model()? })
     }
 
     fn cached_check(&self, id: MessageId) -> Result<Option<CachedCheck>> {
@@ -737,6 +810,7 @@ impl Store {
             familiar_domains: &ctx.familiar,
             trusted_reporters: &trusted,
             known_people: &ctx.people,
+            own_names: &ctx.own_names,
         });
         let features = junk::learn::features(m, body.as_ref(), &analysis);
         let (model, score) = match &ctx.model {
@@ -744,8 +818,8 @@ impl Store {
             None => (String::new(), None),
         };
         self.conn().execute(
-            "INSERT OR REPLACE INTO junk_assessments (message_id, version, json, features, model, score, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR REPLACE INTO junk_assessments (message_id, version, json, features, model, score, created_at, gate)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 m.id,
                 ctx.version,
@@ -753,7 +827,8 @@ impl Store {
                 junk::learn::features_to_json(&features),
                 model,
                 score.map(f64::from),
-                Utc::now().timestamp()
+                Utc::now().timestamp(),
+                gate_of(&analysis)
             ],
         )?;
         Ok(CachedCheck { version: ctx.version.clone(), analysis, features: Some(features), model, score })
@@ -1415,11 +1490,117 @@ impl Store {
             tx.execute("DELETE FROM junk_label_events", [])?;
             tx.execute("DELETE FROM junk_models", [])?;
             tx.execute("DELETE FROM junk_assessments", [])?;
+            tx.execute("DELETE FROM junk_shadow", [])?;
             tx.execute("DELETE FROM kv WHERE key IN (?1, ?2, ?3)", params![ACTIVE_MODEL, TRAINED_REVISION, LEARN_STATUS])?;
             bump_revision_in(tx)
         })?;
         self.forget_cached_model();
         Ok(())
+    }
+}
+
+/// True when you've dealt with this sender: a contact, someone you wrote
+/// to (or whose mail is in your Sent Items' recipients), a never-block rule,
+/// or mail of theirs you marked Not junk. The junk filter leaves their mail
+/// alone whatever it looks like.
+fn known_sender_in(conn: &Connection, account: AccountId, address: &str) -> Result<bool> {
+    let a = address.trim().to_lowercase();
+    if a.is_empty() {
+        return Ok(true);
+    }
+    let mut stmt = conn.prepare_cached(
+        "SELECT EXISTS (SELECT 1 FROM contacts c, json_each(c.json, '$.emails') e WHERE lower(json_extract(e.value, '$.value')) = ?1)
+             OR EXISTS (SELECT 1 FROM recent_addresses WHERE address = ?1)
+             OR EXISTS (SELECT 1 FROM junk_label_events WHERE lower(sender) = ?1 AND label = 'not_spam' AND undone = 0)
+             OR EXISTS (SELECT 1 FROM messages m JOIN folders f ON f.id = m.folder_id, json_each(m.json, '$.to') t
+                        WHERE f.role = 'sent' AND m.account_id = ?2 AND lower(json_extract(t.value, '$.address')) = ?1)",
+    )?;
+    if stmt.query_row(params![a, account], |r| r.get::<_, bool>(0))? {
+        return Ok(true);
+    }
+    Ok(decide_in(conn, account, &a)?.is_some_and(|r| r.action() == RuleAction::Allow))
+}
+
+impl Store {
+    pub(crate) fn known_sender(&self, account: AccountId, address: &str) -> Result<bool> {
+        known_sender_in(&self.conn(), account, address)
+    }
+
+    // ------------------------------------------------------------ junk filter
+
+    /// Start (or restart) the junk filter now: mail already in the Inbox
+    /// stays there. The first start reaches back two days, so the junk that
+    /// made you turn it on goes too.
+    pub fn restart_junk_filter(&self) -> Result<()> {
+        self.kv_set(FILTER_SINCE, &Utc::now().timestamp().to_string())
+    }
+
+    /// Move clearly junk new Inbox mail to Junk Email (see
+    /// [`junk::filter`]): mail that has a current check, arrived since the
+    /// filter started, comes from someone you've never dealt with and has no
+    /// label from you. Each message is weighed once, so mail you move back
+    /// stays where you put it. Returns how many messages were weighed.
+    pub fn filter_junk(&self, limit: u32) -> Result<usize> {
+        if !self.settings().junk_filter {
+            return Ok(0);
+        }
+        let now = Utc::now().timestamp();
+        let since = match self.kv_get(FILTER_SINCE)?.and_then(|v| v.parse::<i64>().ok()) {
+            Some(t) => t,
+            None => {
+                let t = now - 2 * 86_400;
+                self.kv_set(FILTER_SINCE, &t.to_string())?;
+                t
+            }
+        };
+        let rows: Vec<(MessageId, String, Option<f64>, String)> = {
+            let conn = self.conn();
+            let mut stmt = conn.prepare_cached(
+                "SELECT m.id, a.json, a.score, a.model FROM messages m JOIN folders f ON f.id = m.folder_id
+                 JOIN junk_assessments a ON a.message_id = m.id
+                 LEFT JOIN junk_filtered x ON x.message_id = m.id
+                 WHERE f.role = 'inbox' AND x.message_id IS NULL AND COALESCE(json_extract(m.json, '$.is_draft'), 0) = 0
+                 ORDER BY json_extract(m.json, '$.received_at') DESC LIMIT ?1",
+            )?;
+            let rows = stmt.query_map([limit], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+            rows.collect::<std::result::Result<_, _>>()?
+        };
+        let model = self.active_model()?;
+        let mut done = 0;
+        for (id, json, score, scored_by) in rows {
+            let Some(m) = self.message(id)? else { continue };
+            done += 1;
+            let arrived = m.received_at.timestamp();
+            let fresh = arrived >= since - 86_400 && arrived <= now + 86_400;
+            let mut reasons = Vec::new();
+            if fresh && self.message_label(id)?.is_none() {
+                let analysis: analyze::Analysis = serde_json::from_str(&json).unwrap_or_default();
+                let body = self.message_body(id)?.unwrap_or_default();
+                let text = junk::learn::visible_text(&body);
+                let model_says_junk = model.as_ref().is_some_and(|md| md.digest == scored_by && score.is_some_and(|s| s as f32 >= md.threshold));
+                reasons = junk::filter::junk_reasons(&m, &text, &body.attachments, &analysis, model_says_junk);
+            }
+            // Asked last: it reads Sent Items.
+            if !reasons.is_empty() && known_sender_in(&self.conn(), m.account_id, &m.from.address)? {
+                reasons.clear();
+            }
+            self.tx(|tx| {
+                let moved = !reasons.is_empty() && !Self::mark_junk_in(tx, &[id])?.is_empty();
+                tx.execute(
+                    "INSERT OR REPLACE INTO junk_filtered (message_id, reasons, moved, at) VALUES (?1, ?2, ?3, ?4)",
+                    params![id, serde_json::to_string(&reasons)?, moved, now],
+                )?;
+                Ok(())
+            })?;
+        }
+        Ok(done)
+    }
+
+    /// Why the junk filter moved this message to Junk Email, if it did.
+    pub fn filtered_reasons(&self, message_id: MessageId) -> Result<Option<Vec<String>>> {
+        let json: Option<String> =
+            self.conn().query_row("SELECT reasons FROM junk_filtered WHERE message_id = ?1 AND moved = 1", [message_id], |r| r.get(0)).optional()?;
+        Ok(json.map(|j| serde_json::from_str(&j).unwrap_or_default()))
     }
 }
 
@@ -1448,6 +1629,60 @@ mod tests {
     fn second_account(store: &Store) -> AccountId {
         let mut a = Account { kind: AccountKind::Local, email: "second@axentra.example".into(), ..Default::default() };
         store.add_account(&mut a).unwrap()
+    }
+
+    #[test]
+    fn the_junk_filter_moves_clear_junk_from_strangers_once() {
+        let (store, acct) = store_with_account();
+        let junk_folder = store.folder_for_role(acct, FolderRole::Junk).unwrap();
+        let spam = |from: &str, days_ago: i64| {
+            let mut m = Message {
+                account_id: acct,
+                folder_id: inbox(&store, acct),
+                from: EmailAddress::new("Callahan Arroyo", from),
+                subject: "SCW07598 26833.26833.865".into(),
+                importance: Importance::High,
+                has_attachments: true,
+                received_at: Utc::now() - chrono::Duration::days(days_ago),
+                ..Default::default()
+            };
+            let pdf = Attachment { name: "SCW07598.pdf".into(), content_type: "application/pdf".into(), size: 120_000, ..Default::default() };
+            store.insert_message(&mut m, Some(&MessageBody { attachments: vec![pdf], ..Default::default() })).unwrap()
+        };
+        let stranger = spam("x7@mailer.example", 0);
+        let mut friend = Contact { display_name: "Callie Arroyo".into(), ..Default::default() };
+        friend.emails.push(LabeledValue { label: "Work".into(), value: "Callahan@Friend.example".into() });
+        store.insert_contact(&mut friend).unwrap();
+        let known = spam("callahan@friend.example", 0);
+        let old = spam("x8@mailer.example", 30);
+        let plain = msg(&store, acct, "news@shop.example", "Weekend sale");
+        while store.assess_pending(100).unwrap() > 0 {}
+
+        let mut off = store.settings();
+        off.junk_filter = false;
+        store.save_settings(&off).unwrap();
+        assert_eq!(store.filter_junk(100).unwrap(), 0, "off: nothing is weighed");
+        off.junk_filter = true;
+        store.save_settings(&off).unwrap();
+
+        assert_eq!(store.filter_junk(100).unwrap(), 4);
+        let folder = |id| store.message(id).unwrap().unwrap().folder_id;
+        assert_eq!(folder(stranger), junk_folder);
+        assert!(store.filtered_reasons(stranger).unwrap().is_some_and(|r| r.len() == 3), "{:?}", store.filtered_reasons(stranger));
+        for id in [known, old, plain] {
+            assert_eq!(folder(id), inbox(&store, acct), "{id} stays");
+            assert_eq!(store.filtered_reasons(id).unwrap(), None);
+        }
+        assert_eq!(store.filter_junk(100).unwrap(), 0, "each message is weighed once");
+
+        // Not junk brings it back, and it stays back.
+        store.mark_not_junk(&[stranger]).unwrap();
+        assert_eq!(folder(stranger), inbox(&store, acct));
+        let again = spam("x7@mailer.example", 0);
+        while store.assess_pending(100).unwrap() > 0 {}
+        store.filter_junk(100).unwrap();
+        assert_eq!(folder(stranger), inbox(&store, acct));
+        assert_eq!(folder(again), inbox(&store, acct), "a sender you said isn't junk is known now");
     }
 
     #[test]
@@ -1875,6 +2110,29 @@ mod tests {
         assert_eq!(store.assessment(id).unwrap().unwrap().advice, Advice::None);
         // Removed again.
         store.delete_contact(c.id).unwrap();
+        assert_eq!(store.assessment(id).unwrap().unwrap().advice, Advice::None);
+    }
+
+    #[test]
+    fn your_own_name_from_a_stranger_gets_a_phishing_warning() {
+        let (store, acct) = store_with_account();
+        let id = msg(&store, acct, "billing.dept4471@gmail.com", "Confirmation statement for Invoice (50K74OZQ)");
+        let mut m = store.message(id).unwrap().unwrap();
+        m.from.name = "Test User".into();
+        store.update_message(&m).unwrap();
+        let a = store.assessment(id).unwrap().unwrap();
+        assert_eq!(a.advice, Advice::Phishing, "{:?}", a.analysis.findings);
+        assert!(matches!(a.analysis.findings[0], analyze::Finding::YourNameElsewhere { .. }));
+        // Mail you send yourself from the account is fine.
+        let mine = msg(&store, acct, "test@axentra.example", "Note to self");
+        let mut m = store.message(mine).unwrap().unwrap();
+        m.from.name = "Test User".into();
+        store.update_message(&m).unwrap();
+        assert_eq!(store.assessment(mine).unwrap().unwrap().advice, Advice::None);
+        // Renaming the account is picked up.
+        let mut account = store.account(acct).unwrap().unwrap();
+        account.display_name = "Someone Else".into();
+        store.update_account(&account).unwrap();
         assert_eq!(store.assessment(id).unwrap().unwrap().advice, Advice::None);
     }
 

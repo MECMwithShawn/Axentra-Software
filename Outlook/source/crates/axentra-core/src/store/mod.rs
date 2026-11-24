@@ -19,12 +19,25 @@ pub mod mail_search {
 }
 mod drafts;
 mod junk;
+mod junk_shadow;
+pub use junk_shadow::ShadowTally;
 pub use junk::{JunkOperation, LearnStatus};
 pub(crate) use junk::{import_legacy_in as junk_import_legacy, restore_image_sender_in as junk_restore_image_sender, restore_rule_in as junk_restore_rule};
 mod mail;
+mod meaning;
+pub use meaning::{QueryEmbedder, message_text as meaning_text};
+mod orders;
+pub use orders::{OrderSenderIgnore, OrderStateChange, OrdersProgress, OrdersSummary};
+pub(crate) use orders::{
+    clear_in as orders_clear, restore_sender_ignore_in as orders_restore_sender_ignore, restore_user_state_in as orders_restore_user_state, sender_ignores_in as orders_sender_ignores,
+    user_states_in as orders_user_states,
+};
 mod people;
 mod sync;
 mod tasks;
+mod topics;
+pub use topics::{TopicChange, TopicCount, TopicRuleRow, TopicTarget};
+pub(crate) use topics::{clear_in as topics_clear, restore_rules_in as topics_restore_rules, rules_for_backup_in as topics_rules_for_backup};
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
@@ -144,15 +157,122 @@ pub(crate) fn enum_str<T: Serialize>(v: &T) -> String {
     }
 }
 
+/// SQL that bumps a kv counter (usable inside a trigger).
+pub(super) fn bump_sql(key: &str) -> String {
+    format!(
+        "INSERT OR IGNORE INTO kv (key, value) VALUES ('{key}', '0');
+         UPDATE kv SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT) WHERE key = '{key}';"
+    )
+}
+
+/// A trigger's `WHEN` on `messages.json` (or any JSON column): one of
+/// these fields changed.
+pub(super) fn changed_sql(fields: &[&str]) -> String {
+    fields.iter().map(|f| format!("json_extract(OLD.json, '$.{f}') IS NOT json_extract(NEW.json, '$.{f}')")).collect::<Vec<_>>().join(" OR ")
+}
+
+pub(super) fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let names = stmt.query_map([], |r| r.get::<_, String>(1))?;
+    for n in names {
+        if n? == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// A numeric kv entry (a schema level or a revision); 0 when missing.
+pub(super) fn kv_level(conn: &Connection, key: &str) -> Result<i64> {
+    let v: Option<String> = conn.query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0)).optional()?;
+    Ok(v.and_then(|v| v.parse().ok()).unwrap_or(0))
+}
+
+/// The settings as stored, read on `conn` (inside a transaction, where
+/// [`Store::settings`] would wait for its own lock).
+pub(super) fn settings_in(conn: &Connection) -> Settings {
+    let json: Option<String> = conn.query_row("SELECT json FROM settings WHERE id = 1", [], |r| r.get(0)).optional().ok().flatten();
+    json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default()
+}
+
+/// `WHERE` text matching messages (alias `m`) whose sender is the address
+/// `?{n}` (lowercase), or with `domain`, in the domain `?{n}` or a subdomain
+/// of it: an anchored label boundary, no `LIKE` wildcards, so
+/// `evilexample.com` is not `example.com`.
+pub(super) fn sender_match_sql(domain: bool, n: usize) -> String {
+    let p = format!("?{n}");
+    if domain { sender_domain_sql(&p) } else { sender_address_sql(&p) }
+}
+
+/// [`sender_match_sql`] for the address in the SQL expression `p`.
+pub(super) fn sender_address_sql(p: &str) -> String {
+    format!("lower(json_extract(m.json, '$.from.address')) = {p}")
+}
+
+/// [`sender_match_sql`] for the domain in the SQL expression `p`.
+pub(super) fn sender_domain_sql(p: &str) -> String {
+    let addr = "lower(json_extract(m.json, '$.from.address'))";
+    let dom = format!("substr({addr}, instr({addr}, '@') + 1)");
+    format!("({dom} = {p} OR substr({dom}, -length({p}) - 1) = '.' || {p})")
+}
+
+/// A subquery of the folders that have one of `roles` (an SQL list of
+/// quoted roles), or sit somewhere under one: a folder deleted into Deleted
+/// Items, or one made under Junk Email, keeps its own role (`custom`) but
+/// its mail is deleted or junk all the same.
+pub(super) fn folders_under_sql(roles: &str) -> String {
+    format!(
+        "(WITH RECURSIVE under(id) AS (SELECT id FROM folders WHERE role IN ({roles})
+            UNION SELECT c.id FROM folders c JOIN under u ON c.parent_id = u.id) SELECT id FROM under)"
+    )
+}
+
+/// Folders whose mail has no order and no topic: Junk Email, Deleted Items,
+/// your own mail, and everything under them (see [`folders_under_sql`]).
+pub(super) fn no_insights_folders_sql() -> String {
+    folders_under_sql("'junk', 'deleted', 'sent', 'drafts', 'outbox'")
+}
+
+/// Folders whose mail isn't read for orders or topics at all: your own
+/// mail and everything under it.
+pub(super) fn own_mail_folders_sql() -> String {
+    folders_under_sql("'sent', 'drafts', 'outbox'")
+}
+
+/// `?,?,…` for `n` parameters.
+pub(super) fn marks(n: usize) -> String {
+    vec!["?"; n].join(",")
+}
+
 /// A test's callback at each step of a junk training run.
 #[cfg(test)]
 pub(crate) type LearnHook = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
+/// A change a test makes while the next order or topic batch is worked out
+/// (after it read what it needs, before it writes); runs once.
+#[cfg(test)]
+type Meanwhile = Box<dyn FnOnce(&Store)>;
+
+#[cfg(test)]
+thread_local! {
+    static MEANWHILE: std::cell::RefCell<Option<Meanwhile>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Make the test's change "meanwhile", if there is one.
+#[cfg(test)]
+pub(super) fn run_meanwhile(store: &Store) {
+    if let Some(change) = MEANWHILE.with(|m| m.borrow_mut().take()) {
+        change(store);
+    }
+}
 
 pub struct Store {
     conn: Mutex<Connection>,
     path: Option<PathBuf>,
     /// The active junk model, loaded once per digest.
     junk_model: Mutex<Option<std::sync::Arc<crate::junk::learn::Model>>>,
+    /// Makes search vectors for meaning search (installed by the app).
+    query_embedder: Mutex<Option<meaning::QueryEmbedder>>,
     /// Called at each step of a junk training run (tests only).
     #[cfg(test)]
     pub(crate) learn_hook: Mutex<Option<LearnHook>>,
@@ -206,6 +326,9 @@ impl Store {
             tasks::SCHEMA_EXTRA,
             sync::SCHEMA_EXTRA,
             junk::SCHEMA_EXTRA,
+            orders::SCHEMA_EXTRA,
+            topics::SCHEMA_EXTRA,
+            meaning::SCHEMA_EXTRA,
         ] {
             if !extra.trim().is_empty() {
                 conn.execute_batch(extra)?;
@@ -213,10 +336,14 @@ impl Store {
         }
         junk::upgrade_schema_in(&conn)?;
         junk::migrate_legacy_in(&conn)?;
+        // Topic triggers follow `order_extractions`: orders first.
+        orders::upgrade_schema_in(&conn)?;
+        topics::upgrade_schema_in(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             path,
             junk_model: Mutex::new(None),
+            query_embedder: Mutex::new(None),
             #[cfg(test)]
             learn_hook: Mutex::new(None),
         })
@@ -356,13 +483,7 @@ impl Store {
     // ------------------------------------------------------------ settings
 
     pub fn settings(&self) -> Settings {
-        let json: Option<String> = self
-            .conn()
-            .query_row("SELECT json FROM settings WHERE id = 1", [], |r| r.get(0))
-            .optional()
-            .ok()
-            .flatten();
-        json.and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default()
+        settings_in(&self.conn())
     }
 
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
@@ -450,7 +571,11 @@ impl Store {
     /// Remove an account and everything that belongs to it.
     pub fn remove_account(&self, id: AccountId) -> Result<()> {
         self.delete_doc::<Account>(id)?;
-        self.tx(|tx| junk::remove_account_in(tx, id))?;
+        self.tx(|tx| {
+            junk::remove_account_in(tx, id)?;
+            orders::remove_account_in(tx, id)?;
+            topics::remove_account_in(tx, id)
+        })?;
         self.forget_cached_model();
         Ok(())
     }
@@ -640,6 +765,35 @@ pub(crate) mod test_util {
         let id = store.add_account(&mut acct).unwrap();
         (store, id)
     }
+
+    /// Run the background passes (junk checks, orders, topics) until
+    /// nothing is left, as the app does.
+    pub fn settle(store: &Store) {
+        for _ in 0..50 {
+            let now = Utc::now();
+            let done = store.assess_pending(250).unwrap()
+                + store.extract_orders_pending(250, now).unwrap()
+                + store.rebuild_dirty_orders(200).unwrap()
+                + store.classify_topics_pending(250).unwrap();
+            if done == 0 {
+                return;
+            }
+        }
+        panic!("the background passes never settled");
+    }
+
+    /// Make `change` while the next order or topic batch is worked out, as
+    /// the user (or sync) can while it runs in the background.
+    pub fn during_next_batch(change: impl FnOnce(&Store) + 'static) {
+        super::MEANWHILE.with(|m| *m.borrow_mut() = Some(Box::new(change)));
+    }
+
+    /// Every message's stored JSON, to show a feature never changed it.
+    pub fn messages_json(store: &Store) -> Vec<(MessageId, String)> {
+        let conn = store.conn();
+        let mut stmt = conn.prepare("SELECT id, json FROM messages ORDER BY id").unwrap();
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect()
+    }
 }
 
 #[cfg(test)]
@@ -673,6 +827,12 @@ mod tests {
         store.conn().execute("INSERT INTO settings (id, json) VALUES (1, ?1)", [r#"{"theme":"Dark","undo_send_secs":10}"#]).unwrap();
         let s = store.settings();
         assert_eq!((s.theme, s.undo_send_secs, s.attachment_reminder), (ThemeMode::Dark, 10, true));
+        // Nor packages and topics.
+        assert_eq!((s.order_tracking, s.order_banner, s.orders_keep_delivered_days, s.topics_view), (true, true, 30, true));
+        assert!(s.topics_hidden.is_empty());
+        assert_eq!(s.orders_keep_days(), 30);
+        let odd: Settings = serde_json::from_str(r#"{"orders_keep_delivered_days":12,"topics_hidden":["social"]}"#).unwrap();
+        assert_eq!((odd.orders_keep_days(), odd.topics_hidden.as_slice()), (30, ["social".to_string()].as_slice()), "only the offered ages");
         let mut off = s.clone();
         off.attachment_reminder = false;
         store.save_settings(&off).unwrap();

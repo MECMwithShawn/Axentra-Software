@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 use super::ctx::{RowKey, SearchScope, use_mail, use_model};
 use super::model::{Entry, ListModel};
 use crate::kit::{Button, Icon, keys};
-use crate::state::{use_app, store};
+use crate::state::{MailView, use_app, store};
 use header::{ColumnsHeader, ListHeader};
 use row::{ChildItem, GroupHeader, MessageItem, RowLook};
 
@@ -44,6 +44,28 @@ fn entry_key(e: &Entry) -> Option<&RowKey> {
         Entry::Row(r) => Some(&r.key),
         Entry::Child(c) => Some(&c.key),
         Entry::Header { .. } => None,
+    }
+}
+
+/// Empty-state copy of a topic list ("Still sorting" while topics are
+/// still being worked out).
+pub fn topic_empty_copy(topic: Option<topics::Topic>, sorting: bool) -> (&'static str, &'static str, &'static str) {
+    use topics::Topic::*;
+    if sorting {
+        return ("tag", "Still sorting your mail\u{2026}", "Mail shows up here as it's sorted on this device.");
+    }
+    match topic {
+        None => ("tag", "No sorted mail yet", "Your mail is sorted into topics on this device as it arrives."),
+        Some(People) => ("person", "No mail from people yet", "Messages from people you write to show up here."),
+        Some(Orders) => ("box", "No order mail yet", "Order confirmations and shipping updates show up here."),
+        Some(Receipts) => ("receipt", "No receipts yet", "Receipts, invoices and bills show up here."),
+        Some(Finance) => ("wallet", "No finance mail yet", "Mail from your bank, cards and payments shows up here."),
+        Some(Travel) => ("airplane", "No travel mail yet", "Mail about flights, hotels and bookings shows up here."),
+        Some(Events) => ("calendar_ltr", "No event mail yet", "Invitations, tickets and event updates show up here."),
+        Some(Social) => ("people_community", "No social mail yet", "Updates from social networks and communities show up here."),
+        Some(Notifications) => ("alert_badge", "No notifications yet", "Alerts, sign-in codes and account notices show up here."),
+        Some(Newsletters) => ("megaphone", "No newsletters yet", "Newsletters, offers and promotions show up here."),
+        Some(Other) => ("tag", "Nothing in Other", "Mail we weren't sure about lands here. Use Change topic to teach it."),
     }
 }
 
@@ -94,7 +116,13 @@ fn ListEmpty() -> Element {
         };
     }
     let filtered = view.filter != MessageFilter::All;
-    let (icon, title, body) = empty_copy(&m, tab, filtered, settings.focused_inbox_shown());
+    let (icon, title, body) = match m.view.filter(|_| !m.searching && !filtered) {
+        Some(MailView::Topics(t)) => {
+            let _ = app.mail_rev();
+            topic_empty_copy(t, store().topics_pending_count(1).unwrap_or(0) > 0)
+        }
+        _ => empty_copy(&m, tab, filtered, settings.focused_inbox_shown()),
+    };
     // A favourite person with no mail yet.
     let person_title = m.person.as_ref().filter(|_| !m.searching && !filtered).map(|p| format!("No messages from {}", p.name));
     let icon = if person_title.is_some() { "person" } else { icon };
@@ -122,7 +150,15 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
     let mut ctx = use_mail();
     let model = use_model();
     let settings = app.settings.read().clone();
-    let mut scroll_top = use_signal(|| 0.0f64);
+    // Shown anew on a folder (back from Packages, which replaces the list,
+    // or from another module): where that folder's list was (§3.14;
+    // `go_to_folder` sets it). Once: the list is mounted again when it
+    // empties and fills.
+    let mut restore = use_signal(|| {
+        let folder_list = ctx.person.peek().is_none() && ctx.view.peek().is_none() && !app.search.peek().active;
+        Some(*ctx.list_scroll.peek()).filter(|y| folder_list && *y > 0.0)
+    });
+    let mut scroll_top = use_signal(|| restore.peek().unwrap_or(0.0));
     let mut viewport = use_signal(|| 800.0f64);
     let mut width = use_signal(|| 400.0f64);
     let mut scroller = use_signal(|| None::<Rc<MountedData>>);
@@ -201,17 +237,18 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
         let tab = *ctx.tab.read();
         let serial = app.search.read().serial;
         let person = ctx.person.read().as_ref().map(|p| p.contact);
-        let mut prev = use_signal(|| (folder, tab, serial, person));
-        use_effect(use_reactive!(|folder, tab, serial, person| {
-            let (prev_folder, _, _, prev_person) = *prev.peek();
-            if *prev.peek() == (folder, tab, serial, person) {
+        let view = *ctx.view.read();
+        let mut prev = use_signal(|| (folder, tab, serial, person, view));
+        use_effect(use_reactive!(|folder, tab, serial, person, view| {
+            let (prev_folder, _, _, prev_person, prev_view) = *prev.peek();
+            if *prev.peek() == (folder, tab, serial, person, view) {
                 return;
             }
-            prev.set((folder, tab, serial, person));
+            prev.set((folder, tab, serial, person, view));
             let searching = app.search.peek().active;
-            let back_to_folder = prev_folder != folder || prev_person.is_some();
+            let back_to_folder = prev_folder != folder || prev_person.is_some() || prev_view.is_some();
             let y = match folder {
-                Some(f) if back_to_folder && person.is_none() && !searching => ctx.memory.peek().get(&f).map(|m| m.scroll).unwrap_or(0.0),
+                Some(f) if back_to_folder && person.is_none() && view.is_none() && !searching => ctx.memory.peek().get(&f).map(|m| m.scroll).unwrap_or(0.0),
                 _ => 0.0,
             };
             scroll_top.set(y);
@@ -275,13 +312,15 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
     let list_role = if m.conversations { "tree" } else { "listbox" };
     let label = if m.searching {
         "Search results".to_string()
+    } else if let Some(MailView::Topics(t)) = m.view {
+        format!("Topic: {}, message list", t.map(|t| t.label()).unwrap_or("All topics"))
     } else if let Some(p) = &m.person {
         format!("Mail from {}", p.name)
     } else {
         m.folder.as_ref().map(|f| f.name.clone()).unwrap_or_else(|| "Message list".into())
     };
     // Sign-in, offline and first-sync status for the folder's account.
-    let health_account = ctx.folder.read().and_then(|f| crate::state::store().folder(f).ok().flatten()).map(|f| f.account_id);
+    let health_account = ctx.folder.read().filter(|_| m.view.is_none()).and_then(|f| crate::state::store().folder(f).ok().flatten()).map(|f| f.account_id);
     let empty = m.keys.is_empty() && m.entries.iter().all(|e| !matches!(e, Entry::Header { collapsed: true, .. }));
 
     rsx! {
@@ -312,7 +351,15 @@ pub fn MessageList(columns: bool, #[props(default)] style: String) -> Element {
                     "aria-multiselectable": "true",
                     "aria-activedescendant": active_id.unwrap_or_default(),
                     "data-selected-message-ids": "{selected_ids}",
-                    onmounted: move |e| scroller.set(Some(e.data())),
+                    onmounted: move |e| {
+                        let el = e.data();
+                        scroller.set(Some(el.clone()));
+                        if let Some(y) = restore.write().take() {
+                            spawn(async move {
+                                let _ = el.scroll(PixelsVector2D::new(0.0, y), ScrollBehavior::Instant).await;
+                            });
+                        }
+                    },
                     onscroll: move |e: ScrollEvent| {
                         let y = e.data().scroll_top();
                         ctx.list_scroll.set(y);

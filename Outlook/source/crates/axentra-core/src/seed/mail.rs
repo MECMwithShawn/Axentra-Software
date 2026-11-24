@@ -1,5 +1,6 @@
 //! Demo mail: a realistic Inbox around `now` (threads, a meeting invitation,
-//! newsletters in Other, flags, pins, categories, attachments), content in
+//! newsletters in Other, flags, pins, categories, attachments, order and
+//! shipping mail from fictional shops, an example for every topic), content in
 //! every well-known folder, and a few hundred older messages generated
 //! deterministically so scrolling and date grouping look real.
 
@@ -210,6 +211,203 @@ fn newsletter_html(brand: &str, headline: &str, image_host: &str) -> String {
          <p><a href=\"https://{image_host}/read\">Read online</a> · <a href=\"https://{image_host}/unsubscribe\">Unsubscribe</a></p>\
          <img src=\"https://{image_host}/open.gif\" width=\"1\" height=\"1\" alt=\"\"></div>"
     )
+}
+
+/// Synthetic tracking numbers with valid check digits (the tests recompute
+/// them). Carriers are only ever named inside the shops' own mail.
+const UPS_BRIGHTLEAF: &str = "1Z4X7Q203660123459";
+const FEDEX_NORTHPEAK: &str = "612900344789";
+const USPS_PIXEL_PARCEL: &str = "9200190301123456789017";
+const JAPAN_POST_SAKURA: &str = "EJ517382041JP";
+
+/// The order summary table shops send: cells, not text.
+fn items_table(rows: &[(&str, u32, &str)]) -> String {
+    let rows: String = rows.iter().map(|(item, qty, price)| format!("<tr><td>{item}</td><td>{qty}</td><td>{price}</td></tr>")).collect();
+    format!("<h3>Order summary</h3><table><tr><th>Item</th><th>Qty</th><th>Price</th></tr>{rows}</table>")
+}
+
+/// Order mail from fictional shops for Packages (five orders, each in its
+/// own thread, one of them in Japanese), a delivery-fee lure and two near
+/// misses that must not become orders, and an example for each topic the
+/// rest of the demo doesn't already cover.
+fn orders_and_topics(s: &mut Seeder, ctx: &SeedCtx, inbox: FolderId) -> Result<()> {
+    let date = |days: i64| (ctx.now + Duration::days(days)).format("%A, %B %-d").to_string();
+    let order = |number: &str| Some(format!("demo-order-{number}"));
+
+    // Brightleaf Home: confirmed, shipped with UPS, out for delivery today.
+    let brightleaf = EmailAddress::new("Brightleaf Home", "orders@brightleaf.example");
+    s.add(inbox, M {
+        from: brightleaf.clone(),
+        subject: "Order confirmed: #BL-48213".into(),
+        html: para(&["Hi Alex,", "Thanks for shopping with Brightleaf Home. We're getting your order ready and will let you know when it ships."])
+            + &items_table(&[("Linen throw blanket", 1, "&#36;48.00"), ("Stoneware mug set", 1, "&#36;32.00")])
+            + &para(&["Order number: BL-48213"]),
+        ago_min: 60 * 24 * 3, other: true,
+        conversation: order("BL-48213"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: brightleaf.clone(),
+        subject: "Your Brightleaf order #BL-48213 has shipped".into(),
+        html: para(&[
+            "Good news, Alex: your order has left our warehouse.",
+            &format!("Shipped with UPS. Tracking number: {UPS_BRIGHTLEAF}"),
+            &format!("Estimated delivery: {}", date(1)),
+        ]),
+        ago_min: 60 * 24 * 2, other: true,
+        conversation: order("BL-48213"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: brightleaf,
+        subject: "Out for delivery: your order #BL-48213".into(),
+        html: para(&["Your package is out for delivery today.", &format!("UPS tracking number {UPS_BRIGHTLEAF}")]),
+        ago_min: 90, read: false, other: true,
+        conversation: order("BL-48213"),
+        ..Default::default()
+    })?;
+
+    // Northpeak Outfitters: ordered, on its way with FedEx, delivered.
+    let northpeak = EmailAddress::new("Northpeak Outfitters", "shop@northpeak.example");
+    s.add(inbox, M {
+        from: northpeak.clone(),
+        subject: "Thanks for your order #NP-20931".into(),
+        html: para(&["Hi Alex,", "We've received your order and we're packing it now."])
+            + &items_table(&[("Trail running jacket", 1, "&#36;129.00"), ("Merino hiking socks, 3 pairs", 1, "&#36;36.00")]),
+        ago_min: 60 * 24 * 9, other: true,
+        conversation: order("NP-20931"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: northpeak.clone(),
+        subject: "Your order NP-20931 is on its way".into(),
+        html: para(&["Your order is on its way.", &format!("FedEx tracking number: {FEDEX_NORTHPEAK}")]),
+        ago_min: 60 * 24 * 7, other: true,
+        conversation: order("NP-20931"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: northpeak,
+        subject: "Delivered: your Northpeak order #NP-20931".into(),
+        html: para(&[&format!("Your package was delivered. FedEx tracking number {FEDEX_NORTHPEAK}"), "Enjoy the trails!"]),
+        ago_min: 60 * 24 * 2, other: true,
+        conversation: order("NP-20931"),
+        ..Default::default()
+    })?;
+
+    // Pixel & Parcel Books: confirmed, then delayed (USPS) with a new date.
+    let pixel_parcel = EmailAddress::new("Pixel & Parcel Books", "orders@pixelparcel.example");
+    s.add(inbox, M {
+        from: pixel_parcel.clone(),
+        subject: "Order #PP-77310 confirmed".into(),
+        html: para(&["Thank you for your order!"])
+            + &items_table(&[("The Lighthouse Keeper's Atlas (hardcover)", 1, "&#36;34.00"), ("Field Notes on Small Gardens", 1, "&#36;22.50")]),
+        ago_min: 60 * 24 * 6, other: true,
+        conversation: order("PP-77310"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: pixel_parcel,
+        subject: "Delayed: order #PP-77310 has a new delivery date".into(),
+        html: para(&[
+            "Sorry, your books are running a little late.",
+            &format!("USPS tracking number {USPS_PIXEL_PARCEL}"),
+            &format!("New delivery date: {}", date(4)),
+        ]),
+        ago_min: 60 * 24, read: false, other: true,
+        conversation: order("PP-77310"),
+        ..Default::default()
+    })?;
+
+    // Harbor Lane Kitchen: cancelled, then refunded.
+    let harbor_lane = EmailAddress::new("Harbor Lane Kitchen", "orders@harborlane.example");
+    s.add(inbox, M {
+        from: harbor_lane.clone(),
+        subject: "Your order #HL-3304 has been cancelled".into(),
+        html: para(&["We're sorry: the cast-iron grill pan you ordered is out of stock, so we've cancelled your order.", "Your refund follows in a separate email."]),
+        ago_min: 60 * 24 * 4, other: true,
+        conversation: order("HL-3304"),
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: harbor_lane,
+        subject: "Refund issued for order #HL-3304".into(),
+        html: para(&["Refund of &#36;27.50 issued to your original payment method.", "It can take a few business days to show up."]),
+        ago_min: 60 * 24 * 3, other: true,
+        conversation: order("HL-3304"),
+        ..Default::default()
+    })?;
+
+    // A Japanese shop: shipped with Japan Post, full-width order number.
+    let arrives = (ctx.now + Duration::days(3)).format("%Y年%-m月%-d日");
+    s.add(inbox, M {
+        from: EmailAddress::new("さくら雑貨", "shop@sakura-zakka.example"),
+        subject: "【さくら雑貨】ご注文の商品を発送しました（注文番号：ＳＺ－１００２４５）".into(),
+        html: para(&[
+            "アレックス・モーガン 様",
+            "このたびは さくら雑貨 をご利用いただき、誠にありがとうございます。ご注文の商品を本日発送いたしました。",
+            "注文番号：ＳＺ－１００２４５",
+            "配送業者：日本郵便",
+            &format!("追跡番号：{JAPAN_POST_SAKURA}"),
+            &format!("お届け予定日：{arrives}"),
+            "商品：手ぬぐい（桜柄） × 2、豆皿セット × 1",
+        ]),
+        ago_min: 60 * 24, read: false, other: true,
+        conversation: order("SZ-100245"),
+        ..Default::default()
+    })?;
+
+    // A delivery-fee lure: never an order, whatever the junk check says.
+    s.add(inbox, M {
+        from: EmailAddress::new("Parcel Desk", "delivery@parcel-redelivery.example"),
+        subject: "Your parcel is on hold – pay $1.99 redelivery fee".into(),
+        html: para(&[
+            "We couldn't deliver your package.",
+            "Pay a small fee to reschedule: <a href=\"https://parcel-redelivery.example/pay\">Pay now</a>",
+        ]),
+        ago_min: 60 * 5, read: false,
+        ..Default::default()
+    })?;
+
+    // Near misses: a promotion that says "order now", and a chat about an order.
+    s.add(inbox, M {
+        from: EmailAddress::new("Northpeak Outfitters", "news@northpeak.example"),
+        subject: "30% off new arrivals – order now, ships free".into(),
+        html: newsletter_html("Northpeak Outfitters", "30% off new arrivals", "img.northpeak.example"),
+        ago_min: 60 * 24, other: true,
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: person(2),
+        subject: "Re: I ordered the cake for Friday".into(),
+        html: para(&["Hi Alex,", "All sorted: I placed order #12 with the bakery, pick up at 5.", "Could you bring the candles?"]) + &sig("Elena"),
+        ago_min: 60 * 6, read: false,
+        ..Default::default()
+    })?;
+
+    // Social, notifications and events.
+    s.add(inbox, M {
+        from: EmailAddress::new("Circlet", "notify@circlet.example"),
+        subject: "Jordan commented on your photo".into(),
+        html: para(&["Jordan Lee commented on your photo: \u{201c}Great shot!\u{201d}", "<a href=\"https://circlet.example/photos/8841\">See the comment</a>"]),
+        ago_min: 60 * 3, other: true,
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: EmailAddress::new("Corvid Cloud", "no-reply@corvid.example"),
+        subject: "Your verification code is 482913".into(),
+        html: para(&["Use code 482913 to sign in. It expires in 10 minutes.", "If you didn't try to sign in, you can ignore this email."]),
+        ago_min: 40, read: false,
+        ..Default::default()
+    })?;
+    s.add(inbox, M {
+        from: EmailAddress::new("Lakeside Makers", "events@lakeside-makers.example"),
+        subject: "You're invited: Autumn maker night – RSVP".into(),
+        html: para(&["Join us Thursday at 7pm for demos, snacks and a soldering corner.", "RSVP by Wednesday so we know how many chairs to set out."]),
+        ago_min: 60 * 24 * 2, other: true,
+        ..Default::default()
+    })?;
+    Ok(())
 }
 
 pub(super) fn seed(store: &Store, ctx: &SeedCtx) -> Result<()> {
@@ -652,6 +850,8 @@ pub(super) fn seed(store: &Store, ctx: &SeedCtx) -> Result<()> {
         ..Default::default()
     })?;
 
+    orders_and_topics(&mut s, ctx, inbox)?;
+
     // ---------------------------------------------------------------- older history
     for i in 0..320usize {
         let topic = TOPICS[(i * 7) % TOPICS.len()];
@@ -764,5 +964,268 @@ mod tests {
         assert!(responses.get(&venue[0].id).is_some_and(|r| !r.forwarded));
         let notes = all.iter().find(|m| m.subject == "Customer interview notes").unwrap();
         assert!(store.last_responses(&[notes.id]).unwrap()[&notes.id].forwarded);
+        // Each order is its own thread in the Inbox.
+        for (number, count) in [("BL-48213", 3), ("NP-20931", 3), ("PP-77310", 2), ("HL-3304", 2), ("SZ-100245", 1)] {
+            let thread = store.conversation(&format!("demo-order-{number}")).unwrap();
+            assert_eq!(thread.len(), count, "{number}");
+            assert!(thread.iter().all(|m| m.folder_id == inbox.id), "{number}");
+        }
+        // Dates in order mail follow `now`.
+        let body = |subject: &str| {
+            let m = all.iter().find(|m| m.subject == subject).unwrap_or_else(|| panic!("{subject}"));
+            store.message_body(m.id).unwrap().unwrap().text
+        };
+        assert!(body("Your Brightleaf order #BL-48213 has shipped").contains("Estimated delivery: Tuesday, October 20"));
+        assert!(body("Delayed: order #PP-77310 has a new delivery date").contains("New delivery date: Friday, October 23"));
+        let japanese = all.iter().find(|m| m.from.address == "shop@sakura-zakka.example").unwrap();
+        assert!(japanese.subject.contains("ＳＺ－１００２４５"));
+        assert!(store.message_body(japanese.id).unwrap().unwrap().text.contains("お届け予定日：2026年10月22日"));
+        // Shops only: no sender anywhere in the demo poses as a carrier, and
+        // every shop is fictional.
+        for m in &all {
+            let words: String = format!("{} {}", m.from.name, m.from.address).to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' }).collect();
+            let words: Vec<&str> = words.split_whitespace().collect();
+            for carrier in ["ups", "usps", "fedex", "dhl", "royalmail", "japanpost", "evri", "dpd", "ontrac", "postnl", "amazon"] {
+                assert!(!words.contains(&carrier), "{} <{}> looks like {carrier}", m.from.name, m.from.address);
+            }
+            assert!(m.from.address.ends_with(".example"), "{}", m.from.address);
+        }
+    }
+
+    // Order and topic mail the junk check must leave alone: a body that says
+    // "shipped with UPS" is not brand impersonation, and the lure is caught by
+    // the order check, not by a phishing warning (the Inbox keeps exactly
+    // three of those).
+    #[test]
+    fn demo_order_mail_raises_no_junk_danger() {
+        let store = Store::open_in_memory().unwrap();
+        let now = Local.with_ymd_and_hms(2026, 10, 19, 11, 30, 0).unwrap();
+        super::super::seed_demo(&store, now).unwrap();
+        while store.assess_pending(250).unwrap() > 0 {}
+        let acct = store.accounts().unwrap()[0].id;
+        let ours = store.account_messages(acct).unwrap().into_iter().filter(|m| DEMO_SUBJECTS.contains(&m.subject.as_str())).collect::<Vec<_>>();
+        assert_eq!(ours.len(), DEMO_SUBJECTS.len());
+        for m in ours {
+            let a = store.assessment(m.id).unwrap().unwrap();
+            assert_ne!(a.analysis.severity(), Some(crate::junk::analyze::Severity::Danger), "{}: {:?}", m.subject, a.analysis.findings);
+        }
+    }
+
+    /// The subjects [`orders_and_topics`] adds, in order.
+    const DEMO_SUBJECTS: &[&str] = &[
+        "Order confirmed: #BL-48213",
+        "Your Brightleaf order #BL-48213 has shipped",
+        "Out for delivery: your order #BL-48213",
+        "Thanks for your order #NP-20931",
+        "Your order NP-20931 is on its way",
+        "Delivered: your Northpeak order #NP-20931",
+        "Order #PP-77310 confirmed",
+        "Delayed: order #PP-77310 has a new delivery date",
+        "Your order #HL-3304 has been cancelled",
+        "Refund issued for order #HL-3304",
+        "【さくら雑貨】ご注文の商品を発送しました（注文番号：ＳＺ－１００２４５）",
+        "Your parcel is on hold – pay $1.99 redelivery fee",
+        "30% off new arrivals – order now, ships free",
+        "Re: I ordered the cake for Friday",
+        "Jordan commented on your photo",
+        "Your verification code is 482913",
+        "You're invited: Autumn maker night – RSVP",
+    ];
+
+    // ------------------------------------------------------------ tracking numbers
+
+    /// Every synthetic tracking number of the demo (and the spares the order
+    /// tests use), with its carrier.
+    const TRACKING: &[(&str, &str)] = &[
+        ("ups", UPS_BRIGHTLEAF),
+        ("ups", "1Z8F29E10355042072"),
+        ("fedex", FEDEX_NORTHPEAK),
+        ("fedex", "550147029134"),
+        ("usps", USPS_PIXEL_PARCEL),
+        ("s10", JAPAN_POST_SAKURA),
+        ("s10", "LX204417384US"),
+        ("s10", "CP319475029CA"),
+        ("dhl", "3720419861"),
+    ];
+
+    fn digits(s: &str) -> Vec<u32> {
+        s.chars().map(|c| c.to_digit(10).expect("a digit")).collect()
+    }
+
+    /// The number with its check digit recomputed from the rest, written out
+    /// independently of the carrier code so a typo in either is caught.
+    fn with_check(kind: &str, n: &str) -> String {
+        match kind {
+            // "1Z" + 15 chars + check; letters count (ascii - 63) % 10;
+            // odd positions once, even positions twice.
+            "ups" => {
+                let sum: u32 = n[2..17]
+                    .chars()
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let v = c.to_digit(10).unwrap_or_else(|| (c as u32 - 63) % 10);
+                        if i % 2 == 0 { v } else { 2 * v }
+                    })
+                    .sum();
+                format!("{}{}", &n[..17], (10 - sum % 10) % 10)
+            }
+            // Weights 1, 3, 7 from the right over the first 11 digits.
+            "fedex" => {
+                let sum: u32 = digits(&n[..11]).iter().rev().zip([1, 3, 7].iter().cycle()).map(|(d, w)| d * w).sum();
+                format!("{}{}", &n[..11], sum % 11 % 10)
+            }
+            // Weights 3, 1 from the right over all but the last digit.
+            "usps" => {
+                let body = &n[..n.len() - 1];
+                let sum: u32 = digits(body).iter().rev().zip([3, 1].iter().cycle()).map(|(d, w)| d * w).sum();
+                format!("{body}{}", (10 - sum % 10) % 10)
+            }
+            // Weights 8, 6, 4, 2, 3, 5, 9, 7 over the serial; 10 → 0, 11 → 5.
+            "s10" => {
+                let sum: u32 = digits(&n[2..10]).iter().zip([8, 6, 4, 2, 3, 5, 9, 7]).map(|(d, w)| d * w).sum();
+                let check = match 11 - sum % 11 {
+                    10 => 0,
+                    11 => 5,
+                    c => c,
+                };
+                format!("{}{check}{}", &n[..10], &n[11..])
+            }
+            // The first nine digits mod 7.
+            "dhl" => format!("{}{}", &n[..9], n[..9].parse::<u64>().unwrap() % 7),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn demo_tracking_numbers_have_valid_check_digits() {
+        // The well-known samples check the recomputation itself.
+        assert_eq!(with_check("ups", "1Z999AA10123456784"), "1Z999AA10123456784");
+        assert_eq!(with_check("s10", "RR123456785US"), "RR123456785US");
+        for (kind, n) in TRACKING {
+            assert_eq!(with_check(kind, n), *n, "{kind} {n}");
+            let last = n.len() - if *kind == "s10" { 3 } else { 1 };
+            let d = n[last..last + 1].parse::<u32>().unwrap();
+            let wrong = format!("{}{}{}", &n[..last], (d + 1) % 10, &n[last + 1..]);
+            assert_ne!(with_check(kind, &wrong), wrong, "{kind} {wrong}");
+        }
+        assert_eq!(JAPAN_POST_SAKURA.len(), 13);
+        assert!(JAPAN_POST_SAKURA.ends_with("JP"));
+    }
+
+    #[test]
+    fn demo_tracking_numbers_pass_the_carrier_validators() {
+        use crate::orders::carriers::{dhl10_with_check, fedex12_with_check, impb_with_check, s10_with_check, ups_with_check};
+        use crate::orders::{Carrier, validate};
+        for (kind, n) in TRACKING {
+            // Recomputed with order detection's own helpers as well.
+            let again = match *kind {
+                "ups" => ups_with_check(&n[2..17]),
+                "fedex" => fedex12_with_check(&n[..11]),
+                "usps" => impb_with_check(&n[..n.len() - 1]),
+                "s10" => s10_with_check(&n[..2], &n[2..10], &n[11..]),
+                "dhl" => dhl10_with_check(&n[..9]),
+                _ => unreachable!(),
+            };
+            assert_eq!(again, *n, "{kind} {n}");
+            let carrier = match (*kind, &n[n.len() - 2..]) {
+                ("ups", _) => Carrier::Ups,
+                ("fedex", _) => Carrier::FedEx,
+                ("usps", _) | ("s10", "US") => Carrier::Usps,
+                ("s10", "JP") => Carrier::JapanPost,
+                ("s10", "CA") => Carrier::CanadaPost,
+                ("dhl", _) => Carrier::Dhl,
+                _ => unreachable!(),
+            };
+            assert!(validate(&carrier, n), "{carrier:?} {n}");
+        }
+    }
+
+    // ------------------------------------------------------------ packages and topics
+
+    #[test]
+    fn demo_orders_and_topics_are_found() {
+        use crate::orders::{ExtractionKind, OrderSection, OrderStatus, SuppressReason, section};
+        use crate::topics::Topic;
+
+        let store = Store::open_in_memory().unwrap();
+        let now = Local.with_ymd_and_hms(2026, 10, 19, 11, 30, 0).unwrap();
+        super::super::seed_demo(&store, now).unwrap();
+        let acct = store.accounts().unwrap()[0].id;
+        let utc = now.with_timezone(&Utc);
+        let mut rounds = 0;
+        loop {
+            let done = store.assess_pending(250).unwrap()
+                + store.extract_orders_pending(250, utc).unwrap()
+                + store.rebuild_dirty_orders(200).unwrap()
+                + store.classify_topics_pending(250).unwrap();
+            if done == 0 {
+                break;
+            }
+            rounds += 1;
+            assert!(rounds <= 50, "the passes never finish");
+        }
+        let all = store.account_messages(acct).unwrap();
+        let id = |subject: &str| all.iter().find(|m| m.subject == subject).unwrap_or_else(|| panic!("{subject}")).id;
+
+        // Exactly the five orders, each where Packages should show it.
+        let mut orders: Vec<_> = store
+            .orders(false)
+            .unwrap()
+            .into_iter()
+            .map(|o| (o.key.clone(), o.merchant.name.clone(), o.status, section(&o, utc, now.date_naive(), 30), o.events.len()))
+            .collect();
+        orders.sort();
+        let key = |merchant: &str, number: &str| format!("{acct}:o:{merchant}:{number}");
+        let mut want = vec![
+            (key("brightleaf.example", "BL-48213"), "Brightleaf Home".to_string(), OrderStatus::OutForDelivery, Some(OrderSection::ArrivingSoon), 3),
+            (key("northpeak.example", "NP-20931"), "Northpeak Outfitters".into(), OrderStatus::Delivered, Some(OrderSection::Delivered), 3),
+            (key("pixelparcel.example", "PP-77310"), "Pixel & Parcel Books".into(), OrderStatus::Delayed, Some(OrderSection::NeedsAttention), 2),
+            (key("harborlane.example", "HL-3304"), "Harbor Lane Kitchen".into(), OrderStatus::Refunded, Some(OrderSection::CancelledReturned), 2),
+            (key("sakura-zakka.example", "SZ-100245"), "さくら雑貨".into(), OrderStatus::Shipped, Some(OrderSection::OnTheWay), 1),
+        ];
+        want.sort();
+        assert_eq!(orders, want);
+        let sakura = store.order_by_key(&key("sakura-zakka.example", "SZ-100245")).unwrap().unwrap();
+        assert!(sakura.shipments.iter().any(|s| s.tracking.carrier == crate::orders::Carrier::JapanPost && s.tracking.number == JAPAN_POST_SAKURA));
+        assert_eq!(sakura.expected.map(|w| w.from), chrono::NaiveDate::from_ymd_opt(2026, 10, 22));
+
+        // The lure is caught; the promotion and the chat aren't orders.
+        let lure = id("Your parcel is on hold – pay $1.99 redelivery fee");
+        let x = store.extraction_for(lure).unwrap().expect("checked");
+        assert_eq!(x.kind, ExtractionKind::Suppressed);
+        assert_eq!(x.suppressed, Some(SuppressReason::DeliveryFeeLure));
+        assert!(store.order_for_message(lure).unwrap().is_none());
+        for subject in ["30% off new arrivals – order now, ships free", "Re: I ordered the cake for Friday"] {
+            assert!(store.order_for_message(id(subject)).unwrap().is_none(), "{subject}");
+        }
+
+        // Every topic but Other has mail, and the examples land where expected.
+        let counts = store.topic_counts().unwrap();
+        for topic in Topic::ALL.into_iter().filter(|t| *t != Topic::Other) {
+            assert!(counts.iter().any(|c| c.topic == topic && c.total > 0), "{topic:?} is empty: {counts:?}");
+        }
+        let ids: Vec<_> = all.iter().map(|m| m.id).collect();
+        let topics = store.topics_for(&ids).unwrap();
+        for (subject, topic) in [
+            ("Out for delivery: your order #BL-48213", Topic::Orders),
+            ("Your parcel is on hold – pay $1.99 redelivery fee", Topic::Other),
+            ("30% off new arrivals – order now, ships free", Topic::Newsletters),
+            ("Re: I ordered the cake for Friday", Topic::People),
+            ("Jordan commented on your photo", Topic::Social),
+            ("Your verification code is 482913", Topic::Notifications),
+            ("You're invited: Autumn maker night – RSVP", Topic::Events),
+            ("Your trip to Seattle is confirmed", Topic::Travel),
+            ("Your monthly statement is ready", Topic::Finance),
+            ("Receipt: Seattle flight", Topic::Receipts),
+            ("Invoice INV-2048", Topic::Receipts),
+        ] {
+            assert_eq!(topics.get(&id(subject)).map(|t| t.0), Some(topic), "{subject}");
+        }
+
+        // The rest of the demo is unchanged.
+        let inbox = store.folder_by_role(acct, FolderRole::Inbox).unwrap().unwrap();
+        assert!(inbox.total_count > 200, "inbox has {}", inbox.total_count);
+        let favs: Vec<String> = store.favorites().unwrap().into_iter().map(|f| f.name).collect();
+        assert_eq!(favs, vec!["Inbox", "Sent Items", "Deleted Items", "Q4 Launch"]);
     }
 }

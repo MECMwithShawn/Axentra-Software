@@ -1,0 +1,142 @@
+   Compiling axentra-vault v0.1.0 (C:\Users\shawn\code\axentra-vault\app)
+   Compiling passkey-win v0.1.0 (C:\Users\shawn\code\axentra-vault\crates\passkey-win)
+   Compiling vault-core v0.1.0 (C:\Users\shawn\code\axentra-vault\crates\vault-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.09s
+     Running unittests src\main.rs (target\debug\deps\axentra_vault-9ac2c57891e7ac65.exe)
+
+running 50 tests
+test ambient::tests::particles_rise_and_respawn_below ... ok
+test ambient::tests::random_stays_in_unit_range ... ok
+test app::security_tests::idle_lock_recovery_uses_the_real_unlock_screen_even_if_file_disappears ... ok
+test app::security_tests::master_password_cannot_be_undone_after_lock ... ok
+test chrome::tests::module_outline_is_convex ... ok
+test columns::tests::round_trips_and_orders ... ok
+test icon::tests::app_icon_has_tile_rings_padlock_and_clear_corners ... ok
+test icon::tests::every_icon_is_valid_svg ... ok
+test intro::tests::easing_matches_css ... ok
+test intro::tests::geometry_matches_spec ... ok
+test intro::tests::identity_region_is_455_at_desktop_size ... ok
+test intro::tests::reduced_motion_is_end_frame ... ok
+test intro::tests::timeline_rules ... ok
+test jobs::rotation_tests::cancelled_rotation_does_not_change_the_ring ... ok
+test jobs::rotation_tests::revocation_rotates_retained_keys_and_rejects_old_envelopes ... ok
+test secret_edit::tests::hidden_and_revealed_fields_leave_no_undo_secret_after_drop ... ok
+test secret_edit::tests::masked_edit_neither_copies_masks_nor_loses_values_on_cut ... ok
+test secret_edit::tests::unicode_edits_never_expose_plaintext_through_text_buffer ... ok
+test session::backup_creation_tests::replacement_recovery_key_never_overwrites_existing_files ... ok
+test session::floating::tests::added_keys_join_the_ring_without_rekeying ... ok
+test session::floating::tests::downloaded_icons_are_shared_per_site_and_kept ... ok
+test session::floating::tests::only_web_addresses_launch ... ok
+test session::floating::tests::strength_bands ... ok
+test session::idle_lock_tests::failed_save_still_locks_and_recovers_only_with_complete_credentials ... ok
+test siteicons::live_fetch ... ignored
+test siteicons::tests::converts_images_to_64px_png ... ok
+test siteicons::tests::dns_answers_are_filtered_and_pinned ... ok
+test siteicons::tests::downloaded_svg_cannot_include_local_or_embedded_images ... ok
+test siteicons::tests::finds_and_ranks_icon_links ... ok
+test siteicons::tests::hosts_are_public_web_names_only ... ok
+test siteicons::tests::icon_requests_cannot_escape_the_public_origin ... ok
+test ui_tests::classic_columns_can_be_shown_and_hidden ... ok
+test ui_tests::classic_columns_sort_and_right_click ... ok
+test ui_tests::details_panel_does_not_grow_with_long_notes ... ok
+test ui_tests::edit_new_delete_save_and_lock ... ok
+test ui_tests::every_ui_character_has_a_glyph ... ok
+test ui_tests::external_change_is_not_overwritten_silently ... ok
+test ui_tests::floating_layout_end_to_end ... ok
+test ui_tests::floating_locked_screen_shows_no_vault_data ... ok
+test ui_tests::floating_search_and_tags ... ok
+test ui_tests::protect_notes_and_add_protected_field ... ok
+test ui_tests::ranked_search_and_options ... ok
+test ui_tests::render_previews ... ignored
+test ui_tests::settings_lists_unlock_keys ... ok
+test ui_tests::smart_categories_and_manual_override ... ok
+test ui_tests::unlock_card_switches_layout ... ok
+test ui_tests::unlock_shows_real_progress_status ... ok
+test ui_tests::unsaved_changes_prompt_on_lock ... ok
+test ui_tests::views_archive_restore_and_previous_passwords ... ok
+test ui_tests::wrong_password_shows_error_and_stays_locked ... ok
+
+test result: ok. 48 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 21.26s
+
+     Running unittests src\lib.rs (target\debug\deps\passkey_win-6720f6b515dde99f.exe)
+
+running 4 tests
+test tests::api_is_available ... ok
+test tests::base64url_matches_rfc4648 ... ok
+test tests::struct_sizes_match_plugin_layout ... ok
+test tests::transport_labels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\vault_core-f3ca131863363ff7.exe)
+
+running 47 tests
+test categorize::tests::bare_keys_read_back_as_binary_are_recovered ... ok
+test categorize::tests::group_names_are_a_fallback_hint ... ok
+test categorize::tests::keys_round_trip ... ok
+test categorize::tests::longest_keyword_wins ... ok
+test categorize::tests::manual_category_overrides_and_clears ... ok
+test categorize::tests::manual_category_survives_a_save_and_reload ... ok
+test categorize::tests::private_addresses_are_devices ... ok
+test categorize::tests::real_world_entries ... ok
+test envelope::tests::every_field_is_authenticated ... ok
+test envelope::tests::key_ring_round_trips_and_stays_v1_with_one_key ... ok
+test envelope::tests::path_appends_extension ... ok
+test envelope::tests::rejects_foreign_text ... ok
+test envelope::tests::round_trip_through_text ... ok
+test envelope::tests::wrong_secret_rejected ... ok
+test fidelity::tests::own_output_is_clean ... ok
+test form::tests::existing_protection_on_standard_fields_is_kept ... ok
+test form::tests::protect_notes_and_add_protected_field ... ok
+test form::tests::removing_and_renaming_fields ... ok
+test form::tests::round_trip_keeps_protection_flags ... ok
+test form::tests::validation ... ok
+test generator::tests::avoids_ambiguous_and_disabled_classes ... ok
+test generator::tests::entropy_estimate ... ok
+test generator::tests::respects_length_and_classes ... ok
+test header::tests::reads_aes_kdf_rounds ... ok
+test header::tests::reads_argon2id_parameters ... ok
+test header::tests::rejects_non_keepass_data ... ok
+test keyfile::tests::format_matches_keepass_layout ... ok
+test keyfile::tests::raw_key_from_every_direct_format ... ok
+test organize::tests::archive_round_trip ... ok
+test organize::tests::favorites_and_tags ... ok
+test organize::tests::health_flags_reused_and_weak ... ok
+test organize::tests::history_is_oldest_first_and_trimmed ... ok
+test organize::tests::previous_passwords_from_history ... ok
+test organize::tests::strength_estimate ... ok
+test search::tests::all_words_must_match ... ok
+test search::tests::archived_and_recycled_hidden_by_default ... ok
+test search::tests::email_domain_matches_are_reported_and_can_be_shown ... ok
+test search::tests::hosts ... ok
+test search::tests::mid_word_substrings_do_not_match ... ok
+test search::tests::notes_only_when_asked ... ok
+test search::tests::title_match_ranks_first_and_notes_are_ignored ... ok
+test search::tests::username_name_part_still_matches ... ok
+test vault::tests::credential_change_protects_previous_contents_and_can_fail_safely ... ok
+test vault::tests::refuses_to_clobber_external_change ... ok
+test vault::tests::rekey_with_passkey_bytes_matches_backup_keyfile ... ok
+test vault::tests::save_round_trip_keeps_backup ... ok
+test vault::tests::wrong_key_fails ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests\interop.rs (target\debug\deps\interop-e7fd11b9e7689f2b.exe)
+
+running 2 tests
+test keepass_fixture_survives_save ... ok
+test passkey_files_cross_open ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.03s
+
+   Doc-tests passkey_win
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests vault_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

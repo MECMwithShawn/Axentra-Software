@@ -1,0 +1,41 @@
+   Compiling axentra-vault v0.1.0 (C:\Users\shawn\code\axentra-vault\target\audit\baseline-094baa9ad9204ef1974afbd552157374\source\app)
+   Compiling passkey-win v0.1.0 (C:\Users\shawn\code\axentra-vault\target\audit\baseline-094baa9ad9204ef1974afbd552157374\source\crates\passkey-win)
+   Compiling vault-core v0.1.0 (C:\Users\shawn\code\axentra-vault\target\audit\baseline-094baa9ad9204ef1974afbd552157374\source\crates\vault-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.28s
+     Running unittests src\main.rs (target\debug\deps\axentra_vault-11e25e02c3db471f.exe)
+
+running 14 tests
+test app::audit_tests::audit_master_password_can_be_undone_after_lock ... CONFIRMED: real app unlock -> Lock -> Ctrl+Z restores previous master password in locked form.
+ok
+test session::audit_tests::audit_hex_key_with_newline_is_misidentified_as_raw ... CONFIRMED: raw_key trims hex key; KeePass hashes 65-byte file, so added passkey wraps wrong key.
+ok
+test session::audit_tests::audit_idle_lock_fails_open_on_save_conflict ... CONFIRMED: overdue dirty session stays open and silently resets idle timer after save conflict.
+ok
+test session::audit_tests::audit_key_ring_accepts_oversized_credential ... CONFIRMED: parser accepts one-megabyte credential ID with no resource budget.
+ok
+test session::audit_tests::audit_password_undo_survives_session_drop ... CONFIRMED: plaintext password recovered from egui context after Session and Zeroizing form are dropped.
+ok
+test session::audit_tests::audit_rekey_leaves_password_only_backup ... CONFIRMED: current DB needs two factors; automatically-created .bak needs password only.
+ok
+test session::audit_tests::audit_removed_ring_key_opens_current_database ... CONFIRMED: removed key from .old opens later database contents, given master password.
+ok
+test session::audit_tests::audit_revealed_text_emits_unmanaged_clipboard_command ... CONFIRMED: revealed TextEdit Ctrl+C emits egui CopyText outside protected clipboard path.
+ok
+test siteicons::audit_tests::audit_chunked_body_limit_is_enforced ... ok
+test siteicons::audit_tests::audit_gzip_decoding_bypasses_body_limit ... CONFIRMED: 8176 compressed bytes expanded to 8388608 bytes past the 2000000-byte image cap.
+ok
+
+thread 'siteicons::audit_tests::audit_icon_size_overflows_score' (27952) panicked at app\src\siteicons.rs:131:13:
+attempt to add with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test siteicons::audit_tests::audit_icon_size_overflows_score ... CONFIRMED: untrusted apple-touch-icon size panics in debug; release wraps its ranking score.
+ok
+test siteicons::audit_tests::audit_page_icon_href_can_fetch_loopback ... CONFIRMED: public-site icon link fetched loopback successfully.
+ok
+test siteicons::audit_tests::audit_redirect_can_fetch_loopback ... CONFIRMED: redirect targets receive no address validation.
+ok
+test siteicons::audit_tests::audit_svg_reads_local_image ... CONFIRMED: untrusted SVG loads an absolute local image via default resolver.
+ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.85s
+

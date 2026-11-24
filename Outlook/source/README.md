@@ -77,3 +77,6 @@ App icon: Axentra Glass + Precision icon kit (app id `outlook`), in
 
 Icons: [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons),
 MIT License, © Microsoft Corporation (`crates/axentra-ui/icons/LICENSE-fluentui-system-icons.txt`).
+
+Search model: [BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5), MIT License
+(`packaging/linux/LICENSE-bge-small-en-v1.5.txt`). It's downloaded when packaging, not kept in this source.

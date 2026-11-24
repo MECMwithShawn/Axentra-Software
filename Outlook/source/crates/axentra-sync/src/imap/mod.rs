@@ -283,7 +283,7 @@ pub async fn login<T: Transport>(mut client: Client<T>, mut pre_caps: Vec<String
         Err(e) => return Err(imap_err(e, host)),
     };
     if caps.contains("ID") {
-        let id = format!("ID (\"name\" \"Axentra Outlook\" \"version\" \"{}\")", env!("CARGO_PKG_VERSION"));
+        let id = format!("ID (\"name\" \"Axentra Mail\" \"version\" \"{}\")", env!("CARGO_PKG_VERSION"));
         let _ = raw_command(&mut session, &id).await;
     }
     Ok(Imap { session, caps })

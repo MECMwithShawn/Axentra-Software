@@ -1,0 +1,38 @@
+PASS  database name
+PASS  database custom data
+PASS  custom icon
+PASS  Argon2id KDF kept
+PASS  Argon2 iterations kept
+PASS  recycle bin
+PASS  deleted objects
+PASS  group + group custom data
+PASS  group search/auto-type flags
+PASS  root group inherits flags
+PASS  recycle bin flags + entry
+PASS  group auto-type sequence
+PASS  group custom icon
+PASS  nested group + entry
+PASS  title with XML characters
+PASS  password edited in Rust
+PASS  password still protected
+PASS  notes with unicode
+PASS  protected custom field
+PASS  notes protected by the Rust app read as protected
+PASS  protected field added in Rust
+PASS  title stays unprotected
+PASS  custom field
+PASS  three history versions after the Rust edit
+PASS  history oldest first, Rust edit appended last
+PASS  attachment kept in new history version
+PASS  attachment
+PASS  binary attachment
+PASS  auto-type
+PASS  entry colour
+PASS  override URL
+PASS  tags
+PASS  entry custom data
+PASS  expiry
+PASS  quality check flag
+PASS  Rust-sealed passkey file opens in the KeePass plugin code
+PASS  Rust multi-key passkey file: both keys open in the KeePass plugin code
+ALL PASSED

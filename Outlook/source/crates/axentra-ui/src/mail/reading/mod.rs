@@ -16,8 +16,8 @@ use super::actions;
 use super::ctx::{MailCtx, Open, use_mail, use_model};
 use super::menus::{self, Target};
 use super::model::bare_subject;
-use crate::kit::{Avatar, Icon, IconButton, Menu, MenuButton, MenuItem, SurfaceGrips, SurfaceSpec, dom, use_surface};
-use crate::state::{AppState, NavRequest, store, use_app};
+use crate::kit::{Avatar, Icon, IconButton, Menu, MenuButton, MenuItem, SurfaceGrips, SurfaceSpec, Variant, dom, use_surface};
+use crate::state::{AppState, MailView, NavRequest, store, use_app};
 use attachments::AttachmentWell;
 use body::BodyTheme;
 
@@ -257,6 +257,7 @@ fn scroll_to_card(window: bool, id: MessageId) {
 fn ConversationView(open: Open, full: bool, window: bool) -> Element {
     let app = use_app();
     let mut ctx = use_mail();
+    let model = use_model();
     let _ = app.mail_rev();
     let s = store();
     let settings = app.settings.read().clone();
@@ -312,6 +313,23 @@ fn ConversationView(open: Open, full: bool, window: bool) -> Element {
             }
         }
     }
+    // The topic pill (Change topic, and Why?): only where Change topic
+    // works, as in the More actions menu (not in Junk Email or Deleted Items).
+    let assignment = if settings.topics_view && actions::has_topics(&focus_msg, Some(open_role)) && s.folder_has_topics(focus_msg.folder_id).unwrap_or(false) {
+        s.topic_for(focus_msg.id).ok().flatten()
+    } else {
+        None
+    };
+    let pill = assignment.as_ref().and_then(|a| topic_pill(a).map(|text| (a.topic, text)));
+    let pill_reasons: Vec<String> = assignment.as_ref().map(|a| a.reasons.iter().map(|r| r.describe()).collect()).unwrap_or_default();
+    let mut pill_why = use_signal(|| false);
+    let pill_items = {
+        let mut items = menus::change_topic_items(std::slice::from_ref(&focus_msg), assignment.as_ref().map(|a| a.topic), *ctx.topic_scope.read());
+        items.push(MenuItem::divider());
+        items.push(MenuItem::new("topic_why", "Why?").icon("info"));
+        items
+    };
+    let pill_id = focus_msg.id;
     let dark = is_dark(app, ctx);
     let light_body = *ctx.light_body.read();
     let newest_id = msgs.iter().max_by_key(|m| m.received_at).map(|m| m.id);
@@ -380,8 +398,44 @@ fn ConversationView(open: Open, full: bool, window: bool) -> Element {
                     }
                 }
             }
-            if !categories.is_empty() {
-                div { class: "ax-mail-reading-cats", super::list::row::CategoryPills { categories: categories.clone(), max: 6 } }
+            if !categories.is_empty() || pill.is_some() {
+                div { class: "ax-mail-reading-cats",
+                    if !categories.is_empty() {
+                        super::list::row::CategoryPills { categories: categories.clone(), max: 6 }
+                    }
+                    if let Some((topic, text)) = pill.clone() {
+                        MenuButton {
+                            label: text.clone(),
+                            icon: topic.icon(),
+                            variant: Variant::Subtle,
+                            chevron: false,
+                            class: "ax-topic-pill",
+                            title: "Topic: {text}. Change topic",
+                            items: pill_items.clone(),
+                            on_select: move |cmd: String| {
+                                if cmd == "topic_why" {
+                                    pill_why.set(true);
+                                } else {
+                                    let m = model.read();
+                                    actions::run(app, ctx, &m, &cmd, vec![pill_id]);
+                                }
+                            },
+                        }
+                    }
+                }
+                if pill_why() && !pill_reasons.is_empty() {
+                    div { class: "ax-topic-why", role: "note",
+                        div { class: "ax-pkg-why-head",
+                            span { class: "ax-semibold", "Why this topic?" }
+                            IconButton { icon: "dismiss", title: "Close", small: true, onclick: move |_| pill_why.set(false) }
+                        }
+                        ul {
+                            for (i, r) in pill_reasons.iter().enumerate() {
+                                li { key: "{i}", "{r}" }
+                            }
+                        }
+                    }
+                }
             }
             div { class: "ax-mail-thread",
                 for item in items {
@@ -519,6 +573,56 @@ fn Banner(icon: &'static str, #[props(default)] tone: &'static str, children: El
     }
 }
 
+/// "Shipped · Order BL-48213 from Brightleaf Home · Arriving Thu, Oct 22".
+pub fn order_banner_text(o: &orders::Order, today: chrono::NaiveDate) -> String {
+    let merchant = if o.merchant.name.trim().is_empty() { o.merchant.domain.clone() } else { o.merchant.name.clone() };
+    let status = if o.partly_delivered { "Partly delivered" } else { o.status.label() };
+    let mut parts = vec![status.to_string()];
+    parts.push(match &o.order_number {
+        Some(n) => format!("Order {n} from {merchant}"),
+        None => format!("Order from {merchant}"),
+    });
+    let when = match (o.status, o.expected) {
+        (orders::OrderStatus::Delivered, _) => {
+            let d = o.delivered_at.unwrap_or(o.status_at).with_timezone(&Local).date_naive();
+            (d != today).then(|| d.format("%a, %b %-d").to_string())
+        }
+        // Out for delivery (today) and ready for pickup say when themselves,
+        // whatever an earlier email estimated.
+        (s, _) if s.is_terminal() || matches!(s, orders::OrderStatus::OutForDelivery | orders::OrderStatus::ReadyForPickup) => None,
+        (_, Some(w)) if w.from == w.to && w.from == today => Some("Arriving today".to_string()),
+        (_, Some(w)) if w.from == w.to && w.from > today => Some(format!("Arriving {}", w.from.format("%a, %b %-d"))),
+        (_, Some(w)) if w.from == w.to => Some(format!("Expected {}", w.from.format("%a, %b %-d"))),
+        (_, Some(w)) => Some(format!("Expected {}", super::packages::window_text(w))),
+        _ => None,
+    };
+    parts.extend(when);
+    parts.join(" \u{00b7} ")
+}
+
+/// The order shows on the Packages page: not hidden, and not aged out
+/// after "Keep delivered packages for".
+pub fn in_packages(o: &orders::Order, now: chrono::DateTime<chrono::Utc>, keep_days: u32) -> bool {
+    orders::section(o, now, now.with_timezone(&Local).date_naive(), keep_days).is_some()
+}
+
+/// A suppressed delivery lure ("pay a fee to get your parcel") or a
+/// message claiming to be a carrier from somewhere else.
+pub fn is_delivery_lure(e: &orders::Extraction) -> bool {
+    e.kind == orders::ExtractionKind::Suppressed
+        && matches!(e.suppressed, Some(orders::SuppressReason::DeliveryFeeLure | orders::SuppressReason::CarrierImpersonation { .. }))
+}
+
+/// The topic pill's text, or `None` where it stays hidden: People (keeps
+/// personal mail clean) and a fallback Other.
+pub fn topic_pill(a: &topics::Assignment) -> Option<String> {
+    match (a.topic, a.source) {
+        (topics::Topic::People, _) | (topics::Topic::Other, topics::Source::Fallback) => None,
+        (t, _) if a.confidence < 0.75 => Some(format!("{} (likely)", t.label())),
+        (t, _) => Some(t.label().to_string()),
+    }
+}
+
 fn response_icon(forwarded: bool) -> &'static str {
     if forwarded { "arrow_forward" } else { "arrow_reply" }
 }
@@ -554,6 +658,17 @@ fn MessageCard(
     let label = s.message_label(id).ok().flatten();
     let assessment = s.assessment(id).ok().flatten();
     let advice = assessment.as_ref().map(|a| a.advice).unwrap_or_default();
+    let phishing = advice == junk::Advice::Phishing || label == Some(junk::Label::Phishing);
+    // Packages: the order this email belongs to (the phishing banner wins),
+    // or a warning when it looks like a fake delivery notice.
+    let order = (settings.order_tracking && settings.order_banner && !phishing).then(|| s.order_for_message(id).ok().flatten()).flatten();
+    let lure = settings.order_tracking && !phishing && s.extraction_for(id).ok().flatten().is_some_and(|e| is_delivery_lure(&e));
+    let order_text = order.as_ref().map(|o| order_banner_text(o, Local::now().date_naive()));
+    let order_track = order.as_ref().and_then(|o| {
+        o.shipments.iter().find_map(|sh| sh.tracking.carrier.tracking_url(&sh.tracking.number).map(|u| (u, sh.tracking.carrier.host().unwrap_or("the carrier's website"))))
+    });
+    // Only an order Packages lists (not one aged out of it) can be shown there.
+    let order_key = order.as_ref().filter(|o| in_packages(o, chrono::Utc::now(), settings.orders_keep_days())).map(|o| o.key.clone());
     let reasons: Vec<String> = assessment.as_ref().map(|a| a.analysis.findings.iter().map(|f| f.describe()).collect()).unwrap_or_default();
     let partial = assessment.as_ref().is_some_and(|a| a.analysis.truncated);
     // The check couldn't finish: say so rather than show nothing (which
@@ -561,11 +676,21 @@ fn MessageCard(
     let unchecked = assessment.as_ref().is_some_and(|a| a.analysis.incomplete);
     let (advice_icon, advice_tone) = if advice == junk::Advice::Phishing { ("shield_error", "ax-danger-banner") } else { ("warning", "ax-warning") };
     let routed = s.routed_by_rule(id).ok().flatten();
+    let filtered = if routed.is_none() && role == Some(FolderRole::Junk) { s.filtered_reasons(id).ok().flatten() } else { None };
+    // A second opinion, not a warning sign: it adds nothing where one shows.
+    let review = if settings.junk_shadow && label.is_none() && advice != junk::Advice::Phishing && role != Some(FolderRole::Junk) {
+        s.shadow_recommendation(id).ok().flatten().map(|r| match r {
+            junk::shadow::Recommendation::Phishing => ("warning", "ax-warning", "Local AI review: this looks like phishing. It's a suggestion, and nothing was moved."),
+            junk::shadow::Recommendation::Bulk => ("info", "", "Local AI review: this is probably bulk mail. It's a suggestion, and nothing was moved."),
+        })
+    } else {
+        None
+    };
     let allowed = ctx.allowed_remote.read().contains(&id) || !settings.block_external_images || s.images_allowed_for(&msg.from.address).unwrap_or(false);
     let mut history = use_signal(|| false);
     let zoom = *ctx.zoom.read();
     let width = frame_width(if window { *ctx.read_window_width.read() } else { *ctx.reading_width.read() }, window);
-    let doc = body::build(&body, allowed, theme, zoom, history(), width);
+    let doc = body::with_pictures(body::build(&body, allowed, theme, zoom, history(), width), &body::inline_pictures(&body));
     let time = crate::fmt::full_time(msg.received_at, settings.use_24h_time);
     let long = format!("{} {}", msg.received_at.with_timezone(&Local).format("%A, %B %-d, %Y"), crate::fmt::time(msg.received_at, settings.use_24h_time));
     let sender_addr = msg.from.address.clone();
@@ -610,7 +735,8 @@ fn MessageCard(
     let card_id = card_dom_id(window, id);
 
     let more_items = {
-        let t = Target::for_ids(&[id], role, folder.as_ref().map(|f| f.id), settings.focused_inbox_shown(), settings.use_24h_time);
+        let t = Target::for_ids(&[id], role, folder.as_ref().map(|f| f.id), settings.focused_inbox_shown(), settings.use_24h_time)
+            .with_topic_scope(*ctx.topic_scope.read());
         menus::message_menu(&t, folder.as_ref().map(|f| f.id))
     };
     let run = move |cmd: String| {
@@ -728,6 +854,37 @@ fn MessageCard(
                         }
                     }
                 }
+                if let Some(text) = order_text.clone() {
+                    Banner { icon: "box",
+                        span { "{text}" }
+                        if let Some((url, host)) = order_track.clone() {
+                            button {
+                                r#type: "button",
+                                class: "ax-mail-link",
+                                title: "Opens {host} in your browser",
+                                onclick: move |_| crate::calendar::actions::open_external(&url),
+                                "Track package"
+                            }
+                        }
+                        if let Some(key) = order_key.clone() {
+                            button {
+                                r#type: "button",
+                                class: "ax-mail-link",
+                                onclick: move |_| {
+                                    ctx.popout.set(None);
+                                    actions::show_view(app, ctx, MailView::Packages);
+                                    ctx.focus_order.set(Some(key.clone()));
+                                },
+                                "View in Packages"
+                            }
+                        }
+                    }
+                }
+                if lure {
+                    Banner { icon: "warning", tone: "ax-warning",
+                        span { "This looks like a fake delivery notice. Real carriers don't ask for fees by email. It wasn't added to Packages." }
+                    }
+                }
                 if unchecked && advice == junk::Advice::None {
                     Banner { icon: "warning", tone: "ax-warning",
                         span { "Axentra couldn't finish checking this message for warning signs. Be careful with its links and attachments." }
@@ -742,10 +899,18 @@ fn MessageCard(
                         span {
                             if let Some(rule) = routed.clone() {
                                 "Moved to Junk Email by your block rule for {rule}. Links and attachments may be unsafe."
+                            } else if let Some(why) = filtered.as_ref().map(|r| r.join(" ")) {
+                                "Axentra moved this to Junk Email. {why} Links and attachments may be unsafe."
                             } else {
                                 "This message is in Junk Email. Links and attachments may be unsafe."
                             }
                         }
+                        button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("not_junk".into()), "It's not junk" }
+                    }
+                }
+                if let Some((icon, tone, text)) = review {
+                    Banner { icon, tone,
+                        span { "{text} " }
                         button { r#type: "button", class: "ax-mail-link", onclick: move |_| run("not_junk".into()), "It's not junk" }
                     }
                 }
@@ -894,6 +1059,68 @@ fn MeetingBar(event_id: EventId, kind: MeetingMessageKind) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn order(status: orders::OrderStatus, expected: Option<(u32, u32)>) -> orders::Order {
+        let day = |d| chrono::NaiveDate::from_ymd_opt(2026, 10, d).unwrap();
+        orders::Order {
+            merchant: orders::Merchant { domain: "brightleaf.example".into(), name: "Brightleaf Home".into(), key: "brightleaf.example".into() },
+            order_number: Some("BL-48213".into()),
+            status,
+            expected: expected.map(|(from, to)| orders::DateWindow { from: day(from), to: day(to) }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_order_banner_says_where_the_order_is() {
+        use chrono::TimeZone;
+        use orders::OrderStatus::*;
+        // Monday, October 19.
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+        let text = |o: &orders::Order| order_banner_text(o, today);
+        assert_eq!(text(&order(Shipped, Some((22, 22)))), "Shipped \u{b7} Order BL-48213 from Brightleaf Home \u{b7} Arriving Thu, Oct 22");
+        assert_eq!(text(&order(InTransit, Some((19, 19)))), "In transit \u{b7} Order BL-48213 from Brightleaf Home \u{b7} Arriving today");
+        assert_eq!(text(&order(Shipped, Some((22, 25)))), "Shipped \u{b7} Order BL-48213 from Brightleaf Home \u{b7} Expected Oct 22 \u{2013} 25");
+        assert_eq!(text(&order(Delayed, Some((15, 15)))), "Delayed \u{b7} Order BL-48213 from Brightleaf Home \u{b7} Expected Thu, Oct 15", "a date gone by");
+        // Out for delivery is today, whatever the shipping email estimated.
+        assert_eq!(text(&order(OutForDelivery, Some((20, 20)))), "Out for delivery \u{b7} Order BL-48213 from Brightleaf Home");
+        assert_eq!(text(&order(Refunded, Some((20, 20)))), "Refunded \u{b7} Order BL-48213 from Brightleaf Home");
+        let mut delivered = order(Delivered, None);
+        delivered.delivered_at = Some(Local.with_ymd_and_hms(2026, 10, 17, 12, 0, 0).unwrap().with_timezone(&chrono::Utc));
+        assert_eq!(text(&delivered), "Delivered \u{b7} Order BL-48213 from Brightleaf Home \u{b7} Sat, Oct 17");
+        delivered.order_number = None;
+        delivered.delivered_at = Some(Local.with_ymd_and_hms(2026, 10, 19, 9, 0, 0).unwrap().with_timezone(&chrono::Utc));
+        assert_eq!(text(&delivered), "Delivered \u{b7} Order from Brightleaf Home");
+    }
+
+    #[test]
+    fn view_in_packages_only_for_orders_packages_lists() {
+        let now = chrono::Utc::now();
+        let mut o = order(orders::OrderStatus::Delivered, None);
+        o.delivered_at = Some(now - chrono::Duration::days(40));
+        o.status_at = now - chrono::Duration::days(40);
+        o.updated_at = now - chrono::Duration::days(40);
+        assert!(!in_packages(&o, now, 30), "aged out after 30 days");
+        assert!(in_packages(&o, now, 90));
+        o.delivered_at = Some(now);
+        assert!(in_packages(&o, now, 30));
+    }
+
+    #[test]
+    fn lures_and_topic_pills() {
+        let suppressed = |why| orders::Extraction { kind: orders::ExtractionKind::Suppressed, suppressed: Some(why), ..orders::Extraction::none() };
+        assert!(is_delivery_lure(&suppressed(orders::SuppressReason::DeliveryFeeLure)));
+        assert!(is_delivery_lure(&suppressed(orders::SuppressReason::CarrierImpersonation { claimed: orders::Carrier::Ups, domain: "ups-redelivery.example".into() })));
+        assert!(!is_delivery_lure(&suppressed(orders::SuppressReason::IgnoredSender)), "a sender you don't track isn't a scam");
+        assert!(!is_delivery_lure(&suppressed(orders::SuppressReason::Danger)), "the phishing banner says it");
+
+        let pill = |topic, confidence, source| topic_pill(&topics::Assignment { topic, confidence, source, reasons: vec![] });
+        assert_eq!(pill(topics::Topic::Travel, 0.9, topics::Source::Signals).as_deref(), Some("Travel"));
+        assert_eq!(pill(topics::Topic::Travel, 0.6, topics::Source::Signals).as_deref(), Some("Travel (likely)"));
+        assert_eq!(pill(topics::Topic::People, 0.9, topics::Source::Person), None, "personal mail stays clean");
+        assert_eq!(pill(topics::Topic::Other, 0.0, topics::Source::Fallback), None);
+        assert_eq!(pill(topics::Topic::Other, 1.0, topics::Source::Suspicious).as_deref(), Some("Other"));
+    }
 
     #[test]
     fn body_frames_are_estimated_at_the_width_they_get() {

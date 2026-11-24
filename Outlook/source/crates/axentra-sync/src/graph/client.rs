@@ -19,6 +19,11 @@ pub const GRAPH_BASE: &str = "https://graph.microsoft.com/v1.0";
 /// Concurrent requests per mailbox (one below Outlook's limit of 4).
 const CONCURRENCY: usize = 3;
 const MAX_ATTEMPTS: u32 = 6;
+/// Files smaller than this are attached in one request; larger ones go up
+/// in pieces through an upload session (Graph: 3 MB to 150 MB).
+pub const UPLOAD_SESSION_FROM: usize = 3 * 1024 * 1024;
+/// Upload piece size: a multiple of 320 KiB, under Graph's 4 MB cap.
+const UPLOAD_CHUNK: usize = 10 * 320 * 1024;
 
 /// Supplies access tokens; `force` asks for a fresh one after a 401.
 pub trait TokenSource: Send + Sync {
@@ -287,6 +292,74 @@ impl Graph {
     }
 }
 
+impl Graph {
+    /// POST raw text (e.g. base64 MIME to `/me/messages`), returning the JSON answer.
+    pub async fn post_text_json(&self, path: &str, content_type: &'static str, text: String) -> SyncResult<Value> {
+        let (_, b) = self.request(Method::POST, path, Some(RequestBody::Text(content_type, text)), &[]).await?;
+        Self::json(&b)
+    }
+
+    /// Attach a file to the draft at `message_path` (`/me/messages/{id}`):
+    /// in one request when small, else through an upload session.
+    pub async fn attach_file(&self, message_path: &str, name: &str, content_type: &str, data: &[u8]) -> SyncResult<()> {
+        use base64::Engine as _;
+        if data.len() < UPLOAD_SESSION_FROM {
+            let body = serde_json::json!({
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": name,
+                "contentType": content_type,
+                "contentBytes": base64::engine::general_purpose::STANDARD.encode(data),
+            });
+            self.post(&format!("{message_path}/attachments"), body).await?;
+            return Ok(());
+        }
+        let item = serde_json::json!({ "AttachmentItem": { "attachmentType": "file", "name": name, "size": data.len(), "contentType": content_type } });
+        let session = self.post(&format!("{message_path}/attachments/createUploadSession"), item).await?;
+        let Some(url) = session["uploadUrl"].as_str().filter(|u| u.starts_with("https://") || (cfg!(test) && u.starts_with("http://127.0.0.1"))) else {
+            return Err(SyncError::protocol("Microsoft 365 didn't accept the attachment upload."));
+        };
+        let mut start = 0;
+        while start < data.len() {
+            let end = (start + UPLOAD_CHUNK).min(data.len());
+            self.upload_chunk(url, start, &data[start..end], data.len()).await?;
+            start = end;
+        }
+        Ok(())
+    }
+
+    /// PUT one piece to an upload session. The upload URL carries its own
+    /// authorization: sending the access token there is refused (and
+    /// would hand it to another host).
+    async fn upload_chunk(&self, url: &str, start: usize, chunk: &[u8], total: usize) -> SyncResult<()> {
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let resp = self
+                .http
+                .put(url)
+                .header("Content-Range", format!("bytes {start}-{}/{total}", start + chunk.len() - 1))
+                .header("Content-Type", "application/octet-stream")
+                .body(chunk.to_vec())
+                .timeout(Duration::from_secs(300))
+                .send()
+                .await
+                .map_err(|e| from_reqwest(&e))?;
+            let status = resp.status();
+            let retry_after = resp.headers().get("Retry-After").and_then(|v| v.to_str().ok()).and_then(|v| parse_retry_after(v, Utc::now()));
+            let bytes = resp.bytes().await.map_err(|e| from_reqwest(&e))?;
+            if status.is_success() {
+                return Ok(());
+            }
+            match status.as_u16() {
+                429 | 500 | 502 | 503 | 504 if attempt < MAX_ATTEMPTS => {
+                    tokio::time::sleep(retry_after.unwrap_or_else(|| backoff(attempt))).await;
+                }
+                _ => return Err(graph_error(status.as_u16(), &bytes)),
+            }
+        }
+    }
+}
+
 pub enum RequestBody {
     Json(Value),
     Text(&'static str, String),
@@ -327,6 +400,58 @@ mod tests {
         assert_eq!(graph_error(403, &body("ErrorQuotaExceeded")).to_string(), copy::MAILBOX_FULL);
         assert!(graph_error(400, &body("MailboxNotEnabledForRESTAPI")).to_string().contains("couldn't find a mailbox"));
         assert_eq!(seg("AAMk/a+b="), "AAMk%2Fa%2Bb%3D");
+    }
+
+    /// A 4 MB file goes up through an upload session in 3200 KiB pieces,
+    /// without the access token; a small one in one request with it.
+    #[tokio::test]
+    async fn attachments_use_an_upload_session_when_large() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let log = Arc::new(std::sync::Mutex::new(Vec::<(String, usize)>::new()));
+        let (l, b) = (log.clone(), base.clone());
+        tokio::spawn(async move {
+            loop {
+                let (mut s, _) = listener.accept().await.unwrap();
+                let mut req = Vec::new();
+                let mut buf = vec![0u8; 65536];
+                // Headers, then the declared body.
+                let (head, body_len) = loop {
+                    let n = s.read(&mut buf).await.unwrap();
+                    req.extend_from_slice(&buf[..n]);
+                    if let Some(i) = req.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let head = String::from_utf8_lossy(&req[..i]).to_string();
+                        let len = head.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length: ").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                        while req.len() < i + 4 + len {
+                            let n = s.read(&mut buf).await.unwrap();
+                            req.extend_from_slice(&buf[..n]);
+                        }
+                        break (head, len);
+                    }
+                };
+                l.lock().unwrap().push((head.clone(), body_len));
+                let body = if head.starts_with("POST /me/messages/m1/attachments/createUploadSession") {
+                    format!(r#"{{"uploadUrl":"{b}/upload/s1"}}"#)
+                } else {
+                    "{}".to_string()
+                };
+                let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                s.write_all(resp.as_bytes()).await.unwrap();
+            }
+        });
+        let graph = Graph::with_base(reqwest::Client::new(), Arc::new(StaticToken(Secret::new("tok"))), &base);
+        graph.attach_file("/me/messages/m1", "small.txt", "text/plain", b"hi").await.unwrap();
+        let big = vec![1u8; 4 * 1024 * 1024];
+        graph.attach_file("/me/messages/m1", "big.zip", "application/zip", &big).await.unwrap();
+        let log = log.lock().unwrap();
+        assert!(log[0].0.starts_with("POST /me/messages/m1/attachments ") && log[0].0.to_ascii_lowercase().contains("authorization: bearer tok"));
+        assert!(log[1].0.starts_with("POST /me/messages/m1/attachments/createUploadSession"));
+        let puts: Vec<_> = log[2..].iter().collect();
+        assert_eq!(puts.len(), 2);
+        assert!(puts[0].0.starts_with("PUT /upload/s1") && puts[0].0.to_ascii_lowercase().contains("content-range: bytes 0-3276799/4194304"));
+        assert!(puts[1].0.to_ascii_lowercase().contains("content-range: bytes 3276800-4194303/4194304"));
+        assert_eq!(puts[0].1 + puts[1].1, big.len());
+        assert!(puts.iter().all(|(h, _)| !h.to_ascii_lowercase().contains("authorization")));
     }
 
     /// Serves a 429 with Retry-After first, then two pages linked by nextLink.

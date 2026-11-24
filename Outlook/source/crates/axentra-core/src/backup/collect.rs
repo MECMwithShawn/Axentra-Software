@@ -322,7 +322,7 @@ fn account_data(store: &Store, account: &Account, all_kv: &[(String, String)]) -
 
 /// Gather the backup document. `now` becomes `manifest.created_at`.
 pub fn collect(store: &Store, now: DateTime<Utc>) -> Result<Payload> {
-    let (recent_addresses, image_senders, inference_overrides, all_kv) = {
+    let (recent_addresses, image_senders, inference_overrides, all_kv, topic_sender_rules, order_user_state, order_sender_ignores) = {
         let conn = store.conn();
         let recent = rows(&conn, "SELECT address, name, last_used, use_count FROM recent_addresses ORDER BY address", [], |r| {
             Ok(RecentAddress { address: r.get(0)?, name: r.get(1)?, last_used: r.get(2)?, use_count: r.get(3)? })
@@ -334,7 +334,23 @@ pub fn collect(store: &Store, now: DateTime<Utc>) -> Result<Payload> {
             Ok(InferenceOverride { address: r.get(0)?, inference: r.get(1)? })
         })?;
         let kv = rows(&conn, "SELECT key, value FROM kv ORDER BY key", params![], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-        (recent, images, overrides, kv)
+        let topic_rules = crate::store::topics_rules_for_backup(&conn)?
+            .into_iter()
+            .map(|(key, pattern, is_domain, topic, created_at, updated_at)| TopicRuleRowBackup {
+                account_id: (key != 0).then_some(key),
+                pattern,
+                is_domain,
+                topic,
+                created_at,
+                updated_at,
+            })
+            .collect();
+        let order_states = crate::store::orders_user_states(&conn)?;
+        let ignores = crate::store::orders_sender_ignores(&conn)?
+            .into_iter()
+            .map(|i| OrderSenderIgnoreBackup { pattern: i.pattern, is_domain: i.is_domain, created_at: i.created_at })
+            .collect();
+        (recent, images, overrides, kv, topic_rules, order_states, ignores)
     };
     let mut payload = Payload {
         settings: store.settings(),
@@ -343,6 +359,9 @@ pub fn collect(store: &Store, now: DateTime<Utc>) -> Result<Payload> {
         sender_rules: store.sender_rules()?,
         image_senders,
         inference_overrides,
+        topic_sender_rules,
+        order_user_state,
+        order_sender_ignores,
         kv: all_kv.iter().filter(|(k, _)| kv_allowed(k)).map(|(k, v)| KvEntry { key: k.clone(), value: v.clone() }).collect(),
         ..Default::default()
     };

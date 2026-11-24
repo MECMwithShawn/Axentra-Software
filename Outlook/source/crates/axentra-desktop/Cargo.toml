@@ -25,3 +25,5 @@ libc = "0.2"
 # Same version as tao's own.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# The webview's new-window requests (links.rs). Same version as wry's own.
+webkit2gtk = "=2.0.1"

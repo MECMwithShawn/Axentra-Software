@@ -9,13 +9,13 @@ screenshots, release notes and security scan results. Installers and extension p
 | [Command](Command/) | 0.1.11 | 0.1.9 (Windows) | [Installed preview](Command/LINUX.md) |
 | [CrystalWire](CrystalWire/) | 0.8.11 | None | [Installed preview](CrystalWire/LINUX.md) |
 | [Ghost](Ghost/) | 0.1.4 Windows / 0.1.5 Linux preview | 0.1.4 (Windows) | [Installed preview](Ghost/LINUX.md) |
-| [Mail](Mail/) | 0.1.20 | None | [Installed preview](Mail/LINUX.md) |
-| [Outlook](Outlook/) | 0.1.5 | 0.1.5 pre-release (Linux .deb) | [Pre-release package](Outlook/LINUX.md) |
+| [Mail](Mail/) | 0.1.20 | None | Retired; replaced by Axentra Mail 0.1.9 ([Outlook](Outlook/)) |
+| [Outlook](Outlook/) (now Axentra Mail) | 0.1.9 | 0.1.9 pre-release (Linux .deb) | [Pre-release package](Outlook/LINUX.md) |
 | [Spaces](Spaces/) | 0.1.2 | None | [Installed preview](Spaces/LINUX.md) |
 | [Vault](Vault/) | 0.1.0 | None | [Installed preview](Vault/LINUX.md) |
 | [PDF](PDF-Suite/) | 0.3.8 | 0.3.4 (Windows) | [Installed preview](PDF-Suite/LINUX.md) |
 | [Archive](Archive/) | 0.1.4 | None | [Installed preview](Archive/LINUX.md) |
-| [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.1 | None | [Installed preview](Edge-Extension-Suite/Horizon/LINUX.md) |
+| [Horizon](Edge-Extension-Suite/Horizon/) | 0.6.20 | 0.6.20 pre-release (Linux .deb) | [Pre-release package](Edge-Extension-Suite/Horizon/LINUX.md) |
 | [USB](USB/) | 0.1.1 Windows preview | None | Source / packaging included; hardware validation pending |
 | [iMessage](iMessage/) | Service 0.1.0 / GTK frontend | None | [Local preview; Rust frontend migration pending](iMessage/) |
 | [OneDrive](OneDrive/) | 0.1.0 Linux preview | None | [Installed preview](OneDrive/LINUX.md); source included |

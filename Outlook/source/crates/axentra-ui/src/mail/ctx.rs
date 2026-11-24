@@ -10,6 +10,7 @@ use chrono::{Local, NaiveDate};
 use dioxus::prelude::*;
 
 use crate::kit::MenuItem;
+use crate::state::MailView;
 
 use super::model::ListModel;
 
@@ -31,7 +32,8 @@ impl RowKey {
     }
 }
 
-fn fnv(s: &str) -> u64 {
+/// FNV-1a, for short DOM ids from arbitrary keys.
+pub(super) fn fnv(s: &str) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in s.bytes() {
         h ^= b as u64;
@@ -51,6 +53,8 @@ pub enum SortField {
     Importance,
     Subject,
     Flag,
+    /// All topics: grouped by topic (not in [`SortField::ALL`]; offered only there).
+    Topic,
 }
 
 impl SortField {
@@ -73,6 +77,7 @@ impl SortField {
             SortField::Importance => "Importance",
             SortField::Subject => "Subject",
             SortField::Flag => "Flag status",
+            SortField::Topic => "Topic",
         }
     }
 
@@ -85,11 +90,12 @@ impl SortField {
             SortField::Importance => "importance",
             SortField::Subject => "subject",
             SortField::Flag => "flag",
+            SortField::Topic => "topic",
         }
     }
 
     pub fn parse(s: &str) -> Option<SortField> {
-        Self::ALL.into_iter().find(|f| f.id() == s)
+        Self::ALL.into_iter().chain([SortField::Topic]).find(|f| f.id() == s)
     }
 
     /// The natural direction: newest, largest, high, flagged first; names A to Z.
@@ -105,6 +111,8 @@ impl SortField {
             SortField::Importance => ("High on top", "Low on top"),
             SortField::Flag => ("Flagged on top", "Not flagged on top"),
             SortField::From | SortField::Category | SortField::Subject => ("Z to A", "A to Z"),
+            // Topics are in their own order (People first), not A to Z.
+            SortField::Topic => ("Reverse topic order", "Topic order"),
         }
     }
 }
@@ -120,6 +128,57 @@ pub struct ListView {
 impl Default for ListView {
     fn default() -> Self {
         ListView { filter: MessageFilter::All, sort: SortField::Date, descending: true }
+    }
+}
+
+impl ListView {
+    /// The view a list starts with: by date, except All topics (by topic).
+    pub fn default_for(key: Option<FolderId>) -> Self {
+        if key == Some(TOPIC_KEY_BASE) {
+            ListView { sort: SortField::Topic, descending: false, ..Default::default() }
+        } else {
+            ListView::default()
+        }
+    }
+}
+
+/// Filter and sort settings of the topic lists live under keys from here
+/// on (far from folder ids and from the `-contact` keys of people).
+pub const TOPIC_KEY_BASE: FolderId = i64::MIN / 2;
+
+/// Filter and sort settings of search results that have no folder (a
+/// search started from Packages or a topic list).
+pub const SEARCH_KEY: FolderId = TOPIC_KEY_BASE - 1;
+
+/// Key of a view's filter and sort settings (Packages has none).
+pub fn view_key_for(v: MailView) -> Option<FolderId> {
+    match v {
+        MailView::Topics(None) => Some(TOPIC_KEY_BASE),
+        MailView::Topics(Some(t)) => Some(TOPIC_KEY_BASE + 1 + t.index() as i64),
+        MailView::Packages => None,
+    }
+}
+
+/// What "Change topic" corrects: this message, the sender, or the domain.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TopicScopeChoice {
+    Message,
+    #[default]
+    Sender,
+    Domain,
+}
+
+impl TopicScopeChoice {
+    pub fn id(self) -> &'static str {
+        match self {
+            TopicScopeChoice::Message => "message",
+            TopicScopeChoice::Sender => "sender",
+            TopicScopeChoice::Domain => "domain",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        [TopicScopeChoice::Message, TopicScopeChoice::Sender, TopicScopeChoice::Domain].into_iter().find(|c| c.id() == s)
     }
 }
 
@@ -167,6 +226,18 @@ pub enum SearchScope {
 pub enum Drag {
     Messages(Vec<MessageId>),
     Folder(FolderId),
+    /// A folder dragged from Favorites: only reorders Favorites.
+    Favorite(FolderId),
+}
+
+/// Where a drop on a folder row lands: on its top edge, in it, or on its
+/// bottom edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DropPlace {
+    Before,
+    #[default]
+    Into,
+    After,
 }
 
 /// Inline folder editing in the folder pane.
@@ -186,6 +257,10 @@ pub enum MenuTarget {
     Account(AccountId),
     /// A favourite person under Favorites.
     Person(ContactId),
+    /// The Views header, Packages or a topic (`None`: Topics) in the folder pane.
+    ViewsHeader,
+    Packages,
+    Topic(Option<axentra_core::topics::Topic>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -220,6 +295,8 @@ pub enum MailDialog {
     SetUpArchive(Vec<MessageId>),
     Shortcuts,
     Help,
+    /// Change topic, for the keyboard (the menu's submenu otherwise).
+    ChangeTopic { ids: Vec<MessageId> },
 }
 
 /// What the list looked like in a folder, restored when the user comes back
@@ -244,10 +321,28 @@ pub struct FolderPrefs {
     pub collapsed_accounts: Vec<AccountId>,
     /// Height of the message list (percent) with the reading pane at the bottom.
     pub list_height_pct: Option<u32>,
+    #[serde(default)]
+    pub views_collapsed: bool,
+    #[serde(default)]
+    pub topics_collapsed: bool,
+    /// Folder order the user set by dragging, per parent
+    /// ([`FolderPrefs::order_key`]). Kept here, not on the server, so a
+    /// sync never undoes it; folders not listed follow the usual order.
+    #[serde(default)]
+    pub folder_order: std::collections::HashMap<String, Vec<FolderId>>,
+    /// Folders left out of their account's list ("Hide from folder list"),
+    /// with their subfolders. Favorites still show them.
+    #[serde(default)]
+    pub hidden_folders: Vec<FolderId>,
 }
 
 impl FolderPrefs {
     const KEY: &'static str = "mail.folder_pane";
+
+    /// Key of one set of sibling folders in `folder_order`.
+    pub fn order_key(account: AccountId, parent: Option<FolderId>) -> String {
+        format!("{account}:{}", parent.unwrap_or(0))
+    }
 
     pub fn load() -> Self {
         crate::state::store().kv_get(Self::KEY).ok().flatten().and_then(|j| serde_json::from_str(&j).ok()).unwrap_or_default()
@@ -282,6 +377,13 @@ pub struct MailCtx {
     pub collapsed_groups: Signal<HashSet<String>>,
     pub drag: Signal<Option<Drag>>,
     pub drop_target: Signal<Option<FolderId>>,
+    /// Where on `drop_target` the drop lands.
+    pub drop_place: Signal<DropPlace>,
+    /// `drop_target` is its Favorites row, not its row in the account.
+    pub drop_fav: Signal<bool>,
+    /// Row under a drag, even one that can't take the drop (a collapsed
+    /// parent held under it opens).
+    pub drag_hover: Signal<Option<FolderId>>,
     pub dialog: Signal<Option<MailDialog>>,
     pub menu: Signal<Option<ContextMenu>>,
     /// Reading pane hidden: the open message covers the list.
@@ -318,12 +420,26 @@ pub struct MailCtx {
     pub popout: Signal<Option<Open>>,
     /// A favourite person's mail shown instead of the folder.
     pub person: Signal<Option<PersonView>>,
+    /// Packages or a topic list shown instead of the folder.
+    pub view: Signal<Option<MailView>>,
+    /// The order (by key) Packages scrolls to and highlights once.
+    pub focus_order: Signal<Option<String>>,
+    /// The view a search started from, shown again when the search ends.
+    pub search_return: CopyValue<Option<MailView>>,
+    /// The search scope before a search from a view (which covers all
+    /// folders), put back when the search ends.
+    pub scope_return: CopyValue<Option<SearchScope>>,
+    /// What Change topic corrects (the menu's scope choice).
+    pub topic_scope: Signal<TopicScopeChoice>,
     /// When the user last looked at Other ("New messages in Other").
     pub other_seen: Signal<Option<chrono::DateTime<chrono::Utc>>>,
     /// Per-folder selection and scroll position for this session.
     pub memory: CopyValue<HashMap<FolderId, FolderMemory>>,
     /// The list's current scroll offset (written on scroll, non-reactive).
     pub list_scroll: CopyValue<f64>,
+    /// Packages' tab, opened sections and scroll position for this session
+    /// (the cards unmount under an email opened full width).
+    pub packages: CopyValue<super::packages::PackagesMemory>,
 }
 
 impl MailCtx {
@@ -342,6 +458,9 @@ impl MailCtx {
             collapsed_groups: Signal::new(HashSet::new()),
             drag: Signal::new(None),
             drop_target: Signal::new(None),
+            drop_place: Signal::new(DropPlace::Into),
+            drop_fav: Signal::new(false),
+            drag_hover: Signal::new(None),
             dialog: Signal::new(None),
             menu: Signal::new(None),
             full_view: Signal::new(false),
@@ -362,9 +481,15 @@ impl MailCtx {
             focus_reading: Signal::new(0),
             popout: Signal::new(None),
             person: Signal::new(None),
+            view: Signal::new(None),
+            focus_order: Signal::new(None),
+            search_return: CopyValue::new(None),
+            scope_return: CopyValue::new(None),
+            topic_scope: Signal::new(TopicScopeChoice::default()),
             other_seen: Signal::new(None),
             memory: CopyValue::new(HashMap::new()),
             list_scroll: CopyValue::new(0.0),
+            packages: CopyValue::new(Default::default()),
         }
     }
 
@@ -377,13 +502,13 @@ impl MailCtx {
     }
 
     pub fn view(&self, folder: Option<FolderId>) -> ListView {
-        folder.and_then(|f| self.views.read().get(&f).copied()).unwrap_or_default()
+        folder.and_then(|f| self.views.read().get(&f).copied()).unwrap_or_else(|| ListView::default_for(folder))
     }
 
     pub fn set_view(mut self, folder: Option<FolderId>, f: impl FnOnce(&mut ListView)) {
         let Some(folder) = folder else { return };
         let mut views = self.views.write();
-        let v = views.entry(folder).or_default();
+        let v = views.entry(folder).or_insert_with(|| ListView::default_for(Some(folder)));
         f(v);
     }
 

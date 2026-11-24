@@ -9,11 +9,13 @@ use axentra_core::*;
 use chrono::{DateTime, Local, TimeZone, Utc};
 use dioxus::prelude::ReadableExt;
 
-use super::ctx::{ListView, MailCtx, Open, PersonView, RowKey, SearchScope, SortField};
-use crate::state::{AppState, Module, store};
+use super::ctx::{ListView, MailCtx, Open, PersonView, RowKey, SEARCH_KEY, SearchScope, SortField, view_key_for};
+use crate::state::{AppState, MailView, Module, store};
 
 /// Search results are capped like Outlook's (first 1,000).
 const SEARCH_LIMIT: u32 = 1000;
+/// A topic list shows the newest 2,000 messages.
+const TOPIC_LIMIT: u32 = 2000;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row {
@@ -82,6 +84,8 @@ pub struct ListModel {
     pub folder: Option<Folder>,
     /// A favourite person's mail is shown instead of a folder.
     pub person: Option<PersonView>,
+    /// Packages or a topic list is shown instead of a folder (not while searching).
+    pub view: Option<MailView>,
     pub conversations: bool,
     /// Category name to preset colour (for the pills).
     pub category_colors: HashMap<String, String>,
@@ -102,11 +106,15 @@ impl ListModel {
     }
 
     /// Key of the filter / sort settings for what the list shows: the
-    /// folder, or a favourite person (negative contact id).
+    /// folder, a favourite person (negative contact id), a topic list
+    /// ([`view_key_for`]) or search results with no folder ([`SEARCH_KEY`]).
     pub fn view_key(&self) -> Option<FolderId> {
+        if let Some(v) = self.view.filter(|_| !self.searching) {
+            return view_key_for(v);
+        }
         match &self.person {
             Some(p) if !self.searching => Some(-p.contact),
-            _ => self.folder.as_ref().map(|f| f.id),
+            _ => self.folder.as_ref().map(|f| f.id).or(self.searching.then_some(SEARCH_KEY)),
         }
     }
 
@@ -180,7 +188,8 @@ pub fn highlight_terms(query: &str) -> Vec<String> {
         let free = key.is_none() && !matches!(term.as_str(), "AND" | "OR" | "NOT");
         if free || matches!(key.as_deref(), Some("subject" | "body" | "content")) {
             let t = term.trim_end_matches('*').trim().to_lowercase();
-            if !t.is_empty() && !out.contains(&t) {
+            // A one-letter word ("I", "a") would light up every word that starts with it.
+            if t.chars().count() > 1 && !out.contains(&t) {
                 out.push(t);
             }
         }
@@ -278,8 +287,10 @@ pub fn date_label(t: DateTime<Utc>, now: DateTime<Local>, week_start: chrono::We
 
 /// Group header for a row. Pinned rows get their own group only in a
 /// folder sorted newest first (not in search results or a person's mail).
-fn group_label(row: &Row, view: &ListView, pinned_group: bool, now: DateTime<Local>, week_start: chrono::Weekday, size: i64) -> String {
+/// `topic` is the row's topic (All topics, by topic).
+fn group_label(row: &Row, view: &ListView, pinned_group: bool, now: DateTime<Local>, week_start: chrono::Weekday, size: i64, topic: Option<topics::Topic>) -> String {
     match view.sort {
+        SortField::Topic => topic.unwrap_or(topics::Topic::Other).label().into(),
         SortField::Date => {
             if pinned_group && row.pinned && view.descending {
                 "Pinned".into()
@@ -352,11 +363,36 @@ fn sort_rank(row: &Row, field: SortField) -> (i64, String) {
             },
             String::new(),
         ),
-        SortField::Date | SortField::Size => (0, String::new()),
+        SortField::Date | SortField::Size | SortField::Topic => (0, String::new()),
     }
 }
 
+/// The order the store reads rows in. A capped list (a search, a person's
+/// mail, a topic) reads the newest rows whatever it is sorted by, oldest on
+/// top included, so new mail is never past the cap; the other sorts are
+/// done here.
+fn store_sort(view: &ListView, capped: bool) -> MessageSort {
+    match (view.sort, view.descending) {
+        _ if capped => MessageSort::DateNewest,
+        (SortField::Date, false) => MessageSort::DateOldest,
+        (SortField::Date | SortField::Size, _) => MessageSort::DateNewest,
+        _ => MessageSort::DateOldest,
+    }
+}
+
+/// All topics, by topic: topics in their display order ([`topics::Topic::ALL`],
+/// unsorted mail with Other), newest first within a topic.
+fn sort_by_topic(rows: &mut [Row], topic_of: impl Fn(&Row) -> Option<topics::Topic>, descending: bool) {
+    let rank = |r: &Row| topic_of(r).unwrap_or(topics::Topic::Other).index();
+    rows.sort_by(|a, b| {
+        let natural = rank(a).cmp(&rank(b));
+        let ord = if descending { natural.reverse() } else { natural };
+        ord.then(b.latest.received_at.cmp(&a.latest.received_at)).then(b.latest.id.cmp(&a.latest.id))
+    });
+}
+
 /// Inputs read from signals, so `compute` itself is plain code.
+#[derive(Clone)]
 pub struct Inputs {
     pub folder_id: Option<FolderId>,
     pub tab: InferenceClass,
@@ -374,6 +410,8 @@ pub struct Inputs {
     pub other_seen: Option<DateTime<Utc>>,
     /// Show a favourite person's mail (Favorites in the folder pane).
     pub person: Option<PersonView>,
+    /// Show Packages or a topic list (Views in the folder pane).
+    pub mail_view: Option<MailView>,
 }
 
 /// Read every input (subscribing the memo to it) and build the model.
@@ -384,7 +422,14 @@ pub fn build(app: AppState, ctx: MailCtx) -> ListModel {
     let searching = search.active && (app.module)() == Module::Mail && !search.query.trim().is_empty();
     let folder_id = (ctx.folder)();
     let person = (ctx.person)();
-    let view_key = person.as_ref().filter(|_| !searching).map(|p| -p.contact).or(folder_id);
+    let mail_view = (ctx.view)();
+    // The same key as `ListModel::view_key`: a search from a view has no
+    // folder (`compute`), so its results keep their own settings.
+    let view_key = match mail_view {
+        Some(_) if searching => Some(SEARCH_KEY),
+        Some(v) => view_key_for(v),
+        None => person.as_ref().filter(|_| !searching).map(|p| -p.contact).or(folder_id),
+    };
     let today = (ctx.today)();
     let now = if today == Local::now().date_naive() {
         Local::now()
@@ -406,16 +451,25 @@ pub fn build(app: AppState, ctx: MailCtx) -> ListModel {
         week_start: settings.week_start,
         other_seen: (ctx.other_seen)(),
         person,
+        mail_view,
     };
     match compute(&inputs) {
         Ok(m) => m,
-        Err(e) => ListModel {
-            searching,
-            error: Some(e.to_string()),
-            folder: folder_id.and_then(|f| store().folder(f).ok().flatten()),
-            ..Default::default()
-        },
+        Err(e) => failed(&inputs, e.to_string(), |f| store().folder(f).ok().flatten()),
     }
+}
+
+/// The list that couldn't be loaded, still saying which list it is (as
+/// [`compute`] would): a topic list or a person's mail has no folder, so
+/// the header, ribbon and empty state never offer the hidden folder's
+/// "Empty folder".
+fn failed(inp: &Inputs, error: String, folder_of: impl FnOnce(FolderId) -> Option<Folder>) -> ListModel {
+    let searching = inp.search.is_some();
+    let view = inp.mail_view.filter(|_| !searching);
+    let person = inp.person.clone().filter(|_| !searching && view.is_none());
+    let from_view = searching && inp.mail_view.is_some();
+    let folder = inp.folder_id.filter(|_| view.is_none() && person.is_none() && !from_view).and_then(folder_of);
+    ListModel { searching, error: Some(error), folder, person, view, ..Default::default() }
 }
 
 pub fn compute(inp: &Inputs) -> Result<ListModel> {
@@ -423,27 +477,41 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
     let folders = s.folders(None)?;
     let by_id: HashMap<FolderId, &Folder> = folders.iter().map(|f| (f.id, f)).collect();
     let searching = inp.search.is_some();
+    // Packages has no message list (its cards replace the list).
+    let mail_view = inp.mail_view.filter(|_| !searching);
+    if mail_view == Some(MailView::Packages) {
+        return Ok(ListModel { view: mail_view, ..Default::default() });
+    }
+    // A topic list: sorted mail from every folder (the store leaves out
+    // Deleted Items, Junk Email, Drafts and the like), Focused and Other alike.
+    let topic = match mail_view {
+        Some(MailView::Topics(t)) => Some(t),
+        _ => None,
+    };
     // A favourite person's mail (from every folder but Deleted Items and
     // Junk Email) replaces the folder, like a search with its own title.
-    let person = inp.person.clone().filter(|_| !searching);
-    let across = searching || person.is_some();
-    let folder = inp.folder_id.filter(|_| person.is_none()).and_then(|id| by_id.get(&id).map(|f| (*f).clone()));
+    let person = inp.person.clone().filter(|_| !searching && topic.is_none());
+    let across = searching || person.is_some() || topic.is_some();
+    // A search from Packages or a topic list has no folder on screen to
+    // search (the last folder is still remembered): it searches them all.
+    let from_view = searching && inp.mail_view.is_some();
+    let folder = inp
+        .folder_id
+        .filter(|_| person.is_none() && topic.is_none() && !from_view)
+        .and_then(|id| by_id.get(&id).map(|f| (*f).clone()));
     let role = folder.as_ref().map(|f| f.role);
     let view = inp.view;
 
-    let store_sort = match (view.sort, view.descending) {
-        (SortField::Date, true) => MessageSort::DateNewest,
-        (SortField::Date, false) => MessageSort::DateOldest,
-        (SortField::Size, _) => MessageSort::DateNewest,
-        _ => MessageSort::DateOldest,
-    };
-    let mut query = MessageQuery { filter: view.filter, sort: store_sort, ..Default::default() };
+    let mut query = MessageQuery { filter: view.filter, ..Default::default() };
     if let Some(q) = &inp.search {
         query.search = Some(q.clone());
         query.limit = Some(SEARCH_LIMIT);
-        if inp.scope == SearchScope::CurrentFolder {
+        if inp.scope == SearchScope::CurrentFolder && !from_view {
             query.folder_id = inp.folder_id;
         }
+    } else if let Some(t) = topic {
+        query.topic = Some(t.map(TopicScope::One).unwrap_or(TopicScope::Any));
+        query.limit = Some(TOPIC_LIMIT);
     } else if let Some(p) = &person {
         query.search = Some(format!("from:\"{}\"", p.address.replace('"', "")));
         query.limit = Some(SEARCH_LIMIT);
@@ -454,6 +522,7 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
             query.inference = Some(inp.tab);
         }
     }
+    query.sort = store_sort(&view, query.limit.is_some());
     // Conversations only group the date-sorted folder views (as in Outlook).
     let conversations = inp.conversation_view && !across && view.sort == SortField::Date && role != Some(FolderRole::Drafts);
     let mut groups: Vec<Vec<Message>> = if conversations {
@@ -461,7 +530,7 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
     } else {
         s.messages(&query)?.into_iter().map(|m| vec![m]).collect()
     };
-    if person.is_some() {
+    if person.is_some() || topic.is_some() {
         groups.retain(|g| !matches!(by_id.get(&g[0].folder_id).map(|f| f.role), Some(FolderRole::Deleted | FolderRole::Junk)));
     }
 
@@ -484,6 +553,13 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
     let attachments = s.attachments_for(&att_ids)?;
     let all_ids: Vec<MessageId> = groups.iter().flat_map(|g| g.iter().map(|m| m.id)).collect();
     let advice = s.advice_for(&all_ids).unwrap_or_default();
+    // All topics, by topic: each row's topic for the order and the headers.
+    let row_topics: HashMap<MessageId, topics::Topic> = if topic == Some(None) && view.sort == SortField::Topic {
+        s.topics_for(&all_ids)?.into_iter().map(|(id, (t, _))| (id, t)).collect()
+    } else {
+        HashMap::new()
+    };
+    let topic_of = |r: &Row| row_topics.get(&r.latest.id).copied();
     // Replied / forwarded icons (not for the user's own Sent Items and Drafts).
     let responses = if matches!(role, Some(FolderRole::Sent | FolderRole::Drafts)) && !across {
         HashMap::new()
@@ -563,9 +639,12 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
     // Client-side ordering for the non-date fields (stable, newest first within a value).
     let sizes_by_row: HashMap<MessageId, i64> = rows.iter().map(|r| (r.latest.id, approx_size(&r.latest, &attachments))).collect();
     match view.sort {
-        // Results across folders are in date order; pins only lead in folders.
+        // Results across folders are in date order (read newest first, see
+        // `store_sort`); pins only lead in folders.
         SortField::Date if across && view.descending => rows.sort_by_key(|r| std::cmp::Reverse((r.latest.received_at, r.latest.id))),
+        SortField::Date if across => rows.sort_by_key(|r| (r.latest.received_at, r.latest.id)),
         SortField::Date => {}
+        SortField::Topic => sort_by_topic(&mut rows, topic_of, view.descending),
         SortField::Size => {
             rows.sort_by(|a, b| {
                 let (sa, sb) = (sizes_by_row[&a.latest.id], sizes_by_row[&b.latest.id]);
@@ -598,6 +677,7 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
         highlight: inp.search.as_deref().map(highlight_terms).unwrap_or_default(),
         folder: folder.clone(),
         person,
+        view: mail_view,
         conversations,
         total: rows.len(),
         category_colors: s.categories()?.into_iter().map(|c| (c.name, c.color)).collect(),
@@ -607,7 +687,7 @@ pub fn compute(inp: &Inputs) -> Result<ListModel> {
     let mut current: Option<String> = None;
     let mut header_at = 0usize;
     for row in rows {
-        let label = group_label(&row, &view, !across, inp.now, inp.week_start, sizes_by_row[&row.latest.id]);
+        let label = group_label(&row, &view, !across, inp.now, inp.week_start, sizes_by_row[&row.latest.id], topic_of(&row));
         if current.as_deref() != Some(label.as_str()) {
             header_at = model.entries.len();
             model.entries.push(Entry::Header { label: label.clone(), count: 0, collapsed: inp.collapsed.contains(&label) });
@@ -711,6 +791,7 @@ mod tests {
     fn search_terms_highlight_word_prefixes() {
         let terms = highlight_terms(r#"budget from:wei subject:"q3 plan" NOT ray*"#);
         assert_eq!(terms, vec!["q3 plan", "budget", "ray"]);
+        assert_eq!(highlight_terms("bill I need a fix"), vec!["bill", "need", "fix"]);
         let runs = split_highlight("Ray's Q3 plan: budgets for disarray", &terms);
         assert_eq!(
             runs,
@@ -724,5 +805,272 @@ mod tests {
             ]
         );
         assert_eq!(split_highlight("nothing here", &[]), vec![("nothing here".to_string(), false)]);
+    }
+
+    fn row(id: MessageId, days: i64) -> Row {
+        let latest = Message { id, received_at: Utc::now() - chrono::Duration::days(days), ..Default::default() };
+        Row {
+            key: RowKey::Msg(id),
+            open: Open { message: id, conversation: None, mark: vec![id] },
+            latest,
+            ids: vec![id],
+            count: 1,
+            unread: 0,
+            people: String::new(),
+            flag: FlagStatus::NotFlagged,
+            pinned: false,
+            has_attachments: false,
+            importance: Importance::Normal,
+            mentions_me: false,
+            meeting: None,
+            advice: Default::default(),
+            categories: Vec::new(),
+            draft: false,
+            folder_tag: None,
+            attachments: Vec::new(),
+            responded: None,
+        }
+    }
+
+    #[test]
+    fn all_topics_headers_follow_the_topic_order() {
+        use topics::Topic;
+        let found: HashMap<MessageId, Topic> = [(1, Topic::Travel), (2, Topic::People), (4, Topic::Orders), (5, Topic::Travel)].into_iter().collect();
+        let mut rows = vec![row(1, 3), row(2, 1), row(3, 0), row(4, 5), row(5, 1)];
+        let topic_of = |r: &Row| found.get(&r.latest.id).copied();
+        sort_by_topic(&mut rows, topic_of, false);
+        assert_eq!(rows.iter().map(|r| r.latest.id).collect::<Vec<_>>(), [2, 4, 5, 1, 3], "by topic, newest first within one");
+        let view = super::super::ctx::ListView::default_for(Some(super::super::ctx::TOPIC_KEY_BASE));
+        assert_eq!(view.sort, SortField::Topic);
+        let now = Local::now();
+        let mut headers: Vec<String> = Vec::new();
+        for r in &rows {
+            let label = group_label(r, &view, false, now, chrono::Weekday::Sun, 0, topic_of(r));
+            if headers.last() != Some(&label) {
+                headers.push(label);
+            }
+        }
+        assert_eq!(headers, ["People", "Orders & shipping", "Travel", "Other"]);
+    }
+
+    #[test]
+    fn view_keys_never_meet_people_or_folders() {
+        use super::super::ctx::view_key_for;
+        let mut keys: Vec<FolderId> = std::iter::once(MailView::Topics(None)).chain(topics::Topic::ALL.map(|t| MailView::Topics(Some(t)))).filter_map(view_key_for).collect();
+        assert_eq!(view_key_for(MailView::Packages), None);
+        // A person's list uses -contact, a folder its (positive) id.
+        for k in &keys {
+            assert!(!(1..=1_000_000).contains(&-k), "{k} looks like a person's key");
+            assert!(*k < 0);
+        }
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), 11, "one key per list");
+        let model = ListModel { view: Some(MailView::Topics(None)), person: Some(PersonView { contact: 7, name: "P".into(), address: "p@x.example".into() }), ..Default::default() };
+        assert_eq!(model.view_key(), view_key_for(MailView::Topics(None)), "the view wins over a person");
+        let searching = ListModel { searching: true, ..model };
+        assert_eq!(searching.view_key(), Some(super::super::ctx::SEARCH_KEY), "not while searching: results with no folder have their own");
+        assert!(!keys.contains(&super::super::ctx::SEARCH_KEY) && super::super::ctx::SEARCH_KEY < 0);
+        let in_folder = ListModel { folder: Some(Folder { id: 42, ..Default::default() }), ..searching };
+        assert_eq!(in_folder.view_key(), Some(42), "a search from a folder keeps the folder's");
+    }
+
+    #[test]
+    fn a_topic_list_spans_folders_and_both_tabs() {
+        use std::sync::Arc;
+        crate::state::init(Arc::new(Store::open_in_memory().unwrap()), None);
+        let s = store();
+        let mut acct = Account { kind: AccountKind::Local, email: "topics-model@x.example".into(), ..Default::default() };
+        let account = s.add_account(&mut acct).unwrap();
+        let inbox = s.ensure_role_folder(account, FolderRole::Inbox).unwrap();
+        let mut other = Message {
+            account_id: account,
+            folder_id: inbox,
+            subject: "Your flight to Lisbon".into(),
+            from: EmailAddress::new("Skyways", "trips@skyways.example"),
+            inference: InferenceClass::Other,
+            received_at: Utc::now(),
+            ..Default::default()
+        };
+        let id = s.insert_message(&mut other, None).unwrap();
+        // Junk checks first (sorting may wait for them), then the topics.
+        for _ in 0..20 {
+            if !super::super::junk_pass::run_batch(s).is_ok_and(|b| b.checked > 0) {
+                break;
+            }
+        }
+        for _ in 0..20 {
+            if !s.classify_topics_pending(10_000).is_ok_and(|n| n > 0) {
+                break;
+            }
+        }
+        let inputs = Inputs {
+            folder_id: Some(inbox),
+            tab: InferenceClass::Focused,
+            view: super::super::ctx::ListView::default_for(view_key_for(MailView::Topics(None))),
+            search: None,
+            scope: SearchScope::AllFolders,
+            conversation_view: true,
+            focused_inbox: true,
+            attachment_chips: false,
+            expanded: None,
+            collapsed: HashSet::new(),
+            now: Local::now(),
+            week_start: chrono::Weekday::Sun,
+            other_seen: None,
+            person: None,
+            mail_view: Some(MailView::Topics(None)),
+        };
+        let m = compute(&inputs).unwrap();
+        assert_eq!(m.folder, None, "no folder: the list spans folders");
+        assert_eq!(m.view, Some(MailView::Topics(None)));
+        assert!(!m.conversations && !m.other_has_new);
+        let row = m.row(&RowKey::Msg(id)).expect("Other-tab mail is listed while Focused is the tab");
+        assert_eq!(row.folder_tag.as_deref(), Some("Inbox"), "rows say which folder they're in");
+        assert_eq!(m.view_key(), view_key_for(MailView::Topics(None)));
+        // Packages has no message list.
+        let packages = compute(&Inputs { mail_view: Some(MailView::Packages), ..inputs.clone() }).unwrap();
+        assert!(packages.entries.is_empty() && packages.view == Some(MailView::Packages));
+        // A list that couldn't be loaded is still the topic list, not the
+        // folder last shown.
+        let inbox_folder = || Some(Folder { id: inbox, name: "Inbox".into(), ..Default::default() });
+        let failed_topics = failed(&inputs, "database is locked".into(), |_| inbox_folder());
+        assert_eq!((failed_topics.view, failed_topics.folder.is_none()), (Some(MailView::Topics(None)), true));
+        let failed_folder = failed(&Inputs { mail_view: None, ..inputs.clone() }, "database is locked".into(), |_| inbox_folder());
+        assert_eq!((failed_folder.view, failed_folder.folder.map(|f| f.id)), (None, Some(inbox)));
+        let person = PersonView { contact: 7, name: "P".into(), address: "p@x.example".into() };
+        let failed_person = failed(&Inputs { mail_view: None, person: Some(person.clone()), ..inputs }, "database is locked".into(), |_| inbox_folder());
+        assert_eq!((failed_person.person, failed_person.folder.is_none()), (Some(person), true));
+    }
+
+    #[test]
+    fn topic_order_is_not_called_alphabetical() {
+        assert_eq!(SortField::Topic.order_labels(), ("Reverse topic order", "Topic order"));
+        assert_eq!(SortField::Subject.order_labels(), ("Z to A", "A to Z"));
+    }
+
+    #[test]
+    fn capped_lists_read_the_newest_rows_whatever_the_sort() {
+        let view = |sort, descending| ListView { sort, descending, ..ListView::default_for(None) };
+        for sort in [SortField::Topic, SortField::From, SortField::Subject, SortField::Importance, SortField::Flag, SortField::Category, SortField::Size] {
+            for descending in [false, true] {
+                assert_eq!(store_sort(&view(sort, descending), true), MessageSort::DateNewest, "{sort:?} {descending}");
+            }
+        }
+        assert_eq!(store_sort(&view(SortField::Date, true), true), MessageSort::DateNewest);
+        assert_eq!(store_sort(&view(SortField::Date, false), true), MessageSort::DateNewest, "oldest on top too");
+        assert_eq!(store_sort(&view(SortField::Date, false), false), MessageSort::DateOldest);
+        assert_eq!(store_sort(&view(SortField::From, false), false), MessageSort::DateOldest, "a folder reads every row");
+    }
+
+    #[test]
+    fn all_topics_lists_new_mail_past_the_cap() {
+        use std::sync::Arc;
+        crate::state::init(Arc::new(Store::open_in_memory().unwrap()), None);
+        let s = store();
+        let mut acct = Account { kind: AccountKind::Local, email: "topics-cap@x.example".into(), ..Default::default() };
+        let account = s.add_account(&mut acct).unwrap();
+        let inbox = s.ensure_role_folder(account, FolderRole::Inbox).unwrap();
+        let start = Utc::now() - chrono::Duration::days(300);
+        let mut newest = 0;
+        for i in 0..=TOPIC_LIMIT as i64 {
+            let mut m = Message {
+                account_id: account,
+                folder_id: inbox,
+                subject: format!("Note {i}"),
+                from: EmailAddress::new("", format!("p{i}@normal.example")),
+                received_at: start + chrono::Duration::minutes(i),
+                ..Default::default()
+            };
+            newest = s.insert_message(&mut m, None).unwrap();
+        }
+        for _ in 0..50 {
+            if !super::super::junk_pass::run_batch(s).is_ok_and(|b| b.checked > 0) {
+                break;
+            }
+        }
+        for _ in 0..50 {
+            if !s.classify_topics_pending(10_000).is_ok_and(|n| n > 0) {
+                break;
+            }
+        }
+        let inputs = Inputs {
+            folder_id: Some(inbox),
+            tab: InferenceClass::Focused,
+            view: super::super::ctx::ListView::default_for(view_key_for(MailView::Topics(None))),
+            search: None,
+            scope: SearchScope::AllFolders,
+            conversation_view: true,
+            focused_inbox: true,
+            attachment_chips: false,
+            expanded: None,
+            collapsed: HashSet::new(),
+            now: Local::now(),
+            week_start: chrono::Weekday::Sun,
+            other_seen: None,
+            person: None,
+            mail_view: Some(MailView::Topics(None)),
+        };
+        assert_eq!(inputs.view.sort, SortField::Topic);
+        let m = compute(&inputs).unwrap();
+        assert!(m.row(&RowKey::Msg(newest)).is_some(), "the newest message is listed");
+        // Oldest on top: the newest is still listed (other tests' mail
+        // shares the store, so it isn't necessarily the last row).
+        let oldest_first = Inputs { view: ListView { sort: SortField::Date, descending: false, ..inputs.view }, ..inputs };
+        let m = compute(&oldest_first).unwrap();
+        let rows: Vec<&Row> = m
+            .entries
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Row(r) => Some(&**r),
+                _ => None,
+            })
+            .collect();
+        assert!(rows.iter().any(|r| r.latest.id == newest), "the newest message is listed");
+        assert!(rows.windows(2).all(|w| w[0].latest.received_at <= w[1].latest.received_at), "oldest on top");
+    }
+
+    #[test]
+    fn a_search_from_a_view_searches_every_folder() {
+        use std::sync::Arc;
+        crate::state::init(Arc::new(Store::open_in_memory().unwrap()), None);
+        let s = store();
+        let mut acct = Account { kind: AccountKind::Local, email: "view-search@x.example".into(), ..Default::default() };
+        let account = s.add_account(&mut acct).unwrap();
+        let inbox = s.ensure_role_folder(account, FolderRole::Inbox).unwrap();
+        let projects = s.create_folder(account, None, "Projects").unwrap();
+        let mut m = Message {
+            account_id: account,
+            folder_id: inbox,
+            subject: "Order zqvx48213 has shipped".into(),
+            from: EmailAddress::new("Shop", "orders@shop.example"),
+            received_at: Utc::now(),
+            ..Default::default()
+        };
+        let id = s.insert_message(&mut m, None).unwrap();
+        // Last in Projects, with the scope still on Current folder.
+        let inputs = |mail_view| Inputs {
+            folder_id: Some(projects),
+            tab: InferenceClass::Focused,
+            view: ListView::default(),
+            search: Some("zqvx48213".into()),
+            scope: SearchScope::CurrentFolder,
+            conversation_view: false,
+            focused_inbox: true,
+            attachment_chips: false,
+            expanded: None,
+            collapsed: HashSet::new(),
+            now: Local::now(),
+            week_start: chrono::Weekday::Sun,
+            other_seen: None,
+            person: None,
+            mail_view,
+        };
+        assert!(compute(&inputs(None)).unwrap().row(&RowKey::Msg(id)).is_none(), "in Projects: Projects only");
+        for view in [MailView::Packages, MailView::Topics(None), MailView::Topics(Some(topics::Topic::Travel))] {
+            let m = compute(&inputs(Some(view))).unwrap();
+            assert!(m.row(&RowKey::Msg(id)).is_some(), "{view:?}: every folder");
+            assert_eq!(m.folder, None, "{view:?}: no Current folder to offer");
+        }
     }
 }

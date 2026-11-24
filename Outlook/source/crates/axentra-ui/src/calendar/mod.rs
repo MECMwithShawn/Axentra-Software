@@ -6,7 +6,7 @@
 //! Module state lives in a module-local context (`state::Cal`); store data
 //! is re-read on `app.calendar_rev()` like every other module.
 
-mod actions;
+pub(crate) mod actions;
 mod add_calendar;
 mod colors;
 mod dialogs;

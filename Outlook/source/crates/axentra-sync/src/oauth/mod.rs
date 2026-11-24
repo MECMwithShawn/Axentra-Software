@@ -208,7 +208,7 @@ pub fn classify_token_error(e: &TokenError) -> SyncError {
     }
     match e.error.as_str() {
         "invalid_grant" | "interaction_required" | "login_required" => SyncError::Auth("Your sign-in has expired. Sign in again.".into()),
-        "consent_required" | "invalid_scope" => SyncError::Auth("Axentra Outlook needs your permission again. Sign in again.".into()),
+        "consent_required" | "invalid_scope" => SyncError::Auth("Axentra Mail needs your permission again. Sign in again.".into()),
         "access_denied" => SyncError::User(copy::CANCELLED.into()),
         "temporarily_unavailable" | "server_error" => SyncError::Throttled { retry_after: None },
         "invalid_client" | "unauthorized_client" => {

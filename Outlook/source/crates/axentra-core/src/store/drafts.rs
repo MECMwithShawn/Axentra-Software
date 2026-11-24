@@ -15,7 +15,7 @@ use rusqlite::{OptionalExtension, params};
 use super::{MoveRecord, Store};
 use crate::html::html_to_text;
 use crate::model::*;
-use crate::text::preview;
+use crate::text::{guess_content_type, preview};
 use crate::{Error, Result};
 
 pub(crate) const SCHEMA_EXTRA: &str = "
@@ -327,6 +327,57 @@ impl Store {
         Ok(draft)
     }
 
+    /// A saved new draft filled in from outside the app (`--compose`, a
+    /// `mailto:` link), never sent. Files over `max_total` together, or
+    /// that can't be read, are left off; each comes back as a sentence
+    /// saying why, for the user.
+    pub fn draft_from_request(&self, req: &crate::compose_request::ComposeRequest, max_total: i64) -> Result<(Draft, Vec<String>)> {
+        use crate::compose_request::{MAX_BODY, one_line, push_addresses, truncate};
+        let mut d = self.new_draft(ComposeKind::New, None, None)?;
+        for (list, from) in [(&mut d.to, &req.to), (&mut d.cc, &req.cc), (&mut d.bcc, &req.bcc)] {
+            let text = from.iter().map(|a| if a.name.is_empty() { a.address.clone() } else { format!("{} <{}>", a.name, a.address) }).collect::<Vec<_>>().join(";");
+            push_addresses(list, &text);
+        }
+        d.subject = one_line(&req.subject);
+        let body = truncate(req.body.replace("\r\n", "\n"), MAX_BODY);
+        if !body.trim().is_empty() {
+            let style = body_style(&self.settings());
+            let text: String = body.lines().map(|l| if l.is_empty() { format!("<div style=\"{style}\"><br></div>") } else { format!("<div style=\"{style}\">{}</div>", escape_html(l)) }).collect();
+            // Above the empty line and signature that new drafts start with.
+            d.body_html = format!("{text}{}", d.body_html);
+        }
+        self.save_draft(&mut d)?;
+        let mut problems = Vec::new();
+        let mut total = 0i64;
+        for path in &req.attachments {
+            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.display().to_string());
+            let meta = match std::fs::metadata(path) {
+                Ok(m) if m.is_file() => m,
+                Ok(_) => {
+                    problems.push(format!("\"{name}\" isn't a file, so it wasn't attached."));
+                    continue;
+                }
+                Err(e) => {
+                    problems.push(format!("Couldn't attach \"{name}\": {e}."));
+                    continue;
+                }
+            };
+            let size = i64::try_from(meta.len()).unwrap_or(i64::MAX);
+            if total.saturating_add(size) > max_total {
+                problems.push(format!("\"{name}\" is too large to attach. The limit for this account is {} MB.", max_total / (1024 * 1024)));
+                continue;
+            }
+            match std::fs::read(path) {
+                Ok(data) => {
+                    total += data.len() as i64;
+                    self.add_draft_attachment(&mut d, &name, &guess_content_type(&name), &data)?;
+                }
+                Err(e) => problems.push(format!("Couldn't attach \"{name}\": {e}.")),
+            }
+        }
+        Ok((d, problems))
+    }
+
     /// Save (insert or update) a draft in the Drafts folder. Fills `draft.id`.
     /// Attachments taken from another message (forwarded) are copied onto
     /// the draft; stored attachments no longer listed are deleted. Changing
@@ -542,11 +593,11 @@ impl Store {
             None => false,
         };
         let message_id = if exists { draft.id.unwrap_or_default() } else { self.save_draft(draft)? };
-        let content_type = if content_type.trim().is_empty() { "application/octet-stream" } else { content_type };
+        let content_type = crate::text::attachment_content_type(name, content_type, data);
         let mut a = Attachment {
             message_id,
             name: name.to_string(),
-            content_type: content_type.to_string(),
+            content_type,
             size: data.len() as i64,
             ..Default::default()
         };
@@ -1063,7 +1114,7 @@ mod tests {
         assert_eq!(store.draft_attachment_data(&d.attachments[0]).unwrap().unwrap(), b"%PDF");
 
         let added = store.add_draft_attachment(&mut d, "notes.txt", "", b"hello").unwrap();
-        assert_eq!(added.content_type, "application/octet-stream");
+        assert_eq!(added.content_type, "text/plain", "an unlabelled file is typed by its name");
         assert_eq!(added.size, 5);
         let stored = store.message_body(id).unwrap().unwrap().attachments;
         assert_eq!(stored.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["Plan.pdf", "notes.txt"]);
@@ -1092,6 +1143,44 @@ mod tests {
         d.to.push(EmailAddress::new("", "x@contoso.example"));
         store.send_draft(&mut d).unwrap();
         assert_eq!(store.message_body(id).unwrap().unwrap().attachments.len(), 1);
+    }
+
+    #[test]
+    fn draft_from_request_fills_in_and_never_sends() {
+        use crate::compose_request::ComposeRequest;
+        let (store, _) = store_with_account();
+        let dir = std::env::temp_dir().join(format!("axentra-dfr-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let small = dir.join("Guide.zip");
+        std::fs::write(&small, vec![7u8; 2000]).unwrap();
+        let big = dir.join("Big.bin");
+        std::fs::write(&big, vec![0u8; 5000]).unwrap();
+        let req = ComposeRequest {
+            to: vec![EmailAddress::new("", "a@contoso.example"), EmailAddress::new("", "A@contoso.example")],
+            cc: vec![EmailAddress::new("B", "b@contoso.example")],
+            subject: "Guide\r\nBcc: evil@example.com".into(),
+            body: "Hi <there>,\r\n\r\nSee attached.".into(),
+            attachments: vec![small.clone(), big.clone(), dir.join("missing.pdf"), dir.clone()],
+            ..Default::default()
+        };
+        let (d, problems) = store.draft_from_request(&req, 4000).unwrap();
+        let id = d.id.unwrap();
+        assert_eq!(d.to.len(), 1);
+        assert_eq!(d.cc, vec![EmailAddress::new("B", "b@contoso.example")]);
+        assert!(d.bcc.is_empty());
+        assert_eq!(d.subject, "Guide  Bcc: evil@example.com");
+        assert!(d.body_html.contains("Hi &lt;there&gt;,</div>") && d.body_html.contains("See attached."), "{}", d.body_html);
+        assert_eq!(d.attachments.len(), 1);
+        assert_eq!(d.attachments[0].name, "Guide.zip");
+        assert_eq!(d.attachments[0].content_type, "application/zip");
+        assert_eq!(problems.len(), 3, "{problems:?}");
+        assert!(problems[0].contains("too large"));
+        // Saved in Drafts, still a draft.
+        let m = store.message(id).unwrap().unwrap();
+        assert!(m.is_draft);
+        assert_eq!(store.folder(m.folder_id).unwrap().unwrap().role, FolderRole::Drafts);
+        assert_eq!(store.draft(id).unwrap().unwrap().attachments.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

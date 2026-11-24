@@ -1,8 +1,10 @@
-<img src="logo.png" alt="Axentra Outlook logo" width="96" align="right">
+<img src="logo.png" alt="Axentra Mail logo" width="96" align="right">
 
-**Linux pre-release (0.1.5, built 2026-10-28):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
+**Linux pre-release (0.1.9, built 2026-11-17):** [Zorin installation, tests, screenshots and feature limits](LINUX.md).
 
-# Axentra Outlook
+# Axentra Mail (formerly Axentra Outlook)
+
+From 0.1.8 this app is called **Axentra Mail** and takes the place of the earlier Axentra Mail app ([Mail](../Mail/), now retired). Installing it removes the old app. The package, program and data folders keep the name `axentra-outlook`, so existing accounts and mail carry over.
 
 A Linux desktop client for mail, calendar, people and to-do that looks and works like the new Outlook for
 Windows: the same header, app rail, Simplified ribbon, folder pane, conversation list, reading pane, calendar
@@ -10,20 +12,21 @@ views and keyboard shortcuts. It's a native Rust app (Dioxus on the system WebKi
 with a built-in demo mailbox, and connects to Microsoft 365 / Outlook.com through Microsoft Graph and to Gmail,
 iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subscription or tracking.
 
-> "Outlook" is a trademark of Microsoft Corporation. Axentra Outlook is an independent client built from
+> "Outlook" is a trademark of Microsoft Corporation. Axentra Mail is an independent client built from
 > Microsoft's public documentation; it contains no Microsoft code, logos or artwork, and isn't affiliated with
 > or endorsed by Microsoft. Toolbar icons are Microsoft's MIT-licensed Fluent UI System Icons.
 
 ![Axentra Outlook mail with the merged title bar](screenshots/linux-2026-10-20-titlebar-light.png)
 
-**Latest version: 0.1.5 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.5) ·
-[Release notes](releases/0.1.5.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
+**Latest version: 0.1.9 (pre-release)** · [Download](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.9) ·
+[Release notes](releases/0.1.9.md) · [Changelog](CHANGELOG.md) · [Security](security/virustotal.md) · [Source](source/)
 
 ## Features
 
 | Area | What you get |
 |---|---|
 | **Mail** | Favorites and per-account folder tree with unread counts, create/rename/move/delete folders, Focused/Other, date groups, pinned items, conversation view, single-line columns layout when the reading pane is off, multi-select, hover actions, full right-click menu (move, categorize, flag with due dates, snooze, pin, junk/phishing, block, sweep, message details, print), drag messages to folders, Undo for delete/move/archive, search with `from:` / `subject:` / `hasattachments:` keywords |
+| **Mail helpers** | Packages (orders and deliveries found in your mail), Topics (local sorting by topic), auto-archive into topic folders, search by meaning, a junk filter and an optional Local AI review pilot through Ollama (Home › Spam & AI). Everything runs on this computer |
 | **Reading pane** | Right, bottom or off; sanitized HTML in a sandboxed frame with remote images blocked until you allow them; attachments; meeting invitations with Accept / Tentative / Decline; conversation stack |
 | **Compose** | Inline replies and pop-out window, recipient chips with autocomplete, rich text (fonts, colours, lists, links, tables, pictures, emoji, signature), attachments, drafts saved automatically, Schedule send, Undo send, "send without a subject?" and missing-attachment checks |
 | **Calendar** | Day, work week, week and month views, mini month, calendar list with colours, drag to create / move / resize, side-by-side overlaps, current-time line, quick create, peek card with RSVP and Join, full editor with recurrence, reminders |
@@ -42,19 +45,19 @@ iCloud, Yahoo or any IMAP/SMTP server. There's no Axentra server, account, subsc
 - Zorin OS 18 or Ubuntu 24.04, x86_64
 - WebKitGTK 4.1 (installed automatically as a package dependency)
 - A Secret Service keyring (GNOME Keyring or KWallet) to store account sign-ins
-- About 40 MB of disk space
+- About 110 MB of disk space (most of it the on-device search model)
 
 ## Installation
 
-Download `axentra-outlook_0.1.5-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.5),
-check its SHA-256 against the [release notes](releases/0.1.5.md), then:
+Download `axentra-outlook_0.1.9-1_amd64.deb` from the [release page](https://github.com/MECMwithShawn/Axentra-Software/releases/tag/outlook-v0.1.9),
+check its SHA-256 against the [release notes](releases/0.1.9.md), then:
 
 ```bash
-sha256sum axentra-outlook_0.1.5-1_amd64.deb
-sudo apt install ./axentra-outlook_0.1.5-1_amd64.deb
+sha256sum axentra-outlook_0.1.9-1_amd64.deb
+sudo apt install ./axentra-outlook_0.1.9-1_amd64.deb
 ```
 
-Open **Axentra Outlook** from the application menu. The first start creates a demo account (Alex Morgan, all
+Open **Axentra Mail** from the application menu. The first start creates a demo account (Alex Morgan, all
 fictional) so you can explore offline; remove it under **Settings › Accounts** once your own account is added.
 
 **Connecting a Microsoft 365 or Outlook.com account** needs a free Microsoft Entra app registration (a public

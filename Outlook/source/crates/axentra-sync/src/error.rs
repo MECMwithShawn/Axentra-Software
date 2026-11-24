@@ -11,15 +11,15 @@ pub mod copy {
     pub const OFFLINE: &str = "You're offline. Connect to the internet and try again.";
     pub const IMAP_AUTH: &str = "We couldn't sign in. Check your password. Some providers need an app password.";
     pub const TLS_UNTRUSTED: &str = "The server's security certificate isn't trusted.";
-    pub const ALREADY_PRESENT: &str = "This account is already in Axentra Outlook.";
+    pub const ALREADY_PRESENT: &str = "This account is already in Axentra Mail.";
     pub const SIGNIN_TIMEOUT: &str = "Sign-in timed out. Please try again.";
-    pub const ADMIN_CONSENT: &str = "Your organization needs to approve Axentra Outlook before you can sign in.";
+    pub const ADMIN_CONSENT: &str = "Your organization needs to approve Axentra Mail before you can sign in.";
     pub const CANCELLED: &str = "Sign-in was cancelled.";
     pub const CA_BLOCKED: &str = "Your organization's sign-in policy blocked this app.";
     pub const DEVICE_CODE_BLOCKED: &str = "Your organization doesn't allow sign-in with a code. Use your browser instead.";
     pub const CODE_EXPIRED: &str = "The code expired. Get a new code.";
     pub const NO_OUTLOOK_COM_MAILBOX: &str = "This Microsoft account doesn't have an Outlook.com mailbox.";
-    pub const KEYRING_UNAVAILABLE: &str = "Axentra Outlook can't find a keyring to store your sign-in securely. \
+    pub const KEYRING_UNAVAILABLE: &str = "Axentra Mail can't find a keyring to store your sign-in securely. \
         Start a Secret Service keyring (such as GNOME Keyring, KWallet or KeePassXC) and try again. \
         Passwords are never saved in plain text.";
     pub const KEYRING_DENIED: &str = "Access to the keyring was denied, so your sign-in couldn't be saved.";

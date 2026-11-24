@@ -1,4 +1,4 @@
-//! One running app per database: launching Axentra Outlook again (from
+//! One running app per database: launching Axentra Mail again (from
 //! Axentra Command, the app menu or a terminal) shows the window that is
 //! already open instead of starting a second copy.
 //!
@@ -20,7 +20,7 @@
 //! [`ClaimError::NotAnswering`]: never a second copy, never a hang.
 //!
 //! The lock only guards copies that look for it. [`other_copies`] finds any
-//! other Axentra Outlook process with the database open: one started before
+//! other Axentra Mail process with the database open: one started before
 //! this version (0.1.2 took no lock), or one whose lock lives elsewhere
 //! (another `XDG_RUNTIME_DIR`). [`start`] runs that check while holding the
 //! lock and, when it refuses, lets go of the lock before the user is told
@@ -195,7 +195,7 @@ impl std::fmt::Display for ClaimError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ClaimError::Setup(e) => write!(f, "{e}"),
-            ClaimError::NotAnswering => f.write_str("Axentra Outlook is already open on this profile but is not responding"),
+            ClaimError::NotAnswering => f.write_str("Axentra Mail is already open on this profile but is not responding"),
         }
     }
 }
@@ -678,7 +678,7 @@ pub fn private_dir(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Another Axentra Outlook process that has the database open.
+/// Another Axentra Mail process that has the database open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OtherCopy {
     pub pid: u32,
@@ -687,7 +687,7 @@ pub struct OtherCopy {
     pub outdated: bool,
 }
 
-/// Other Axentra Outlook processes of this user with `db` open, found
+/// Other Axentra Mail processes of this user with `db` open, found
 /// through `/proc` (read only). The lock cannot see them when they take
 /// none (0.1.2 and earlier) or keep it elsewhere (another runtime
 /// directory); either way a second session on the same mail must not start.

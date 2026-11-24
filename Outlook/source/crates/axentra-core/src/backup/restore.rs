@@ -745,6 +745,31 @@ fn restore_shared(tx: &Connection, payload: &Payload, opts: RestoreOptions, curr
             params![o.address, o.inference],
         )?;
     }
+    // Corrections and order changes of an account that isn't restored are
+    // dropped, never widened; order keys start with their account id.
+    let mut topic_rules = Vec::with_capacity(payload.topic_sender_rules.len());
+    for r in &payload.topic_sender_rules {
+        let account_key = match r.account_id {
+            None => 0,
+            Some(a) => match ids.accounts.get(&a) {
+                Some(&mapped) => mapped,
+                None => continue,
+            },
+        };
+        topic_rules.push((account_key, r.pattern.clone(), r.is_domain, r.topic.clone(), r.created_at, r.updated_at));
+    }
+    crate::store::topics_restore_rules(tx, &topic_rules)?;
+    for s in &payload.order_user_state {
+        let Some((account, rest)) = s.key.split_once(':') else { continue };
+        let Some(&mapped) = account.parse::<AccountId>().ok().and_then(|a| ids.accounts.get(&a)) else { continue };
+        crate::store::orders_restore_user_state(tx, &crate::orders::OrderUserState { key: format!("{mapped}:{rest}"), ..s.clone() })?;
+    }
+    for i in &payload.order_sender_ignores {
+        crate::store::orders_restore_sender_ignore(
+            tx,
+            &crate::store::OrderSenderIgnore { pattern: i.pattern.clone(), is_domain: i.is_domain, created_at: i.created_at },
+        )?;
+    }
     for e in &payload.kv {
         if !kv_allowed(&e.key) {
             continue;
@@ -770,6 +795,14 @@ fn restore_shared(tx: &Connection, payload: &Payload, opts: RestoreOptions, curr
             "INSERT INTO settings (id, json) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET json = excluded.json",
             [serde_json::to_string(&s)?],
         )?;
+        // As the Settings switches do: a feature restored off keeps no
+        // derived data (its pass doesn't run to clear it later).
+        if !s.order_tracking {
+            crate::store::orders_clear(tx)?;
+        }
+        if !s.topics_view {
+            crate::store::topics_clear(tx)?;
+        }
         summary.settings_restored = true;
     }
     Ok(())

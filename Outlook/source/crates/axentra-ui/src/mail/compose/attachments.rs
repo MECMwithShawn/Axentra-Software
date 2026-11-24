@@ -19,35 +19,7 @@ const PICTURE_LIMIT: u64 = 5 * 1024 * 1024;
 
 /// MIME type from a file name, for files the platform did not label.
 pub fn guess_type(name: &str) -> String {
-    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
-    match ext.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "bmp" => "image/bmp",
-        "svg" => "image/svg+xml",
-        "pdf" => "application/pdf",
-        "txt" | "log" | "md" => "text/plain",
-        "csv" => "text/csv",
-        "html" | "htm" => "text/html",
-        "ics" => "text/calendar",
-        "eml" => "message/rfc822",
-        "json" => "application/json",
-        "zip" => "application/zip",
-        "doc" => "application/msword",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "xls" => "application/vnd.ms-excel",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "ppt" => "application/vnd.ms-powerpoint",
-        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "mp3" => "audio/mpeg",
-        "wav" => "audio/wav",
-        "mp4" => "video/mp4",
-        "mov" => "video/quicktime",
-        _ => "application/octet-stream",
-    }
-    .to_string()
+    axentra_core::text::guess_content_type(name)
 }
 
 /// Fluent icon for an attachment card.
@@ -291,10 +263,14 @@ fn remove(mut form: Form, index: usize) {
     }
 }
 
-/// Pictures and text files open in the preview dialog.
+/// Pictures and text files open in the preview dialog (by their type or,
+/// for files attached before types were checked, their name).
 pub fn previewable(a: &DraftAttachment) -> bool {
-    let t = a.content_type.to_ascii_lowercase();
-    a.size <= PREVIEW_LIMIT && (t.starts_with("image/") || t.starts_with("text/") || t == "application/json")
+    let shows = |t: &str| {
+        let t = t.to_ascii_lowercase();
+        t.starts_with("image/") || t.starts_with("text/") || t == "application/json"
+    };
+    a.size <= PREVIEW_LIMIT && (shows(&a.content_type) || shows(&guess_type(&a.name)))
 }
 
 /// Largest file the preview dialog loads.
@@ -430,18 +406,19 @@ pub fn PreviewDialog(index: usize) -> Element {
         form.dialog.set(None);
         form.focus(&format!("att{index}"));
     };
-    let t = a.content_type.to_ascii_lowercase();
+    // What the bytes are, not just what the file was labelled.
+    let t = content.as_deref().map(|b| axentra_core::text::attachment_content_type(&a.name, &a.content_type, b)).unwrap_or_default();
     let body = match content {
-        None => rsx! { div { class: "ax-compose-preview-empty", "This file can't be previewed." } },
         Some(bytes) if t.starts_with("image/") => {
-            let src = format!("data:{};base64,{}", a.content_type, base64(&bytes));
+            let src = format!("data:{t};base64,{}", base64(&bytes));
             rsx! { img { class: "ax-compose-preview-img", src: "{src}", alt: "{a.name}" } }
         }
-        Some(bytes) => {
+        Some(bytes) if axentra_core::text::looks_like_text(&bytes) => {
             const MAX_TEXT: usize = 200 * 1024;
             let text = String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_TEXT)]).into_owned();
             rsx! { pre { class: "ax-compose-preview-text", "{text}" } }
         }
+        _ => rsx! { div { class: "ax-compose-preview-empty", "This file can't be previewed." } },
     };
     rsx! {
         Dialog {

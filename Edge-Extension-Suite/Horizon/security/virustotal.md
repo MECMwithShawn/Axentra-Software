@@ -6,10 +6,14 @@ file you downloaded is the one that was scanned.
 
 | Version | File | Result | Scanned | Report |
 |---|---|---|---|---|
+| 0.6.20 | `axentra-horizon_0.6.20-2_amd64.deb` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/36fb82b90a9aea26d5d197d850bd39bfa3d214b19a2b0490ec8ad6e9308559dc) |
+| 0.6.19 | `axentra-horizon_0.6.19-2_amd64.deb` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/034933153af57cce7b1781763fb62d4e69497009063e1f6151de6e53f33a316c) |
 | 0.4.2 | `AxentraHorizon-0.4.2.zip` | *pending* | | [VirusTotal](https://www.virustotal.com/gui/file/2300f331094aa56d1f814fd7aab609e501458047cd2d5a48073ca4dc04f6951b) |
 
 SHA-256 of each file:
 
+- `axentra-horizon_0.6.20-2_amd64.deb`: `36fb82b90a9aea26d5d197d850bd39bfa3d214b19a2b0490ec8ad6e9308559dc`
+- `axentra-horizon_0.6.19-2_amd64.deb`: `034933153af57cce7b1781763fb62d4e69497009063e1f6151de6e53f33a316c`
 - `AxentraHorizon-0.4.2.zip`: `2300f331094aa56d1f814fd7aab609e501458047cd2d5a48073ca4dc04f6951b`
 
 Record each result as *detections / engines* (for example `0 / 66`) with the scan date. Screenshots of the

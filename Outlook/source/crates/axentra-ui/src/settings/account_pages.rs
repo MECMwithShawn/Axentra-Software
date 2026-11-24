@@ -336,7 +336,7 @@ pub fn StoragePage() -> Element {
     let size = store().path().and_then(|p| std::fs::metadata(p).ok()).map(|m| m.len() as i64);
     let mut confirm = use_signal(|| false);
     rsx! {
-        Section { title: "Storage", description: "What Axentra Outlook keeps on this device.",
+        Section { title: "Storage", description: "What Axentra Mail keeps on this device.",
             Row { label: "Storage used on this device",
                 span { class: "ax-set-value", match size { Some(b) => crate::fmt::file_size(b), None => "In memory (preview)".into() } }
             }

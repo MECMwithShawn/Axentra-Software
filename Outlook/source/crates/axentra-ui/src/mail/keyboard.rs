@@ -36,6 +36,13 @@ fn needs_selection(cmd: &str) -> bool {
     !matches!(cmd, "new_mail" | "undo")
 }
 
+/// Keys that act on the selected messages (`chord` as `keys::chord` gives
+/// it). Where no message list is focused (an order card in Packages), the
+/// selection may be an email the focused item has nothing to do with.
+pub fn acts_on_messages(chord: &str) -> bool {
+    matches!(chord, "Delete" | "Shift+Delete" | "Shift+Enter") || command_for(chord).is_some_and(needs_selection)
+}
+
 /// Move the selection to the next / previous item (Ctrl+. / Ctrl+,).
 fn step_message(app: AppState, ctx: MailCtx, model: &ListModel, delta: isize) {
     if model.keys.is_empty() {
@@ -178,8 +185,9 @@ pub fn module_key(app: AppState, mut ctx: MailCtx, model: &ListModel, e: &Keyboa
 
 /// Browser defaults to suppress inside the Mail module (the liveview
 /// preview can't prevent them from Rust; the desktop webview can, but this
-/// is harmless there). Also sets up the drag ghost and the right-click
-/// guard for the list and folder pane.
+/// is harmless there). Also sets up the drag ghost, the right-click guard
+/// for the list and folder pane, and the mouse wheel for the Topic pivot
+/// (it scrolls sideways; an ordinary wheel only scrolls up and down).
 pub const HELPERS_JS: &str = r#"
 if (!window.__axMailHelpers) {
   window.__axMailHelpers = true;
@@ -198,7 +206,43 @@ if (!window.__axMailHelpers) {
     const t = e.target;
     if (t && t.closest && t.closest('.ax-mail-scroll, .ax-mail-tree, .ax-menu, .ax-menu-backdrop')) e.preventDefault();
   }, true);
+  // The small label shown under the pointer while dragging. WebKitGTK
+  // scales the drag image by the screen scale a second time on HiDPI
+  // screens (and Chromium doesn't), so there it is drawn that much smaller.
+  const dragLabel = (e, iconSvg, text) => {
+    const ghost = document.createElement('div');
+    ghost.className = 'ax-mail-drag-ghost';
+    ghost.innerHTML = '<span class="ax-icon" style="width:16px;height:16px">' + iconSvg + '</span><span></span>';
+    ghost.lastChild.textContent = text;
+    const dpr = window.devicePixelRatio || 1;
+    if (!/Chrome\//.test(navigator.userAgent)) {
+      if (dpr > 1) ghost.style.zoom = String(1 / dpr);
+      // WebKitGTK leaves out the parts of an off-screen label; on screen,
+      // under everything, it is drawn whole (and removed right after).
+      ghost.style.top = '0';
+      ghost.style.left = '0';
+      ghost.style.zIndex = '-1';
+    }
+    (document.querySelector('.ax-app') || document.body).appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 14, 14);
+    setTimeout(() => ghost.remove(), 0);
+  };
   document.addEventListener('dragstart', (e) => {
+    // WebKitGTK starts a drag only when it carries data: folder rows give
+    // their name (the app tracks what is dragged itself).
+    const node = e.target && e.target.closest && e.target.closest('.ax-mail-tree .ax-mail-node[draggable="true"]');
+    if (node && e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // The shown name (the tooltip helper takes the title attribute away).
+      const nameEl = node.querySelector('.ax-mail-node-name');
+      const name = ((nameEl && nameEl.firstChild && nameEl.firstChild.textContent) || node.getAttribute('aria-label') || '').trim();
+      try { e.dataTransfer.setData('text/plain', name); } catch (_) {}
+      // A small label, as for messages: WebKitGTK's own snapshot of the
+      // row comes out scaled up on HiDPI screens.
+      const icon = node.querySelector('.ax-mail-node-icon .ax-icon');
+      dragLabel(e, icon ? icon.innerHTML : '', name);
+      return;
+    }
     const row = e.target && e.target.closest && e.target.closest('[data-drag-count]');
     if (!row || !e.dataTransfer) return;
     const n = parseInt(row.getAttribute('data-drag-count') || '1', 10);
@@ -210,14 +254,14 @@ if (!window.__axMailHelpers) {
       ? list.dataset.selectedMessageIds
       : row.dataset.messageIds || '';
     if (ids) try { e.dataTransfer.setData('application/x-axentra-message-ids', '[' + ids + ']'); } catch (_) {}
-    const ghost = document.createElement('div');
-    ghost.className = 'ax-mail-drag-ghost';
-    ghost.innerHTML = '<span class="ax-icon" style="width:16px;height:16px">' + (window.__axMailIcon || '') + '</span><span></span>';
-    ghost.lastChild.textContent = n === 1 ? '1 item' : n + ' items';
-    (document.querySelector('.ax-app') || document.body).appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 14, 14);
-    setTimeout(() => ghost.remove(), 0);
+    dragLabel(e, window.__axMailIcon || '', n === 1 ? '1 item' : n + ' items');
   }, true);
+  document.addEventListener('wheel', (e) => {
+    const p = e.target && e.target.closest && e.target.closest('.ax-mail-topic-pivot');
+    if (!p || e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || p.scrollWidth <= p.clientWidth) return;
+    p.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    e.preventDefault();
+  }, { passive: false });
 }
 "#;
 
@@ -237,5 +281,15 @@ mod tests {
         assert_eq!(command_for("R"), None);
         assert!(!needs_selection("new_mail"));
         assert!(needs_selection("delete"));
+    }
+
+    #[test]
+    fn message_commands_are_known_apart_from_the_rest() {
+        for chord in ["Delete", "Shift+Delete", "Backspace", "Ctrl+R", "Ctrl+Q", "Insert", "Shift+Enter", "Ctrl+Shift+V"] {
+            assert!(acts_on_messages(chord), "{chord}");
+        }
+        for chord in ["Enter", "T", "ArrowDown", "Escape", "F6", "Ctrl+N", "Ctrl+Z", "Ctrl+Y"] {
+            assert!(!acts_on_messages(chord), "{chord}");
+        }
     }
 }

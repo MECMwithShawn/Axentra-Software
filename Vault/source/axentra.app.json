@@ -1,0 +1,47 @@
+{
+  "id": "vault",
+  "name": "Axentra Vault",
+  "tagline": "KeePass-compatible password manager with passkey unlock",
+  "kind": "desktop",
+  "order": 10,
+  "accent": "#408bff",
+  "icon": "{source}/app/assets/app/vault-512.png",
+  "install": {
+    "uninstall_key": "{C36D03EC-E3A1-41C6-B147-019EC2B9B245}_is1",
+    "display_name": "Axentra Vault",
+    "exe": "%ProgramFiles%/Axentra/Vault/axentra-vault.exe"
+  },
+  "launch": {
+    "exe": "%ProgramFiles%/Axentra/Vault/axentra-vault.exe"
+  },
+  "process": [
+    "axentra-vault.exe"
+  ],
+  "source": {
+    "path": "~/code/axentra-vault",
+    "version_file": "Cargo.toml"
+  },
+  "dist": {
+    "path": "{source}/dist",
+    "prefix": "AxentraVault-",
+    "suffix": "-Setup.exe"
+  },
+  "docs": "~/code/Axentra-Software/Vault",
+  "tray": [
+    {
+      "label": "Lock vault",
+      "args": [
+        "--lock"
+      ],
+      "running_only": true
+    },
+    {
+      "label": "Exit Axentra Vault",
+      "args": [
+        "--exit"
+      ],
+      "running_only": true,
+      "separator": true
+    }
+  ]
+}

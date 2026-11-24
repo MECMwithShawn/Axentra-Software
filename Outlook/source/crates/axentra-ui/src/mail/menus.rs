@@ -4,6 +4,7 @@
 use axentra_core::*;
 use chrono::Local;
 
+use super::ctx::TopicScopeChoice;
 use super::dates::{self, FlagPreset, SnoozePreset};
 use crate::kit::{MenuItem, category_colors};
 use crate::state::store;
@@ -17,6 +18,8 @@ pub struct Target {
     pub snoozed_folder: bool,
     pub focused_inbox: bool,
     pub h24: bool,
+    /// What Change topic corrects (the menu remembers the last choice).
+    pub topic_scope: TopicScopeChoice,
 }
 
 impl Target {
@@ -29,7 +32,13 @@ impl Target {
             snoozed_folder: folder.is_some_and(|f| snoozed.contains(&f)),
             focused_inbox,
             h24,
+            topic_scope: TopicScopeChoice::default(),
         }
+    }
+
+    pub fn with_topic_scope(mut self, scope: TopicScopeChoice) -> Self {
+        self.topic_scope = scope;
+        self
     }
 
     fn single(&self) -> bool {
@@ -126,6 +135,43 @@ pub fn move_items(prefix: &str, account: Option<AccountId>, current: Option<Fold
     items
 }
 
+/// The "Change topic" submenu: what a pick applies to (the scope last
+/// chosen in the Change topic dialog, as it applies to these messages),
+/// every topic (the current one checked), and back to automatic. The scope
+/// is changed in the dialog: a pick here always changes a topic. `current`
+/// is the messages' topic when they share one.
+pub fn change_topic_items(messages: &[Message], current: Option<topics::Topic>, scope: TopicScopeChoice) -> Vec<MenuItem> {
+    let mut senders: Vec<String> = messages.iter().map(|m| m.from.address.trim().to_lowercase()).collect();
+    senders.sort();
+    senders.dedup();
+    let who = match senders.as_slice() {
+        [one] => one.clone(),
+        _ => "these senders".to_string(),
+    };
+    let applies = match super::actions::topic_scope_for(scope, messages) {
+        TopicScopeChoice::Message if messages.len() == 1 => "For this message only".to_string(),
+        TopicScopeChoice::Message => "For these messages only".to_string(),
+        TopicScopeChoice::Sender => format!("For {who} from now on"),
+        TopicScopeChoice::Domain => {
+            format!("For everything from {}", super::actions::offered_domain(senders.iter().map(String::as_str)).unwrap_or_default())
+        }
+    };
+    let mut items = vec![MenuItem::header(applies)];
+    items.extend(topics::Topic::ALL.into_iter().map(|t| MenuItem::new(format!("topic:{}", t.id()), t.label()).icon(t.icon()).checked(current == Some(t))));
+    items.push(MenuItem::divider());
+    items.push(MenuItem::new("topic_reset", "Reset to automatic").icon("arrow_undo"));
+    items.push(MenuItem::new("topic_dialog", "Change topic\u{2026}").icon("tag"));
+    items
+}
+
+/// The messages' shared topic, if they have one (cached topics only).
+pub fn shared_topic(ids: &[MessageId]) -> Option<topics::Topic> {
+    let found = store().topics_for(ids).unwrap_or_default();
+    let mut it = ids.iter().map(|id| found.get(id).map(|(t, _)| *t));
+    let first = it.next().flatten()?;
+    it.all(|t| t == Some(first)).then_some(first)
+}
+
 /// Right-click menu for messages in the list (and "More actions" in the
 /// reading pane).
 pub fn message_menu(t: &Target, folder: Option<FolderId>) -> Vec<MenuItem> {
@@ -161,6 +207,11 @@ pub fn message_menu(t: &Target, folder: Option<FolderId>) -> Vec<MenuItem> {
     items.push(MenuItem::new("copy_menu", "Copy").icon("copy").submenu(move_items("copy", account, folder, "Copy to a different folder…")));
     items.push(MenuItem::divider());
     items.push(MenuItem::new("cat_menu", "Categorize").icon("tag").submenu(categorize_items(&t.messages)));
+    // Not on mail that has no topic (Sent Items, Drafts, Junk Email, …).
+    if settings_week.topics_view && !t.messages.is_empty() && super::actions::topic_mail(t.messages.clone()).len() == t.messages.len() {
+        let ids: Vec<MessageId> = t.messages.iter().map(|m| m.id).collect();
+        items.push(MenuItem::new("topic_menu", "Change topic").icon("tag").submenu(change_topic_items(&t.messages, shared_topic(&ids), t.topic_scope)));
+    }
     let any_unread = t.messages.iter().any(|m| !m.is_read);
     let any_read = t.messages.iter().any(|m| m.is_read);
     if any_unread {
@@ -244,8 +295,9 @@ pub fn is_fixed(folder: &Folder, snoozed: &[FolderId]) -> bool {
     folder.role != FolderRole::Custom || snoozed.contains(&folder.id)
 }
 
-/// Right-click / "More options" menu for a folder (or a favourite).
-pub fn folder_menu(folder: &Folder, as_favorite: bool, snoozed: &[FolderId]) -> Vec<MenuItem> {
+/// Right-click / "More options" menu for a folder (or a favourite);
+/// `hidden`: a hidden folder shown for its unread mail.
+pub fn folder_menu(folder: &Folder, as_favorite: bool, hidden: bool, snoozed: &[FolderId]) -> Vec<MenuItem> {
     let fixed = is_fixed(folder, snoozed);
     let mut items = Vec::new();
     if as_favorite {
@@ -278,6 +330,13 @@ pub fn folder_menu(folder: &Folder, as_favorite: bool, snoozed: &[FolderId]) -> 
     if !fixed {
         items.push(MenuItem::new("f_move", "Move").icon("folder_arrow_right"));
     }
+    items.push(MenuItem::new("f_order_up", "Move up in list").icon("arrow_up"));
+    items.push(MenuItem::new("f_order_down", "Move down in list").icon("arrow_down"));
+    if hidden {
+        items.push(MenuItem::new("f_unhide", "Keep in folder list").icon("eye"));
+    } else if folder.role != FolderRole::Inbox {
+        items.push(MenuItem::new("f_hide", "Hide from folder list").icon("eye_off"));
+    }
     items
 }
 
@@ -298,11 +357,39 @@ pub fn person_menu() -> Vec<MenuItem> {
     ]
 }
 
-pub fn account_menu() -> Vec<MenuItem> {
-    vec![
+/// Menu for Packages in the folder pane.
+pub fn packages_menu() -> Vec<MenuItem> {
+    vec![MenuItem::new("v_open", "Open").icon("open"), MenuItem::divider(), MenuItem::new("v_package_settings", "Package settings\u{2026}").icon("settings")]
+}
+
+/// Menu for a topic (or Topics, `all`) in the folder pane.
+pub fn topic_menu(all: bool) -> Vec<MenuItem> {
+    let mut items = vec![MenuItem::new("v_open", "Open").icon("open")];
+    if !all {
+        items.push(MenuItem::new("v_hide_topic", "Hide from folder pane").icon("eye_off"));
+    }
+    items.push(MenuItem::divider());
+    items.push(MenuItem::new("v_topic_settings", "Topic settings\u{2026}").icon("settings"));
+    items
+}
+
+/// Menu for the Views header (and Topics under it).
+pub fn views_header_menu(collapsed: bool) -> Vec<MenuItem> {
+    vec![if collapsed { MenuItem::new("v_expand", "Expand").icon("chevron_down") } else { MenuItem::new("v_collapse", "Collapse").icon("chevron_right") }]
+}
+
+/// Menu for an account; `hidden` is how many of its folders are hidden.
+pub fn account_menu(hidden: usize) -> Vec<MenuItem> {
+    let mut items = vec![
         MenuItem::new("a_new", "Create new folder").icon("folder_add"),
-        MenuItem::divider(),
-        MenuItem::new("a_mark_read", "Mark all as read").icon("mail_read"),
-        MenuItem::new("a_settings", "Account settings").icon("settings"),
-    ]
+        MenuItem::new("a_reset_order", "Reset folder order").icon("arrow_sort"),
+    ];
+    if hidden > 0 {
+        let label = if hidden == 1 { "Show 1 hidden folder".to_string() } else { format!("Show {hidden} hidden folders") };
+        items.push(MenuItem::new("a_show_hidden", label).icon("eye"));
+    }
+    items.push(MenuItem::divider());
+    items.push(MenuItem::new("a_mark_read", "Mark all as read").icon("mail_read"));
+    items.push(MenuItem::new("a_settings", "Account settings").icon("settings"));
+    items
 }

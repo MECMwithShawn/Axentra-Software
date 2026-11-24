@@ -7,7 +7,7 @@
 //! conversations, sweep rules, the Snoozed folder, restore origins, favourite
 //! order and the full-text index used by search.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Utc, Weekday};
 use rusqlite::types::Value;
@@ -15,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 
 use super::{Doc, Store, enum_str};
 use crate::model::*;
+use crate::topics::Topic;
 use crate::{Error, Result};
 
 pub(crate) const SCHEMA_EXTRA: &str = r#"
@@ -40,6 +41,8 @@ CREATE INDEX IF NOT EXISTS mail_in_reply_to ON messages(json_extract(json, '$.in
 
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     subject, sender, to_rcpt, cc_rcpt, preview, body, tokenize = 'unicode61 remove_diacritics 2');
+-- Every indexed word with how many messages hold it: search's typo fixes.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts_vocab USING fts5vocab(messages_fts, 'row');
 CREATE VIEW IF NOT EXISTS mail_fts_source AS
 SELECT m.id AS id,
     COALESCE(json_extract(m.json, '$.subject'), '') AS subject,
@@ -125,7 +128,7 @@ fn like_pattern(term: &str) -> String {
     format!("%{escaped}%")
 }
 
-fn id_list(ids: &[MessageId]) -> String {
+pub(super) fn id_list(ids: &[MessageId]) -> String {
     ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",")
 }
 
@@ -167,6 +170,100 @@ fn fts_term(term: &str) -> Option<String> {
     let quoted = format!("\"{}\"", term.replace('"', "\"\""));
     let short_number = term.chars().all(|c| c.is_ascii_digit()) && term.len() < 5;
     if term.contains(char::is_whitespace) || short_number { Some(quoted) } else { Some(format!("{quoted}*")) }
+}
+
+/// The root of an English word, for matching its other forms with a
+/// prefix: "deliveries", "delivered" and "delivery" all give "deliver",
+/// "invoices" gives "invoic", "shipping" gives "ship". Words under five
+/// letters, with digits, or whose root would be under four letters are
+/// only lower-cased.
+fn word_root(word: &str) -> String {
+    let lower = word.to_lowercase();
+    if lower.chars().count() < 5 || !lower.chars().all(char::is_alphabetic) {
+        return lower;
+    }
+    let mut r = lower.clone();
+    let mut verb = false;
+    if let Some(x) = r.strip_suffix("ies") {
+        r = x.to_string();
+    } else if let Some(x) = r.strip_suffix("ing").or_else(|| r.strip_suffix("ed")) {
+        r = x.to_string();
+        verb = true;
+    } else if ["shes", "ches", "sses", "xes", "zes"].iter().any(|e| r.ends_with(e)) {
+        r.truncate(r.len() - 2);
+    } else if r.ends_with('s') && !["ss", "us", "is"].iter().any(|e| r.ends_with(e)) {
+        r.pop();
+    }
+    if r.ends_with('e') || r.ends_with('y') {
+        r.pop();
+    }
+    // shipp(ing) -> ship, plann(ed) -> plan.
+    let c: Vec<char> = r.chars().collect();
+    if verb && c.len() >= 2 && c[c.len() - 1] == c[c.len() - 2] && !"aeiouls".contains(c[c.len() - 1]) {
+        r.pop();
+    }
+    if r.chars().count() < 4 { lower } else { r }
+}
+
+/// Edit distance counting a swap of two neighbouring letters as one edit.
+fn typo_distance(a: &[char], b: &[char]) -> usize {
+    let (n, m) = (a.len(), b.len());
+    let mut d = vec![vec![0usize; m + 1]; n + 1];
+    for (i, row) in d.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
+    }
+    for i in 1..=n {
+        for j in 1..=m {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            d[i][j] = (d[i - 1][j] + 1).min(d[i][j - 1] + 1).min(d[i - 1][j - 1] + cost);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
+            }
+        }
+    }
+    d[n][m]
+}
+
+/// Indexed words (`(word, messages holding it)`) a mistyped `root` likely
+/// meant, best first: one typo for roots up to six letters, two beyond;
+/// a long word is matched by its start, as search matches prefixes.
+fn typo_fixes(root: &str, vocab: impl Iterator<Item = (String, i64)>) -> Vec<String> {
+    let r: Vec<char> = root.chars().collect();
+    let n = r.len();
+    if n < 4 || !r.iter().all(|c| c.is_alphabetic()) {
+        return Vec::new();
+    }
+    let k = if n <= 6 { 1 } else { 2 };
+    let mut found: HashMap<String, (usize, i64)> = HashMap::new();
+    for (term, docs) in vocab {
+        let t: Vec<char> = term.chars().collect();
+        if t.len() + k < n || !t.iter().all(|c| c.is_alphabetic()) {
+            continue;
+        }
+        let mut best: Option<(usize, String)> = None;
+        if t.len() <= n + k {
+            best = Some((typo_distance(&r, &t), term.clone()));
+        }
+        for len in n.saturating_sub(1)..=(n + 1).min(t.len()) {
+            let d = typo_distance(&r, &t[..len]);
+            if best.as_ref().is_none_or(|(b, _)| d < *b) {
+                // Keep short words whole ("invoice"), long ones as their start.
+                let keep = if t.len() <= n + 3 { term.clone() } else { t[..len].iter().collect() };
+                best = Some((d, keep));
+            }
+        }
+        if let Some((d, word)) = best.filter(|(d, _)| *d > 0 && *d <= k) {
+            let e = found.entry(word).or_insert((d, 0));
+            e.0 = e.0.min(d);
+            e.1 += docs;
+        }
+    }
+    let mut out: Vec<(String, (usize, i64))> = found.into_iter().collect();
+    out.sort_by(|a, b| a.1.0.cmp(&b.1.0).then(b.1.1.cmp(&a.1.1)).then(a.0.cmp(&b.0)));
+    out.into_iter().take(3).map(|(w, _)| w).collect()
 }
 
 /// FTS5 column set for a search keyword, `None` for keywords that are not text searches.
@@ -351,6 +448,21 @@ fn group_by_conversation(msgs: Vec<Message>) -> Vec<Vec<Message>> {
     groups
 }
 
+/// [`Store::last_responses`] for the messages `list` (an [`id_list`]). The
+/// `+` takes the column's text affinity away: compared with it as it is,
+/// the reply id isn't looked up in `mail_in_reply_to` but every message is
+/// read for every one in the list (seconds for a large Inbox, on each
+/// refresh of the list).
+fn last_responses_sql(list: &str) -> String {
+    format!(
+        "SELECT m.id, r.id, r.received_at, COALESCE(json_extract(r.json, '$.subject'), '')
+         FROM messages m JOIN messages r ON json_extract(r.json, '$.in_reply_to') = +m.internet_message_id
+         WHERE m.id IN ({list}) AND m.internet_message_id <> '' AND r.is_draft = 0
+           AND lower(json_extract(r.json, '$.from.address')) IN (SELECT lower(json_extract(json, '$.email')) FROM accounts)
+         ORDER BY r.received_at ASC, r.id ASC"
+    )
+}
+
 impl Store {
     // ------------------------------------------------------------ folders
 
@@ -379,8 +491,18 @@ impl Store {
         Ok(folders)
     }
 
+    /// One folder, with its own counts only (counting every folder's mail
+    /// for it is slow in a large mailbox).
     pub fn folder(&self, id: FolderId) -> Result<Option<Folder>> {
-        Ok(self.folders(None)?.into_iter().find(|f| f.id == id))
+        let conn = self.conn();
+        let Some(mut folder) = Self::get_doc_in::<Folder>(&conn, id)? else { return Ok(None) };
+        let mut stmt = conn.prepare_cached(&format!(
+            "SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END), 0)
+             FROM messages WHERE folder_id = ?1 AND {}",
+            VISIBLE_NOW.replace('?', "?2")
+        ))?;
+        (folder.total_count, folder.unread_count) = stmt.query_row(params![id, Utc::now().timestamp()], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(Some(folder))
     }
 
     pub fn folder_by_role(&self, account_id: AccountId, role: FolderRole) -> Result<Option<Folder>> {
@@ -407,6 +529,23 @@ impl Store {
         let order = self.favorite_order();
         favs.sort_by_key(|f| order.iter().position(|o| *o == f.id).unwrap_or(usize::MAX));
         Ok(favs)
+    }
+
+    /// Put `id` in Favorites just before (or after) the favourite `target`,
+    /// adding it to Favorites first when it isn't one (drag and drop).
+    pub fn place_favorite(&self, id: FolderId, target: FolderId, after: bool) -> Result<()> {
+        if id == target {
+            return Ok(());
+        }
+        if !self.folder(id)?.is_some_and(|f| f.is_favorite) {
+            self.set_folder_favorite(id, true)?;
+        }
+        let mut ids: Vec<FolderId> = self.favorites()?.into_iter().map(|f| f.id).filter(|f| *f != id).collect();
+        let Some(pos) = ids.iter().position(|f| *f == target) else {
+            return Err(Error::NotFound(format!("favorite {target}")));
+        };
+        ids.insert(if after { pos + 1 } else { pos }, id);
+        self.save_favorite_order(&ids)
     }
 
     /// Move a favourite up (`delta < 0`) or down in the Favorites section.
@@ -513,7 +652,8 @@ impl Store {
 
     /// True when `folder` is `ancestor` or sits somewhere below it.
     pub fn folder_is_within(&self, folder: FolderId, ancestor: FolderId) -> Result<bool> {
-        let all = self.folders(None)?;
+        // Parents only: no counts.
+        let all: Vec<Folder> = Self::query_docs_in(&self.conn(), "", [])?;
         let parent: HashMap<FolderId, Option<FolderId>> = all.iter().map(|f| (f.id, f.parent_id)).collect();
         let mut cur = Some(folder);
         let mut guard = 0;
@@ -700,9 +840,13 @@ impl Store {
         self.update_doc(message)
     }
 
+    /// Write a message's body. An existing body is updated in place (not
+    /// replaced), so triggers can tell an unchanged re-download from new
+    /// content.
     pub fn set_message_body(&self, message_id: MessageId, html: Option<&str>, text: &str) -> Result<()> {
         self.conn().execute(
-            "INSERT OR REPLACE INTO message_bodies (message_id, html, text) VALUES (?1, ?2, ?3)",
+            "INSERT INTO message_bodies (message_id, html, text) VALUES (?1, ?2, ?3)
+             ON CONFLICT(message_id) DO UPDATE SET html = excluded.html, text = excluded.text",
             params![message_id, html, text],
         )?;
         Ok(())
@@ -800,12 +944,41 @@ impl Store {
     /// `read:`, `hasflag:` / `isflagged:` / `followupflag:`, `category:`,
     /// `importance:`, `received:` / `sent:` and `due:`.
     pub fn messages(&self, q: &MessageQuery) -> Result<Vec<Message>> {
+        let Some(search) = q.search.as_deref() else { return self.messages_matching(q, &[]) };
+        let typed = parse_search_terms(search);
+        // Read as plain words if the phrases as filters find nothing.
+        let natural = natural_search(&typed);
+        if natural != typed {
+            let found = self.messages_matching(q, &natural)?;
+            if !found.is_empty() {
+                return Ok(found);
+            }
+        }
+        self.messages_matching(q, &typed)
+    }
+
+    /// [`Store::messages`] for the search `terms` (none: `q.search` unset).
+    fn messages_matching(&self, q: &MessageQuery, terms: &[SearchTerm]) -> Result<Vec<Message>> {
         let mut w = Where::default();
         if let Some(folder) = q.folder_id {
             w.push("folder_id = ?", vec![Value::Integer(folder)]);
         }
         if let Some(class) = q.inference {
             w.push("inference = ?", vec![Value::Text(enum_str(&class))]);
+        }
+        if let Some(scope) = q.topic {
+            // Current topics only, across folders, never Junk, Deleted or your own mail.
+            let version = super::topics::current_version(&self.conn())?;
+            match scope {
+                TopicScope::Any => w.push("id IN (SELECT message_id FROM topic_assignments WHERE version = ?)", vec![Value::Text(version)]),
+                TopicScope::One(t) => w.push(
+                    "id IN (SELECT message_id FROM topic_assignments WHERE version = ? AND topic = ?)",
+                    vec![Value::Text(version), Value::Text(t.id().into())],
+                ),
+            }
+            w.raw(format!("folder_id NOT IN {} AND is_draft = 0", super::no_insights_folders_sql()));
+            // Snoozed mail stays hidden until due here too (the Snoozed folder's own exception doesn't apply).
+            w.push("(snoozed_until IS NULL OR snoozed_until <= ?)", vec![Value::Integer(Utc::now().timestamp())]);
         }
         w.push(VISIBLE_NOW, vec![Value::Integer(Utc::now().timestamp())]);
         match q.filter {
@@ -827,9 +1000,7 @@ impl Store {
                   AND lower(json_extract(je.value, '$.address')) = lower(json_extract(a.json, '$.email')))",
             ),
         }
-        if let Some(search) = q.search.as_deref()
-            && !self.push_search(&mut w, search)?
-        {
+        if q.search.is_some() && !self.push_search(&mut w, terms)? {
             return Ok(Vec::new());
         }
         let order = match q.sort {
@@ -860,15 +1031,54 @@ impl Store {
         self.query_docs(&tail, params_from_iter(w.values))
     }
 
+    /// The FTS5 expression for one search term. A single unquoted word also
+    /// finds its other forms (`forms`: "deliveries" finds "delivered") and,
+    /// when it is in no message at all, the words it was likely a typo for
+    /// (`fix_typos`).
+    fn fts_text(&self, term: &str, quoted: bool, forms: bool, fix_typos: bool) -> Option<String> {
+        let exact = fts_term(term)?;
+        if quoted || !term.chars().all(char::is_alphanumeric) {
+            return Some(exact);
+        }
+        let root = if forms { word_root(term) } else { term.to_lowercase() };
+        let expr = fts_term(&root)?;
+        if !fix_typos {
+            return Some(expr);
+        }
+        let conn = self.conn();
+        let found = conn
+            .query_row("SELECT EXISTS(SELECT 1 FROM messages_fts WHERE messages_fts MATCH ?1)", [&expr], |r| r.get::<_, bool>(0))
+            .unwrap_or(true);
+        if found {
+            return Some(expr);
+        }
+        let n = root.chars().count() as i64;
+        let fixes = conn
+            .prepare("SELECT term, doc FROM messages_fts_vocab WHERE length(term) >= ?1")
+            .and_then(|mut st| {
+                let rows = st.query_map([n - 2], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+                Ok(typo_fixes(&root, rows.filter_map(|r| r.ok())))
+            })
+            .unwrap_or_default();
+        if fixes.is_empty() {
+            return Some(expr);
+        }
+        Some(format!("({})", fixes.iter().filter_map(|f| fts_term(f)).collect::<Vec<_>>().join(" OR ")))
+    }
+
     /// Add the clauses for a search string. Returns false when the search
     /// has nothing that can match (e.g. only punctuation).
-    fn push_search(&self, w: &mut Where, search: &str) -> Result<bool> {
+    fn push_search(&self, w: &mut Where, terms: &[SearchTerm]) -> Result<bool> {
         let today = Local::now().date_naive();
         let week_start = self.settings().week_start;
         let mut fts: Vec<(&'static str, String)> = Vec::new();
         let mut pending_op: &'static str = "AND";
         let mut criteria = 0usize;
-        for (key, term) in parse_search(search) {
+        // Plain words (no keyword, quotes or operator): meaning search adds
+        // messages about the same thing when every text term is one.
+        let mut free: Vec<String> = Vec::new();
+        let mut other_text = false;
+        for SearchTerm { key, text: term, quoted } in terms.iter().cloned() {
             if key.is_none() && matches!(term.as_str(), "AND" | "OR" | "NOT") {
                 pending_op = match term.as_str() {
                     "OR" => "OR",
@@ -880,8 +1090,11 @@ impl Store {
             let op = std::mem::replace(&mut pending_op, "AND");
             let key = key.as_deref();
             if let Some(cols) = key.and_then(fts_columns) {
-                if let Some(t) = fts_term(&term) {
+                // Names and addresses aren't English words: no other forms.
+                let words = matches!(key, Some("subject" | "body" | "content"));
+                if let Some(t) = self.fts_text(&term, quoted, words, op != "NOT") {
                     fts.push((op, format!("{cols} : {t}")));
+                    other_text = true;
                 }
                 continue;
             }
@@ -957,11 +1170,23 @@ impl Store {
                 }
                 // Free text (and unknown keywords, searched as text).
                 _ => {
-                    if let Some(t) = fts_term(&term) {
+                    if key.is_none() && !quoted && op == "AND" {
+                        free.push(term.clone());
+                    } else {
+                        other_text = true;
+                    }
+                    if let Some(t) = self.fts_text(&term, quoted, true, op != "NOT") {
                         fts.push((op, t));
                     }
                 }
             }
+        }
+        let meaning = if free.is_empty() || other_text { None } else { self.meaning_matches(&free.join(" "))? };
+        if fts.is_empty()
+            && let Some(ids) = &meaning
+        {
+            w.raw(format!("id IN ({ids})"));
+            criteria += 1;
         }
         if !fts.is_empty() {
             // A leading NOT has no left operand in FTS5: exclude it separately.
@@ -979,7 +1204,10 @@ impl Store {
                 for (op, e) in tail {
                     expr.push_str(&format!(" {op} {e}"));
                 }
-                w.push("id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)", vec![Value::Text(expr)]);
+                match &meaning {
+                    Some(ids) => w.push(&format!("id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?) OR id IN ({ids})"), vec![Value::Text(expr)]),
+                    None => w.push("id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)", vec![Value::Text(expr)]),
+                }
                 criteria += 1;
             }
         }
@@ -1048,14 +1276,7 @@ impl Store {
             return Ok(out);
         }
         let conn = self.conn();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT m.id, r.id, r.received_at, COALESCE(json_extract(r.json, '$.subject'), '')
-             FROM messages m JOIN messages r ON json_extract(r.json, '$.in_reply_to') = m.internet_message_id
-             WHERE m.id IN ({}) AND m.internet_message_id <> '' AND r.is_draft = 0
-               AND lower(json_extract(r.json, '$.from.address')) IN (SELECT lower(json_extract(json, '$.email')) FROM accounts)
-             ORDER BY r.received_at ASC, r.id ASC",
-            id_list(ids)
-        ))?;
+        let mut stmt = conn.prepare(&last_responses_sql(&id_list(ids)))?;
         let rows = stmt.query_map([], |r| {
             Ok((r.get::<_, MessageId>(0)?, r.get::<_, MessageId>(1)?, r.get::<_, i64>(2)?, r.get::<_, String>(3)?))
         })?;
@@ -1435,6 +1656,73 @@ impl Store {
             records.extend(self.move_messages(&[m.id], archive)?);
         }
         Ok(records)
+    }
+
+    /// Inbox mail auto-archive would move now: older than `days`, read
+    /// (unless `include_unread`), not pinned, flagged, snoozed or a draft,
+    /// and not in a conversation with an Inbox message newer than that.
+    /// Only accounts with an Archive folder. Oldest first.
+    pub fn auto_archive_candidates(&self, days: u32, include_unread: bool, now: DateTime<Utc>) -> Result<Vec<Message>> {
+        let cutoff = now - Duration::days(i64::from(days));
+        let mut out = Vec::new();
+        for account in self.accounts()? {
+            let (Some(inbox), Some(_)) = (self.folder_by_role(account.id, FolderRole::Inbox)?, self.folder_by_role(account.id, FolderRole::Archive)?) else {
+                continue;
+            };
+            let msgs = self.folder_messages(inbox.id)?;
+            // Conversations still going: they stay together in the Inbox.
+            let active: HashSet<&str> = msgs.iter().filter(|m| m.received_at >= cutoff && !m.conversation_id.is_empty()).map(|m| m.conversation_id.as_str()).collect();
+            out.extend(
+                msgs.iter()
+                    .filter(|m| {
+                        m.received_at < cutoff
+                            && (m.is_read || include_unread)
+                            && !m.is_pinned
+                            && m.flag != FlagStatus::Flagged
+                            && !m.is_draft
+                            && m.snoozed_until.is_none()
+                            && !active.contains(m.conversation_id.as_str())
+                    })
+                    .cloned(),
+            );
+        }
+        out.sort_by_key(|m| (m.received_at, m.id));
+        Ok(out)
+    }
+
+    /// Move [`Store::auto_archive_candidates`] to their accounts' Archive
+    /// folders (synced to the server like any move). With `by_topic`, each
+    /// goes into the folder for its topic inside Archive ("Orders &
+    /// shipping"), made when first needed; mail of no particular topic
+    /// (Other) stays in Archive itself. Undo with [`Store::undo_moves`].
+    pub fn auto_archive(&self, days: u32, include_unread: bool, by_topic: bool, now: DateTime<Utc>) -> Result<Vec<MoveRecord>> {
+        let msgs = self.auto_archive_candidates(days, include_unread, now)?;
+        let topics = if by_topic { self.sort_topics(&msgs)? } else { HashMap::new() };
+        let mut groups: BTreeMap<(AccountId, Option<Topic>), Vec<MessageId>> = BTreeMap::new();
+        for m in &msgs {
+            let topic = topics.get(&m.id).copied().filter(|t| *t != Topic::Other);
+            groups.entry((m.account_id, topic)).or_default().push(m.id);
+        }
+        let mut records = Vec::new();
+        for ((account, topic), ids) in groups {
+            let archive = self.folder_id_by_role(account, FolderRole::Archive)?;
+            let to = match topic {
+                Some(t) => self.archive_topic_folder(account, archive, t)?,
+                None => archive,
+            };
+            records.extend(self.move_messages(&ids, to)?);
+        }
+        Ok(records)
+    }
+
+    /// The folder for `topic` inside `archive`: the one with its name (any
+    /// case), else a new one.
+    fn archive_topic_folder(&self, account: AccountId, archive: FolderId, topic: Topic) -> Result<FolderId> {
+        let name = topic.label();
+        match self.folders(Some(account))?.into_iter().find(|f| f.parent_id == Some(archive) && f.name.eq_ignore_ascii_case(name)) {
+            Some(f) => Ok(f.id),
+            None => self.create_folder(account, Some(archive), name),
+        }
     }
 
     /// Move to Junk Email.
@@ -1819,6 +2107,31 @@ fn addr_header(list: &[EmailAddress]) -> String {
 /// Split a search string into (keyword, term) pairs. Supports `key:value`,
 /// `key:"quoted value"` and `"quoted phrases"`.
 pub fn parse_search(input: &str) -> Vec<(Option<String>, String)> {
+    parse_search_terms(input).into_iter().map(|t| (t.key, t.text)).collect()
+}
+
+/// One term of a search: its `key:` (lower-cased), text, and whether any of
+/// it was in quotes (searched as typed: no other word forms or typo fixes).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchTerm {
+    pub key: Option<String>,
+    pub text: String,
+    pub quoted: bool,
+}
+
+impl SearchTerm {
+    fn new(key: &str, text: impl Into<String>) -> Self {
+        SearchTerm { key: Some(key.into()), text: text.into(), quoted: false }
+    }
+
+    /// An unquoted word with no key, lower-cased.
+    fn plain(&self) -> Option<String> {
+        (self.key.is_none() && !self.quoted).then(|| self.text.to_lowercase())
+    }
+}
+
+/// [`parse_search`], keeping whether each term was quoted.
+pub fn parse_search_terms(input: &str) -> Vec<SearchTerm> {
     let mut out = Vec::new();
     let mut chars = input.chars().peekable();
     while chars.peek().is_some() {
@@ -1828,10 +2141,12 @@ pub fn parse_search(input: &str) -> Vec<(Option<String>, String)> {
         let mut word = String::new();
         let mut key: Option<String> = None;
         let mut quoted = false;
+        let mut had_quotes = false;
         while let Some(&c) = chars.peek() {
             if c == '"' {
                 chars.next();
                 quoted = !quoted;
+                had_quotes = true;
                 continue;
             }
             if c.is_whitespace() && !quoted {
@@ -1846,8 +2161,61 @@ pub fn parse_search(input: &str) -> Vec<(Option<String>, String)> {
             chars.next();
         }
         if !word.is_empty() {
-            out.push((key, word));
+            out.push(SearchTerm { key, text: word, quoted: had_quotes });
         }
+    }
+    out
+}
+
+/// A search typed as plain words, read as filters where it says so:
+/// "from priya" (from:), "sent to sam" (to:), "with attachments", "unread",
+/// "flagged", and dates ("today", "last week", "in march", "since monday",
+/// "before 10/1"). Quoted words and keywords stay as they are.
+pub fn natural_search(terms: &[SearchTerm]) -> Vec<SearchTerm> {
+    let today = Local::now().date_naive();
+    let is_date = |s: &str| date_span(s, today, Weekday::Mon).is_some();
+    let word = |i: usize| terms.get(i).and_then(SearchTerm::plain);
+    // A date at `i` of one word, or two ("last week"); with how many words it took.
+    let date_at = |i: usize| -> Option<(String, usize)> {
+        let w = word(i)?;
+        if matches!(w.as_str(), "this" | "last" | "next")
+            && let Some(two) = word(i + 1).map(|n| format!("{w} {n}")).filter(|t| is_date(t))
+        {
+            return Some((two, 2));
+        }
+        is_date(&w).then_some((w, 1))
+    };
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < terms.len() {
+        let w = word(i).unwrap_or_default();
+        let next = terms.get(i + 1).filter(|t| t.key.is_none() && !matches!(t.text.as_str(), "AND" | "OR" | "NOT"));
+        let (term, used) = match w.as_str() {
+            "from" if next.is_some() => (SearchTerm { key: Some("from".into()), ..next.unwrap().clone() }, 2),
+            "sent" if word(i + 1).as_deref() == Some("to") && terms.get(i + 2).is_some_and(|t| t.key.is_none()) => {
+                (SearchTerm { key: Some("to".into()), ..terms[i + 2].clone() }, 3)
+            }
+            "with" | "has" if word(i + 1).is_some_and(|n| n == "attachment" || n == "attachments") => (SearchTerm::new("hasattachments", "yes"), 2),
+            "unread" | "flagged" => (SearchTerm::new("is", w.clone()), 1),
+            "today" | "yesterday" => (SearchTerm::new("received", w.clone()), 1),
+            "this" | "last" if date_at(i).is_some_and(|(_, n)| n == 2) => {
+                let (d, n) = date_at(i).unwrap();
+                (SearchTerm::new("received", d), n)
+            }
+            "in" | "on" | "since" | "after" | "before" if date_at(i + 1).is_some() => {
+                let (d, n) = date_at(i + 1).unwrap();
+                let op = match w.as_str() {
+                    "since" => ">=",
+                    "after" => ">",
+                    "before" => "<",
+                    _ => "",
+                };
+                (SearchTerm::new("received", format!("{op}{d}")), n + 1)
+            }
+            _ => (terms[i].clone(), 1),
+        };
+        out.push(term);
+        i += used;
     }
     out
 }
@@ -1993,6 +2361,83 @@ mod tests {
     }
 
     #[test]
+    fn search_finds_other_word_forms_and_fixes_typos() {
+        let (store, acct) = store_with_account();
+        let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
+        let p = EmailAddress::new("Pat", "pat@x.example");
+        msg_from(&store, acct, inbox, p.clone(), "Package delivered", 1, "a");
+        msg_from(&store, acct, inbox, p.clone(), "Invoice 4471 attached", 1, "b");
+        msg_from(&store, acct, inbox, p, "Shipping update", 1, "c");
+        assert_eq!(search(&store, "deliveries"), vec!["Package delivered"]);
+        assert_eq!(search(&store, "invoices"), vec!["Invoice 4471 attached"]);
+        assert_eq!(search(&store, "shipped"), vec!["Shipping update"]);
+        assert_eq!(search(&store, "subject:updates"), vec!["Shipping update"]);
+        // A word in no message is read as the likely typo.
+        assert_eq!(search(&store, "invioce"), vec!["Invoice 4471 attached"]);
+        assert_eq!(search(&store, "delivred"), vec!["Package delivered"]);
+        assert_eq!(search(&store, "packgae delivred"), vec!["Package delivered"]);
+        // Quoted words are searched as typed; unrelated words find nothing.
+        assert!(search(&store, "\"invioce\"").is_empty());
+        assert!(search(&store, "zebra").is_empty());
+        // NOT never guesses.
+        assert_eq!(search(&store, "NOT invioce").len(), 3);
+    }
+
+    #[test]
+    fn search_reads_plain_phrases_as_filters() {
+        let (store, acct) = store_with_account();
+        let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
+        let fresh = msg_from(&store, acct, inbox, EmailAddress::new("Pat Lee", "pat@x.example"), "Fresh", 0, "a");
+        msg_from(&store, acct, inbox, EmailAddress::new("Sam", "sam@x.example"), "Notes from the meeting", 400, "b");
+        let mut m = store.message(fresh).unwrap().unwrap();
+        m.has_attachments = true;
+        store.update_message(&m).unwrap();
+        assert_eq!(search(&store, "from pat"), vec!["Fresh"]);
+        assert_eq!(search(&store, "from sam"), vec!["Notes from the meeting"]);
+        assert_eq!(search(&store, "today"), vec!["Fresh"]);
+        assert_eq!(search(&store, "with attachments"), vec!["Fresh"]);
+        assert_eq!(search(&store, "unread"), vec!["Fresh", "Notes from the meeting"]);
+        // Read as filters it finds nothing, so the words are searched.
+        assert_eq!(search(&store, "notes from the meeting"), vec!["Notes from the meeting"]);
+
+        let terms = |q: &str| natural_search(&parse_search_terms(q)).into_iter().map(|t| (t.key, t.text)).collect::<Vec<_>>();
+        let k = |key: &str, v: &str| (Some(key.to_string()), v.to_string());
+        let free = |v: &str| (None, v.to_string());
+        assert_eq!(terms("invoice from priya last week"), vec![free("invoice"), k("from", "priya"), k("received", "last week")]);
+        assert_eq!(terms("sent to sam in march"), vec![k("to", "sam"), k("received", "march")]);
+        assert_eq!(terms("rent since monday"), vec![free("rent"), k("received", ">=monday")]);
+        assert_eq!(terms("before 10/1 has attachment"), vec![k("received", "<10/1"), k("hasattachments", "yes")]);
+        // Quoted and keyed words stay as typed; "in" needs a date after it.
+        assert_eq!(terms("\"from priya\" subject:today in kuwait"), vec![free("from priya"), k("subject", "today"), free("in"), free("kuwait")]);
+    }
+
+    #[test]
+    fn word_roots_and_typo_fixes() {
+        for (w, r) in [
+            ("deliveries", "deliver"),
+            ("delivered", "deliver"),
+            ("delivery", "deliver"),
+            ("invoices", "invoic"),
+            ("shipping", "ship"),
+            ("planned", "plan"),
+            ("matches", "match"),
+            ("status", "status"),
+            ("address", "address"),
+            ("ray", "ray"),
+            ("james", "james"),
+            ("Q4report", "q4report"),
+        ] {
+            assert_eq!(word_root(w), r, "{w}");
+        }
+        let vocab = || ["invoice", "invoke", "involve", "delivered", "the", "receipt"].into_iter().map(|w| (w.to_string(), 3));
+        assert_eq!(typo_fixes("invioc", vocab()), vec!["invoice"]);
+        assert_eq!(typo_fixes("reciept", vocab()), vec!["receipt"]);
+        assert!(typo_fixes("zebra", vocab()).is_empty());
+        assert!(typo_fixes("thx", vocab()).is_empty());
+        assert_eq!(typo_distance(&['a', 'b'], &['b', 'a']), 1);
+    }
+
+    #[test]
     fn date_expressions() {
         let today = NaiveDate::from_ymd_opt(2026, 10, 22).unwrap(); // Thursday
         let d = |m, dd| NaiveDate::from_ymd_opt(2026, m, dd).unwrap();
@@ -2110,6 +2555,110 @@ mod tests {
     }
 
     #[test]
+    fn auto_archive_moves_old_settled_mail_only() {
+        let (store, acct) = store_with_account();
+        let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
+        let archive = store.folder_for_role(acct, FolderRole::Archive).unwrap();
+        let who = || EmailAddress::new("A", "a@x.example");
+        let mk = |subject: &str, days: i64, conv: &str, edit: &dyn Fn(&mut Message)| {
+            let id = msg_from(&store, acct, inbox, who(), subject, days, conv);
+            let mut m = store.message(id).unwrap().unwrap();
+            m.is_read = true;
+            edit(&mut m);
+            store.update_message(&m).unwrap();
+            id
+        };
+        let old = mk("Old", 40, "c1", &|_| {});
+        let older = mk("Older", 90, "c2", &|_| {});
+        let unread = mk("Unread", 40, "c3", &|m| m.is_read = false);
+        let pinned = mk("Pinned", 40, "c4", &|m| m.is_pinned = true);
+        let flagged = mk("Flagged", 40, "c5", &|m| m.flag = FlagStatus::Flagged);
+        let done = mk("Done flag", 40, "c6", &|m| m.flag = FlagStatus::Complete);
+        let thread_old = mk("Thread start", 50, "live", &|_| {});
+        mk("Thread reply", 2, "live", &|_| {});
+        let recent = mk("Recent", 10, "c7", &|_| {});
+        let now = Utc::now();
+
+        let ids = |v: Vec<Message>| v.into_iter().map(|m| m.id).collect::<Vec<_>>();
+        assert_eq!(ids(store.auto_archive_candidates(30, false, now).unwrap()), vec![older, old, done]);
+        let with_unread = ids(store.auto_archive_candidates(30, true, now).unwrap());
+        assert!(with_unread.contains(&unread) && with_unread.len() == 4);
+        assert_eq!(ids(store.auto_archive_candidates(60, false, now).unwrap()), vec![older]);
+
+        let recs = store.auto_archive(30, false, false, now).unwrap();
+        assert_eq!(recs.len(), 3);
+        for id in [old, older, done] {
+            assert_eq!(store.message(id).unwrap().unwrap().folder_id, archive);
+        }
+        for id in [unread, pinned, flagged, thread_old, recent] {
+            assert_eq!(store.message(id).unwrap().unwrap().folder_id, inbox);
+        }
+        assert!(store.auto_archive(30, false, false, now).unwrap().is_empty());
+        store.undo_moves(&recs).unwrap();
+        assert_eq!(store.message(old).unwrap().unwrap().folder_id, inbox);
+
+        // Due once a day, only when on.
+        let mut s = Settings::default();
+        assert!(!s.auto_archive_due(now));
+        s.auto_archive = true;
+        assert!(s.auto_archive_due(now));
+        s.auto_archive_last_run = Some(now - Duration::hours(23));
+        assert!(!s.auto_archive_due(now));
+        s.auto_archive_last_run = Some(now - Duration::hours(25));
+        assert!(s.auto_archive_due(now));
+        // A clock set back: run rather than wait.
+        s.auto_archive_last_run = Some(now + Duration::days(3));
+        assert!(s.auto_archive_due(now));
+    }
+
+    #[test]
+    fn auto_archive_sorts_into_topic_folders() {
+        use crate::store::topics::TopicTarget;
+        let (store, acct) = store_with_account();
+        let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
+        let archive = store.folder_for_role(acct, FolderRole::Archive).unwrap();
+        // Already there under another case: used, not made again.
+        let orders = store.create_folder(acct, Some(archive), "orders & SHIPPING").unwrap();
+        let mk = |subject: &str, topic: Topic| {
+            let id = msg_from(&store, acct, inbox, EmailAddress::new("Shop", "shop@store.example"), subject, 40, subject);
+            store.set_read(&[id], true).unwrap();
+            store.set_topic(None, TopicTarget::Message(id), Some(topic)).unwrap();
+            id
+        };
+        let bill = mk("Your bill", Topic::Receipts);
+        let statement = mk("Statement", Topic::Receipts);
+        let parcel = mk("Shipped", Topic::Orders);
+        let other = mk("Misc", Topic::Other);
+        // Topics off: still sorted.
+        let mut settings = store.settings();
+        settings.topics_view = false;
+        store.save_settings(&settings).unwrap();
+        let recent = msg_from(&store, acct, inbox, EmailAddress::new("Shop", "shop@store.example"), "New", 2, "new");
+
+        let recs = store.auto_archive(30, false, true, Utc::now()).unwrap();
+        assert_eq!(recs.len(), 4);
+        let folder_of = |id| store.message(id).unwrap().unwrap().folder_id;
+        let receipts = folder_of(bill);
+        let made = store.folder(receipts).unwrap().unwrap();
+        assert_eq!((made.name.as_str(), made.parent_id, made.role), ("Receipts & bills", Some(archive), FolderRole::Custom));
+        assert_eq!(folder_of(statement), receipts);
+        assert_eq!(folder_of(parcel), orders);
+        assert_eq!(folder_of(other), archive, "no topic in particular: Archive itself");
+        assert_eq!(folder_of(recent), inbox);
+        let under_archive = store.folders(Some(acct)).unwrap().into_iter().filter(|f| f.parent_id == Some(archive)).count();
+        assert_eq!(under_archive, 2);
+
+        store.undo_moves(&recs).unwrap();
+        for id in [bill, statement, parcel, other] {
+            assert_eq!(folder_of(id), inbox);
+        }
+        // Again: the folders made last time are used.
+        store.auto_archive(30, false, true, Utc::now()).unwrap();
+        assert_eq!(folder_of(bill), receipts);
+        assert_eq!(store.folders(Some(acct)).unwrap().into_iter().filter(|f| f.parent_id == Some(archive)).count(), 2);
+    }
+
+    #[test]
     fn sweep_modes_and_saved_rules() {
         let (store, acct) = store_with_account();
         let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
@@ -2181,6 +2730,23 @@ mod tests {
         assert_eq!(names(&store), vec!["Projects", "Inbox", "Drafts", "Sent Items"]);
         store.set_folder_favorite(inbox, false).unwrap();
         assert_eq!(names(&store), vec!["Projects", "Drafts", "Sent Items"]);
+    }
+
+    #[test]
+    fn dragging_into_favorites_places_the_folder() {
+        let (store, acct) = store_with_account();
+        let names = |s: &Store| s.favorites().unwrap().into_iter().map(|f| f.name).collect::<Vec<_>>();
+        let drafts = store.folder_for_role(acct, FolderRole::Drafts).unwrap();
+        let sent = store.folder_for_role(acct, FolderRole::Sent).unwrap();
+        let inbox = store.folder_for_role(acct, FolderRole::Inbox).unwrap();
+        store.place_favorite(sent, inbox, false).unwrap();
+        assert_eq!(names(&store), vec!["Sent Items", "Inbox", "Drafts"]);
+        // A folder that isn't a favourite yet joins where it was dropped.
+        let projects = store.create_folder(acct, None, "Projects").unwrap();
+        store.place_favorite(projects, inbox, true).unwrap();
+        assert_eq!(names(&store), vec!["Sent Items", "Inbox", "Projects", "Drafts"]);
+        store.place_favorite(drafts, drafts, true).unwrap();
+        assert_eq!(names(&store), vec!["Sent Items", "Inbox", "Projects", "Drafts"]);
     }
 
     #[test]
@@ -2350,6 +2916,11 @@ mod tests {
         store.delete_messages_permanently(&[forward]).unwrap();
         let r = store.last_responses(&[original]).unwrap();
         assert_eq!((r[&original].message_id, r[&original].forwarded), (reply, false));
+        // Replies are looked up by index, not by reading every message.
+        let conn = store.conn();
+        let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {}", last_responses_sql(&original.to_string()))).unwrap();
+        let plan: Vec<String> = stmt.query_map([], |r| r.get::<_, String>(3)).unwrap().map(Result::unwrap).collect();
+        assert!(plan.iter().any(|p| p.starts_with("SEARCH r USING INDEX mail_in_reply_to")), "{plan:?}");
     }
 
     #[test]

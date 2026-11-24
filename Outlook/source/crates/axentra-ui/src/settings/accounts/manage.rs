@@ -193,7 +193,7 @@ pub fn ManagePanel(account_id: AccountId, live_rev: u64, on_action: EventHandler
                         div {
                             div { class: "ax-acct-strong", "Remove account" }
                             div { class: "ax-acct-hint",
-                                if local { "Deletes this account's items from this device." } else { "Removes the account from Axentra Outlook. Nothing is deleted from the server." }
+                                if local { "Deletes this account's items from this device." } else { "Removes the account from Axentra Mail. Nothing is deleted from the server." }
                             }
                         }
                         DialogButton { label: "Remove", danger: true, onclick: move |_| on_action.call(Action::Remove(account_id)) }
@@ -221,10 +221,10 @@ pub fn RemoveDialog(account_id: AccountId, on_done: EventHandler<bool>) -> Eleme
         (true, false) => format!("{email} is stored only on this device. Its {what} will be permanently deleted."),
         (true, true) => format!("{email} is stored only on this device and will be deleted."),
         (false, false) => format!(
-            "{email} and its {what} will be removed from Axentra Outlook on this device. Nothing is deleted from the server, and you can add the account again later."
+            "{email} and its {what} will be removed from Axentra Mail on this device. Nothing is deleted from the server, and you can add the account again later."
         ),
         (false, true) => format!(
-            "{email} will be removed from Axentra Outlook on this device. Nothing is deleted from the server, and you can add the account again later."
+            "{email} will be removed from Axentra Mail on this device. Nothing is deleted from the server, and you can add the account again later."
         ),
     };
     let remove = move |_| {

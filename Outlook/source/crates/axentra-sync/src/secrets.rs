@@ -117,9 +117,9 @@ impl SecretKey {
 
     fn label(&self) -> String {
         if self.kind == SecretKind::BackupPassword {
-            return "Axentra Outlook – backup password".into();
+            return "Axentra Mail – backup password".into();
         }
-        format!("Axentra Outlook – {} ({})", self.username, self.provider.keyring_name())
+        format!("Axentra Mail – {} ({})", self.username, self.provider.keyring_name())
     }
 }
 
@@ -288,7 +288,7 @@ mod tests {
             k.delete_account("u1").await.unwrap();
             assert!(k.get(&key(SecretKind::SmtpPassword), false).await.unwrap().is_none());
         });
-        assert_eq!(key(SecretKind::OauthRefreshToken).label(), "Axentra Outlook – ana@example.org (imap)");
+        assert_eq!(key(SecretKind::OauthRefreshToken).label(), "Axentra Mail – ana@example.org (imap)");
         assert_eq!(key(SecretKind::Password).attributes()["xdg:schema"], SCHEMA);
     }
 
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(b.attributes()["kind"], "backup_password");
         assert_eq!(b.attributes()["provider"], "backup");
         assert_eq!(b.attributes()["account_id"], BACKUP_SECRET_ID);
-        assert_eq!(b.label(), "Axentra Outlook – backup password");
+        assert_eq!(b.label(), "Axentra Mail – backup password");
         let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
         rt.block_on(async {
             let k = Keyring::memory();

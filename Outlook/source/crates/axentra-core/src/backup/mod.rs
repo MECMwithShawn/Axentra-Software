@@ -60,9 +60,9 @@ pub enum BackupError {
     /// tell these apart).
     #[error("This backup couldn't be opened. Check the password.")]
     CantOpen,
-    #[error("This backup was made by a newer version of Axentra Outlook.")]
+    #[error("This backup was made by a newer version of Axentra Mail.")]
     NewerVersion,
-    #[error("This file isn't an Axentra Outlook backup.")]
+    #[error("This file isn't an Axentra Mail backup.")]
     NotABackup,
     #[error("Use a backup password with at least 8 characters.")]
     WeakPassword,
